@@ -1,14 +1,8 @@
 <template>
   <div class="register">
-    <!-- 左侧品牌展示区 -->
-    <div class="register-left">
-      <div class="left-content">
-        <h2 class="brand-title">{{ title }}</h2>
-        <p class="brand-desc">华设轨道智审系统</p>
-      </div>
-    </div>
-    <!-- 右侧注册区 -->
-    <div class="register-right">
+    <div class="register-content">
+      <h2 class="brand-title">{{ title }}</h2>
+      <p class="brand-desc">华设轨道智审系统</p>
       <div class="register-card">
         <h2 class="card-title">注册</h2>
         <p class="card-subtitle">创建您的账号以继续。</p>
@@ -30,7 +24,6 @@
           <!-- 密码 -->
           <div class="field-label">
             <span class="label-left">密码</span>
-            <span class="label-right">区分大小写</span>
           </div>
           <el-form-item prop="password">
             <el-input
@@ -198,103 +191,101 @@ export default {
 </script>
 
 <style rel="stylesheet/scss" lang="scss" scoped>
-.register {
-  display: flex;
-  height: 100vh;
-  min-height: 100vh;
-  overflow: hidden;
-}
+$primary: #7b9ec8;
+$primary-dark: #5a82b0;
+$primary-light: #a8c4e0;
+$text-dark: #3a5a7c;
+$text-muted: #8aa4bc;
+$border: #c8d8ea;
+$card-bg: linear-gradient(145deg, rgba(180, 205, 228, 0.9) 0%, rgba(200, 222, 242, 0.93) 50%, rgba(170, 198, 225, 0.9) 100%);
 
-/* ===== 左侧品牌区 50% ===== */
-.register-left {
-  width: 50%;
+.register {
   height: 100vh;
-  min-height: 100vh;
-  background-image: url("../assets/images/login-background.jpg");
-  background-size: cover;
-  background-position: center;
+  width: 100vw;
+  overflow: hidden;
+  background: linear-gradient(135deg, #c8d8ea 0%, #dce8f4 25%, #e8f0f8 50%, #d0e0f0 75%, #c0d4e8 100%);
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
+  align-items: flex-start;
+  justify-content: center;
   position: relative;
-  opacity: 0.8;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.4) 30.5%, rgba(255,255,255,0.4) 31%, transparent 31.5%),
+      linear-gradient(125deg, transparent 60%, rgba(200,218,238,0.5) 60.5%, rgba(200,218,238,0.5) 61%, transparent 61.5%),
+      linear-gradient(125deg, transparent 80%, rgba(255,255,255,0.3) 80.5%, rgba(255,255,255,0.3) 81%, transparent 81.5%);
+    pointer-events: none;
+  }
 
   &::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(30, 80, 162, 0.35) 0%, rgba(0, 0, 0, 0.15) 100%);
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
+    pointer-events: none;
   }
 }
 
-.left-content {
+.register-content {
   position: relative;
   z-index: 1;
-  padding: 0 56px;
-  color: #fff;
-}
-
-.brand-logo {
-  width: 56px;
-  height: 56px;
-  margin-bottom: 20px;
-  filter: brightness(0) invert(1);
+  width: 100%;
+  max-width: 580px;
+  padding: 0 24px;
+  margin-top: 10vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .brand-title {
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 700;
   margin: 0 0 8px 0;
-  letter-spacing: 2px;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  letter-spacing: 4px;
+  color: $text-dark;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
 }
 
 .brand-desc {
   font-size: 16px;
-  margin: 0;
-  opacity: 0.8;
+  margin: 0 0 40px 0;
+  color: $text-muted;
+  opacity: 0.9;
   letter-spacing: 4px;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.2);
-}
-
-/* ===== 右侧注册区 50% ===== */
-.register-right {
-  width: 50%;
-  height: 100vh;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f8f9fc;
 }
 
 .register-card {
-  width: 80%;
-  max-width: 800px;
-  padding: 80px 72px;
-  background: #fff;
-  border-radius: 32px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
+  width: 100%;
+  padding: 40px 56px;
+  background: $card-bg;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(122, 158, 200, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   transition: box-shadow 0.3s ease, transform 0.3s ease;
 
   &:hover {
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 12px 40px rgba(122, 158, 200, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     transform: translateY(-2px);
   }
 }
 
 .card-title {
-  margin: 0 0 8px 0;
-  font-size: 38px;
+  margin: 0 0 6px 0;
+  font-size: 28px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: $text-dark;
   text-align: left;
 }
 
 .card-subtitle {
-  margin: 0 0 48px 0;
-  font-size: 16px;
-  color: #909399;
+  margin: 0 0 28px 0;
+  font-size: 14px;
+  color: $text-muted;
   text-align: left;
 }
 
@@ -302,54 +293,94 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .label-left {
-  font-size: 15px;
-  font-weight: 500;
-  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-dark;
 }
 
 .label-right {
-  font-size: 14px;
-  color: #b0b3c6;
+  font-size: 13px;
+  color: $text-muted;
   cursor: pointer;
 
   &:hover {
-    color: #5b6abf;
+    color: $primary;
   }
 }
 
 .register-form {
   ::v-deep .el-form-item {
-    margin-bottom: 24px;
+    margin-bottom: 18px;
+  }
+
+  ::v-deep .el-form-item__error {
+    top: 48px !important;
+    color: #d4847c;
+  }
+
+  ::v-deep .el-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+
+    .el-col {
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
+
+    .el-col:first-child {
+      padding-right: 8px !important;
+    }
+
+    .el-col:last-child {
+      padding-left: 8px !important;
+    }
+
+    .el-col:first-child {
+      .el-input {
+        height: 48px;
+        line-height: 48px;
+
+        .el-input__inner {
+          height: 48px;
+          line-height: 48px;
+        }
+      }
+    }
   }
 
   ::v-deep .el-input {
-    height: 56px;
-    line-height: 56px;
+    height: 48px;
+    line-height: 48px;
 
     .el-input__inner {
-      height: 56px;
-      line-height: 56px;
+      height: 48px;
+      line-height: 48px;
       border-radius: 12px;
-      font-size: 16px;
-      border: 1.5px solid #e8e9ed;
-      padding: 0 16px;
+      font-size: 15px;
+      border: 1.5px solid $border;
+      background: rgba(255, 255, 255, 0.5);
+      padding: 0 18px;
+      color: $text-dark;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
       &::placeholder {
-        color: #c0c4cc;
+        color: $text-muted;
+        font-size: 14px;
       }
 
       &:hover {
-        border-color: #5b6abf;
+        border-color: $primary;
+        background: rgba(255, 255, 255, 0.7);
       }
 
       &:focus {
-        border: 2px solid #5b6abf;
-        box-shadow: 0 0 0 4px rgba(91, 106, 191, 0.18), 0 0 12px rgba(91, 106, 191, 0.12);
+        border: 2px solid $primary;
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: 0 0 0 3px rgba(123, 158, 200, 0.15);
         outline: none;
       }
     }
@@ -358,56 +389,58 @@ export default {
 
 .register-btn {
   width: 100%;
-  height: 60px;
-  border-radius: 14px;
-  font-size: 18px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 6px;
-  background: linear-gradient(135deg, #5b6abf 0%, #4a58a0 100%);
+  background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
   border: none;
+  color: #fff;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
-    background: linear-gradient(135deg, #6e7dd4 0%, #5b6abf 100%);
+    background: linear-gradient(135deg, $primary-light 0%, $primary 100%);
     transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(91, 106, 191, 0.35);
+    box-shadow: 0 4px 16px rgba(123, 158, 200, 0.35);
   }
 
   &:active {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(91, 106, 191, 0.25);
+    box-shadow: 0 2px 8px rgba(123, 158, 200, 0.25);
   }
 }
 
 .register-code-img {
   width: 100%;
-  height: 56px;
+  height: 48px;
   border-radius: 12px;
   cursor: pointer;
   object-fit: cover;
-  border: 1.5px solid #e8e9ed;
+  border: 1.5px solid $border;
+  background: rgba(255, 255, 255, 0.5);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
-    border-color: #5b6abf;
-    box-shadow: 0 0 8px rgba(91, 106, 191, 0.15);
+    border-color: $primary;
+    box-shadow: 0 0 8px rgba(123, 158, 200, 0.15);
   }
 
   &:active {
-    border: 2px solid #5b6abf;
-    box-shadow: 0 0 0 4px rgba(91, 106, 191, 0.18), 0 0 12px rgba(91, 106, 191, 0.12);
+    border: 2px solid $primary;
+    box-shadow: 0 0 0 3px rgba(123, 158, 200, 0.15);
   }
 }
 
 .card-footer {
-  margin-top: 36px;
+  margin-top: 28px;
   text-align: center;
-  font-size: 15px;
-  color: #909399;
+  font-size: 14px;
+  color: $text-muted;
 }
 
 .login-link {
-  color: #5b6abf;
+  color: $primary-dark;
   font-weight: 500;
   text-decoration: none;
 
@@ -423,7 +456,7 @@ export default {
   bottom: 0;
   width: 100%;
   text-align: center;
-  color: #909399;
+  color: $text-muted;
   font-size: 12px;
   letter-spacing: 1px;
   z-index: 10;
