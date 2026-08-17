@@ -1,0 +1,1157 @@
+{
+  "format_version": "human_review_opinion_db_v1",
+  "section": "auto",
+  "record_count": 62,
+  "records": [
+    {
+      "source_file": "..\\安全评估报告\\南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624.docx",
+      "source_doc": "南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624",
+      "section": "6",
+      "section_title": "6 对R18032地块项目的评价与建议",
+      "opinion_number": 6,
+      "opinion_text": "1 对R18032地块项目的总体评价上述模拟计算结果表明，临近的轨道交通1号线4线盾构区间的实施过程中，R18032地块项目的最大水平位移为2.4mm，最大沉降量为1.0mm，最大差异成绩为0.1mm，最大倾斜值为0.00024，均满足建筑物变形保护要求。可见，R18032地块项目按申报建筑、结构方案实施，能满足后期盾构隧道侧穿的控制保护标准，其对轨道交通1号线居康路站~宏兴路站区间以及小海停车场出入场线区间实施的影响可控。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624.docx",
+      "source_doc": "南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 1,
+      "opinion_text": "R18032地块项目先于轨道交通1号线实施，建筑自身的管综应按规划批复的路径进行布置，地铁影响范围内的管线应能承受后期地铁施工造成的变形影响；用地红线局部侵入特别保护区，特别保护区内不能进行任何工程；",
+      "topics": [
+        "特别保护区",
+        "管线与周边设施"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "4.1.1"
+      ],
+      "related_fields": [
+        "is_in_special_protection_zone",
+        "main_external_work_type",
+        "monitoring_object",
+        "special_zone_intrusion_length"
+      ],
+      "keywords": [
+        "保护区",
+        "特别保护区",
+        "用地红线",
+        "管线",
+        "管综"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624.docx",
+      "source_doc": "南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 2,
+      "opinion_text": "R18032地块项目的围护结构及建筑基础等应严格按目前设计方案实施，施工时应做好质量控制及相关的检测工作，确保建筑主体达到设计强度，可承受盾构区间施工造成的变形影响；",
+      "topics": [
+        "围护结构和基础质量"
+      ],
+      "related_clauses": [
+        "5.1.2",
+        "5.2.7"
+      ],
+      "related_fields": [
+        "foundation_type",
+        "measure_for_support",
+        "support_method"
+      ],
+      "keywords": [
+        "围护结构",
+        "建筑基础",
+        "设计强度",
+        "设计方案",
+        "质量控制"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624.docx",
+      "source_doc": "南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 3,
+      "opinion_text": "主体结构完成后，应回填密实，强度不低于原状土，并确保盾构区间侧穿前停止降水；",
+      "topics": [
+        "回填与降水控制"
+      ],
+      "related_clauses": [
+        "5.5.1",
+        "7.2.6"
+      ],
+      "related_fields": [
+        "dewatering_type",
+        "groundwater_monitoring_required",
+        "measure_for_dewatering"
+      ],
+      "keywords": [
+        "停止降水",
+        "回填",
+        "降水"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624.docx",
+      "source_doc": "南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 4,
+      "opinion_text": "R18032地块西侧建筑距轨道交通1号线区间较近，不满足环境振动控制标准，下阶段建设单位应研究保护区范围内建筑的减震、隔振措施，使其满足轨道交通振动的环境振动控制标准，并通过相关技术审查；",
+      "topics": [
+        "减震隔振",
+        "特别保护区"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "3.4.3"
+      ],
+      "related_fields": [
+        "is_in_special_protection_zone",
+        "measure_for_vibration",
+        "special_zone_intrusion_length",
+        "vibration_compliance"
+      ],
+      "keywords": [
+        "保护区",
+        "减震",
+        "振动",
+        "环境振动",
+        "隔振"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624.docx",
+      "source_doc": "南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 5,
+      "opinion_text": "应按要求分阶段上报项目的建设方案至轨道公司审核备案（规划设计阶段、施工图阶段），若实施方案调整，需重新报审。主要从事道路、桥梁、隧道、市政、轨道交通、铁道工程、港口、航道、船闸、水利、工业与民用建筑、环境、景观、智能交通的规划、勘察、设计、咨询、科研、试验检测、监理和项目管理。单位地址：南京市秦淮区紫云大道9号                        邮编：210014业务联系电话：经营处 025-88018888-8515                  网址：http://www.jsjty.com",
+      "topics": [
+        "报审备案"
+      ],
+      "related_clauses": [
+        "5.1.2"
+      ],
+      "related_fields": [
+        "approval_required",
+        "review_stage"
+      ],
+      "keywords": [
+        "上报",
+        "审核备案",
+        "施工图",
+        "重新报审"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2).docx",
+      "source_doc": "（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2)",
+      "section": "6",
+      "section_title": "6 对R18032地块项目的评价与建议",
+      "opinion_number": 6,
+      "opinion_text": "1 对R18032地块项目的总体评价上述模拟计算结果表明，临近的轨道交通1号线4线盾构区间的实施过程中，R18032地块项目的最大水平位移为2.4mm，最大沉降量为1.0mm，最大差异成绩为0.1mm，最大倾斜值为0.00024，均满足建筑物变形保护要求。可见，R18032地块项目按申报建筑、结构方案实施，能满足后期盾构隧道侧穿的控制保护标准，其对轨道交通1号线居康路站~宏兴路站区间以及小海停车场出入场线区间实施的影响可控。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2).docx",
+      "source_doc": "（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 1,
+      "opinion_text": "R18032地块项目先于轨道交通1号线实施，建筑自身的管综应按规划批复的路径进行布置，地铁影响范围内的管线应能承受后期地铁施工造成的变形影响；用地红线局部侵入特别保护区，特别保护区内不能进行任何工程；",
+      "topics": [
+        "特别保护区",
+        "管线与周边设施"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "4.1.1"
+      ],
+      "related_fields": [
+        "is_in_special_protection_zone",
+        "main_external_work_type",
+        "monitoring_object",
+        "special_zone_intrusion_length"
+      ],
+      "keywords": [
+        "保护区",
+        "特别保护区",
+        "用地红线",
+        "管线",
+        "管综"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2).docx",
+      "source_doc": "（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 2,
+      "opinion_text": "R18032地块项目的围护结构及建筑基础等应严格按目前设计方案实施，施工时应做好质量控制及相关的检测工作，确保建筑主体达到设计强度，可承受盾构区间施工造成的变形影响；",
+      "topics": [
+        "围护结构和基础质量"
+      ],
+      "related_clauses": [
+        "5.1.2",
+        "5.2.7"
+      ],
+      "related_fields": [
+        "foundation_type",
+        "measure_for_support",
+        "support_method"
+      ],
+      "keywords": [
+        "围护结构",
+        "建筑基础",
+        "设计强度",
+        "设计方案",
+        "质量控制"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2).docx",
+      "source_doc": "（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 3,
+      "opinion_text": "主体结构完成后，应回填密实，强度不低于原状土，并确保盾构区间侧穿前停止降水；",
+      "topics": [
+        "回填与降水控制"
+      ],
+      "related_clauses": [
+        "5.5.1",
+        "7.2.6"
+      ],
+      "related_fields": [
+        "dewatering_type",
+        "groundwater_monitoring_required",
+        "measure_for_dewatering"
+      ],
+      "keywords": [
+        "停止降水",
+        "回填",
+        "降水"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2).docx",
+      "source_doc": "（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 4,
+      "opinion_text": "R18032地块西侧建筑距轨道交通1号线区间较近，不满足环境振动控制标准，下阶段建设单位应研究保护区范围内建筑的减震、隔振措施，使其满足轨道交通振动的环境振动控制标准，并通过相关技术审查；",
+      "topics": [
+        "减震隔振",
+        "特别保护区"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "3.4.3"
+      ],
+      "related_fields": [
+        "is_in_special_protection_zone",
+        "measure_for_vibration",
+        "special_zone_intrusion_length",
+        "vibration_compliance"
+      ],
+      "keywords": [
+        "保护区",
+        "减震",
+        "振动",
+        "环境振动",
+        "隔振"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2).docx",
+      "source_doc": "（测试1监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (2)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 5,
+      "opinion_text": "应按要求分阶段上报项目的建设方案至轨道公司审核备案（规划设计阶段、施工图阶段），若实施方案调整，需重新报审。主要从事道路、桥梁、隧道、市政、轨道交通、铁道工程、港口、航道、船闸、水利、工业与民用建筑、环境、景观、智能交通的规划、勘察、设计、咨询、科研、试验检测、监理和项目管理。单位地址：南京市秦淮区紫云大道9号                        邮编：210014业务联系电话：经营处 025-88018888-8515                  网址：http://www.jsjty.com",
+      "topics": [
+        "报审备案"
+      ],
+      "related_clauses": [
+        "5.1.2"
+      ],
+      "related_fields": [
+        "approval_required",
+        "review_stage"
+      ],
+      "keywords": [
+        "上报",
+        "审核备案",
+        "施工图",
+        "重新报审"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3).docx",
+      "source_doc": "（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3)",
+      "section": "6",
+      "section_title": "6 对R18032地块项目的评价与建议",
+      "opinion_number": 6,
+      "opinion_text": "1 对R18032地块项目的总体评价上述模拟计算结果表明，临近的轨道交通1号线4线盾构区间的实施过程中，R18032地块项目的最大水平位移为2.4mm，最大沉降量为1.0mm，最大差异成绩为0.1mm，最大倾斜值为0.00024，均满足建筑物变形保护要求。可见，R18032地块项目按申报建筑、结构方案实施，能满足后期盾构隧道侧穿的控制保护标准，其对轨道交通1号线居康路站~宏兴路站区间以及小海停车场出入场线区间实施的影响可控。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3).docx",
+      "source_doc": "（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 1,
+      "opinion_text": "R18032地块项目先于轨道交通1号线实施，建筑自身的管综应按规划批复的路径进行布置，地铁影响范围内的管线应能承受后期地铁施工造成的变形影响；用地红线局部侵入特别保护区，特别保护区内不能进行任何工程；",
+      "topics": [
+        "特别保护区",
+        "管线与周边设施"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "4.1.1"
+      ],
+      "related_fields": [
+        "is_in_special_protection_zone",
+        "main_external_work_type",
+        "monitoring_object",
+        "special_zone_intrusion_length"
+      ],
+      "keywords": [
+        "保护区",
+        "特别保护区",
+        "用地红线",
+        "管线",
+        "管综"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3).docx",
+      "source_doc": "（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 2,
+      "opinion_text": "R18032地块项目的围护结构及建筑基础等应严格按目前设计方案实施，施工时应做好质量控制及相关的检测工作，确保建筑主体达到设计强度，可承受盾构区间施工造成的变形影响；",
+      "topics": [
+        "围护结构和基础质量"
+      ],
+      "related_clauses": [
+        "5.1.2",
+        "5.2.7"
+      ],
+      "related_fields": [
+        "foundation_type",
+        "measure_for_support",
+        "support_method"
+      ],
+      "keywords": [
+        "围护结构",
+        "建筑基础",
+        "设计强度",
+        "设计方案",
+        "质量控制"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3).docx",
+      "source_doc": "（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 3,
+      "opinion_text": "主体结构完成后，应回填密实，强度不低于原状土，并确保盾构区间侧穿前停止降水；",
+      "topics": [
+        "回填与降水控制"
+      ],
+      "related_clauses": [
+        "5.5.1",
+        "7.2.6"
+      ],
+      "related_fields": [
+        "dewatering_type",
+        "groundwater_monitoring_required",
+        "measure_for_dewatering"
+      ],
+      "keywords": [
+        "停止降水",
+        "回填",
+        "降水"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3).docx",
+      "source_doc": "（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 4,
+      "opinion_text": "R18032地块西侧建筑距轨道交通1号线区间较近，不满足环境振动控制标准，下阶段建设单位应研究保护区范围内建筑的减震、隔振措施，使其满足轨道交通振动的环境振动控制标准，并通过相关技术审查；",
+      "topics": [
+        "减震隔振",
+        "特别保护区"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "3.4.3"
+      ],
+      "related_fields": [
+        "is_in_special_protection_zone",
+        "measure_for_vibration",
+        "special_zone_intrusion_length",
+        "vibration_compliance"
+      ],
+      "keywords": [
+        "保护区",
+        "减震",
+        "振动",
+        "环境振动",
+        "隔振"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3).docx",
+      "source_doc": "（测试2监测）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本 (3)",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 5,
+      "opinion_text": "应按要求分阶段上报项目的建设方案至轨道公司审核备案（规划设计阶段、施工图阶段），若实施方案调整，需重新报审。主要从事道路、桥梁、隧道、市政、轨道交通、铁道工程、港口、航道、船闸、水利、工业与民用建筑、环境、景观、智能交通的规划、勘察、设计、咨询、科研、试验检测、监理和项目管理。单位地址：南京市秦淮区紫云大道9号                        邮编：210014业务联系电话：经营处 025-88018888-8515                  网址：http://www.jsjty.com",
+      "topics": [
+        "报审备案"
+      ],
+      "related_clauses": [
+        "5.1.2"
+      ],
+      "related_fields": [
+        "approval_required",
+        "review_stage"
+      ],
+      "keywords": [
+        "上报",
+        "审核备案",
+        "施工图",
+        "重新报审"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本.docx",
+      "source_doc": "（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本",
+      "section": "6",
+      "section_title": "6 对R18032地块项目的评价与建议",
+      "opinion_number": 6,
+      "opinion_text": "1 对R18032地块项目的总体评价上述模拟计算结果表明，临近的轨道交通1号线4线盾构区间的实施过程中，R18032地块项目的最大水平位移为2.4mm，最大沉降量为1.0mm，最大差异成绩为0.1mm，最大倾斜值为0.00024，均满足建筑物变形保护要求。可见，R18032地块项目按申报建筑、结构方案实施，能满足后期盾构隧道侧穿的控制保护标准，其对轨道交通1号线居康路站~宏兴路站区间以及小海停车场出入场线区间实施的影响可控。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本.docx",
+      "source_doc": "（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 1,
+      "opinion_text": "R18032地块项目先于轨道交通1号线实施，建筑自身的管综应按规划批复的路径进行布置，地铁影响范围内的管线应能承受后期地铁施工造成的变形影响；用地红线局部侵入特别保护区，特别保护区内不能进行任何工程；",
+      "topics": [
+        "特别保护区",
+        "管线与周边设施"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "4.1.1"
+      ],
+      "related_fields": [
+        "is_in_special_protection_zone",
+        "main_external_work_type",
+        "monitoring_object",
+        "special_zone_intrusion_length"
+      ],
+      "keywords": [
+        "保护区",
+        "特别保护区",
+        "用地红线",
+        "管线",
+        "管综"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本.docx",
+      "source_doc": "（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 2,
+      "opinion_text": "R18032地块项目的围护结构及建筑基础等应严格按目前设计方案实施，施工时应做好质量控制及相关的检测工作，确保建筑主体达到设计强度，可承受盾构区间施工造成的变形影响；",
+      "topics": [
+        "围护结构和基础质量"
+      ],
+      "related_clauses": [
+        "5.1.2",
+        "5.2.7"
+      ],
+      "related_fields": [
+        "foundation_type",
+        "measure_for_support",
+        "support_method"
+      ],
+      "keywords": [
+        "围护结构",
+        "建筑基础",
+        "设计强度",
+        "设计方案",
+        "质量控制"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本.docx",
+      "source_doc": "（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 3,
+      "opinion_text": "主体结构完成后，应回填密实，强度不低于原状土，并确保盾构区间侧穿前停止降水；",
+      "topics": [
+        "回填与降水控制"
+      ],
+      "related_clauses": [
+        "5.5.1",
+        "7.2.6"
+      ],
+      "related_fields": [
+        "dewatering_type",
+        "groundwater_monitoring_required",
+        "measure_for_dewatering"
+      ],
+      "keywords": [
+        "停止降水",
+        "回填",
+        "降水"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本.docx",
+      "source_doc": "（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 4,
+      "opinion_text": "R18032地块西侧建筑距轨道交通1号线区间较近，不满足环境振动控制标准，下阶段建设单位应研究保护区范围内建筑的减震、隔振措施，使其满足轨道交通振动的环境振动控制标准，并通过相关技术审查；",
+      "topics": [
+        "减震隔振",
+        "特别保护区"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "3.4.3"
+      ],
+      "related_fields": [
+        "is_in_special_protection_zone",
+        "measure_for_vibration",
+        "special_zone_intrusion_length",
+        "vibration_compliance"
+      ],
+      "keywords": [
+        "保护区",
+        "减震",
+        "振动",
+        "环境振动",
+        "隔振"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本.docx",
+      "source_doc": "（测试3结构安全）南通R18032地块项目与轨道交通1号线盾构区间相互影响安全评估报告20190624 - 副本",
+      "section": "6.2",
+      "section_title": "6.2 对R18032地块项目实施的建议",
+      "opinion_number": 5,
+      "opinion_text": "应按要求分阶段上报项目的建设方案至轨道公司审核备案（规划设计阶段、施工图阶段），若实施方案调整，需重新报审。主要从事道路、桥梁、隧道、市政、轨道交通、铁道工程、港口、航道、船闸、水利、工业与民用建筑、环境、景观、智能交通的规划、勘察、设计、咨询、科研、试验检测、监理和项目管理。单位地址：南京市秦淮区紫云大道9号                        邮编：210014业务联系电话：经营处 025-88018888-8515                  网址：http://www.jsjty.com",
+      "topics": [
+        "报审备案"
+      ],
+      "related_clauses": [
+        "5.1.2"
+      ],
+      "related_fields": [
+        "approval_required",
+        "review_stage"
+      ],
+      "keywords": [
+        "上报",
+        "审核备案",
+        "施工图",
+        "重新报审"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5",
+      "section_title": "5. 分析结论和建议",
+      "opinion_number": 5,
+      "opinion_text": "1 分析结论（1） 根据《城市轨道交通结构安全保护技术规范》（CJJ/T202－2013）的规定，并结合南京的特殊软土特性，在既有地铁交通 1号线旁边施工，将对既有地铁结构产生不利影响，需采取针对性的保护措施和施工方案。（2）C1、C2地块由于距离地铁较远，基坑开挖对于地铁位移和内力影响很小。地铁连接通道基坑开挖体量较小，对于地铁位移和内力影响也较小。（3）B1、B2地块三层地下室基坑距离区间隧道最近约 41.9~50.3m，距离车站最近距离约 12.9m~16.2m ，基坑开挖深度 16.30~17.50m。基坑距离地铁车站较近且场地工程地质条件较差，存在较厚的②~3淤泥质粉质粘土，因此 B地块基坑施工对地铁车站有一定影响。（4）考虑分区开挖，基坑施工顺序：C1（逆作）、B1（顺作）——B2（顺作）、C2（逆作）——A、D（顺作）——地铁连接通道。累计开挖引起车站结构最大竖向位移为 3.429mm，满足 5mm 位移控制标准。累计开挖引起车站结构最大水平位移为 4.938mm，满足5mm水平位移控制标准。表5.1-1基坑开挖对既有1号线车站结构位移影响表名称 1号线车站结构最大竖向位移 1号线车站结构最大水平位移（mm） （mm）未开挖时 0 0C1、B1区开挖完成后 -0.919mm（1.081mm） 2.276mmC2、B2区开挖完成后 -0.345mm（2.612mm） 4.495mmA/D区开挖完成后 -0.648mm（2.488mm） 4.921mm地铁连接通道开挖后 -0.650mm（3.429mm） 4.938mm73南京华贸中心项目基坑工程对南京地铁1号线安全影响评价报告（5）累计开挖引起区间隧道结构最大竖向位移为 0.877mm，满足5mm位移控制标准。累计开挖引起区间隧道最大水平位移为 2.613mm，满足 5mm 位移控制标准。表5.1-2基坑开挖对既有1号线区间隧道位移影响表名称 1号线区间隧道结构最大竖向位 1号线区间隧道结构最大水平位移（mm） 移（mm）未开挖时 0 0C1、B1区开挖完成后 -0.288mm 0.799mmC2、B2区开挖完成后 -0.301mm 0.943mmA/D区开挖完成后 -0.867mm 2.617mm地铁连接通道开挖后 -0.877mm 2.613mm（6）根据内力分析计算结果可知，由于基坑开挖引起靠近基坑车站顶板、中板、底板、中柱和侧墙的内力有所增大，经计算车站墙板结构承载能力、裂缝满足规范要求，中柱轴压比满足89混凝土规范要求，但已超出现行混凝土规范轴压比限值要求。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 1,
+      "opinion_text": "首先应对基坑开挖影响范围内地铁车站、区间隧道进行初始状态调查，并且作为基坑允许开挖的前提条件。基坑施工前，须对地块土壤修复工程基坑回填质量进行检测，确保回填密实，压实度应不小于 92%；对不影响本工程支护结构施工的型钢在基坑工程结束后拔出。所有型钢拔除应同步高压注浆充填空隙；同时对型钢拔出情况进行摸排，保证主基坑支护结构施工范围内无障碍物。",
+      "topics": [
+        "回填与降水控制"
+      ],
+      "related_clauses": [
+        "5.5.1",
+        "7.2.6"
+      ],
+      "related_fields": [
+        "dewatering_type",
+        "groundwater_monitoring_required",
+        "measure_for_dewatering"
+      ],
+      "keywords": [
+        "回填"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 2,
+      "opinion_text": "新模范马路站是南京1号线最早一批建造的车站，车站采用的混凝土和钢筋等级较低，结构安全冗余度较低，基坑开挖前应对车站结构中柱等重点部位制定加固保护预案，施工中加强对车站结构的监控量测。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 3,
+      "opinion_text": "根据地铁结构变形和地下水控制要求，细化完善地下连续墙型钢接头大样和质量控制要求，补充地下墙槽壁加固措施，建议搅拌桩进入第 3层粘土层。74南京华贸中心项目基坑工程对南京地铁1号线安全影响评价报告同时要求调整优化临近地铁侧 B1、B2分区的支撑体系，增强东西向支撑刚度。",
+      "topics": [
+        "围护结构和基础质量"
+      ],
+      "related_clauses": [
+        "5.1.2",
+        "5.2.7"
+      ],
+      "related_fields": [
+        "foundation_type",
+        "measure_for_support",
+        "support_method"
+      ],
+      "keywords": [
+        "质量控制"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 4,
+      "opinion_text": "施工前，应针对不同地层进行试桩，确定合理施工工艺，量化各项施工技术参数。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 5,
+      "opinion_text": "基坑工程施工方应编制针对地铁隧道结构的专项保护方案，并制定应急预案、采取对应措施，所编方案需报地铁并组织专家评审。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 6,
+      "opinion_text": "施工期间应重点加强对基坑围护、开挖、支护等全过程的管理，特别是基坑开挖前，应重点加强围护墙体的渗流检测，符合设计要求后方可开挖。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 7,
+      "opinion_text": "C1-B1、C2-B2、A-D 等每个重要节点工程完成后，应对基坑施工管控质量和地铁结构状态进行分析评估，满足各项控制指标要求后，方可进行下道工序施工。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 8,
+      "opinion_text": "施工期间，临地铁侧各 30m 范围内严禁堆载，地面超载按 20kpa 控制，施工车辆应避开该荷载控制范围。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 9,
+      "opinion_text": "尽快同步开展连接通道对地铁车站内部结构及设备布局改造设计工作。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 10,
+      "opinion_text": "基坑开挖期间需加强对既有地铁区间隧道的保护性监测。根据《江苏省城市轨道交通工程监测规程》DGJ32/J195-2015，按基坑开挖分区先后实施次序，细化基坑实施变形控制指标和控制条件明确，测值不得大于以下表格中数值：表 5.2- 1 基坑工程临近既有地铁 1 号线地铁结构施工期间控制值车站最大水平位移 车站结构最大沉降 车站结构最大隆起施工阶段 （mm） （mm） （mm）计算值 控制值 计算值 控制值 计算值 控制值C1、B1区开挖",
+      "topics": [
+        "安全监测"
+      ],
+      "related_clauses": [
+        "7.1.1",
+        "7.1.2",
+        "7.1.3"
+      ],
+      "related_fields": [
+        "monitoring_items",
+        "monitoring_required",
+        "monitoring_requirements"
+      ],
+      "keywords": [
+        "监测"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 2,
+      "opinion_text": "276 3 -0.919 -1 1.081 1.5完成后C2、B2区开挖",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 4,
+      "opinion_text": "495 4.5 -0.345 -1 2.612 3完成后A/D区开挖完",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 4,
+      "opinion_text": "921 5 -0.648 -1 2.488 3成后地铁连接通道",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 4,
+      "opinion_text": "938 5 -0.65 -1 3.429 4开挖后75南京华贸中心项目基坑工程对南京地铁1号线安全影响评价报告区间隧道最大水平 区间隧道最大沉降 径向收 裂缝宽施工阶段 位移（mm） （mm） 敛（mm） 度（mm）计算值 控制值 计算值 控制值 控制值 控制值C1、B1区开挖",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 0,
+      "opinion_text": "799 1 -0.288 -1 ＜2 ＜0.2完成后C2、B2区开挖",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 0,
+      "opinion_text": "943 1 -0.301 -1 ＜2 ＜0.2完成后A/D区开挖完",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 2,
+      "opinion_text": "617 3 -0.867 -1 ＜2 ＜0.2成后地铁连接通道",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\华贸安全影响评价报告20200322.pdf",
+      "source_doc": "华贸安全影响评价报告20200322",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 2,
+      "opinion_text": "613 3 -0.877 -1 ＜2 ＜0.2开挖后76",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 1,
+      "opinion_text": "基坑施工前，应对基坑开挖影响范围内地铁区间隧道、车站结构进行初始状态调查，会同地铁运营公司完善逐环三维扫描普查方案，对存在缺陷的地铁结构作重点调查建档记录，并制定相应专项修复预案。协调明确本基坑工程与原AI 研发总部基地项目的建设时序关系，本工程完成地下室主体结构后，方可进行原AI 研发总部基地项目基坑开挖施工。以上要求须作为本基坑允许开挖的前提条件。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 2,
+      "opinion_text": "临近地铁侧采用Φ800mm钻孔灌注桩作为隔离桩，设置在地铁结构外侧10米，桩底进入地铁隧道底板以下不小于3m，隔离桩顶需设置冠梁，以隔离基坑开挖对地铁结构的影响。临地铁侧隔离桩建议采用护筒+旋挖成孔工艺，施工前应结合场地情况和地质条件，进行预试桩，完善成孔稳定施工工艺，减小地层扰动。桩基施工时应跳桩施工，跳桩间隔不少于5 根。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 3,
+      "opinion_text": "建议在临地铁侧基坑围护墙转折处D 点（11~12轴），增设外侧加强拉板，同时在基坑外侧增加三轴搅拌桩进行土体加固，控制基坑变形。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 4,
+      "opinion_text": "为确保止水效果和质量，临近地铁侧地下墙接缝应结合地质条件，通过试桩采用MJS、RJP、S-JET等先进可靠施工工艺进行补强处理；考虑到地墙施工范围分布连续卵砾石层，应选择合适成槽机械，确保地墙施工质量。临近地铁侧地墙入岩深度建议不小于2 米，并适当加长外侧槽壁加固深度。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 5,
+      "opinion_text": "施工期间应重点加强对基坑围护、开挖、支护等全过程的管理，特别是基坑开挖前，应重点加强地墙墙体的渗流检测，符合设计要求后方可开挖；适当增加临近地铁侧的坑外观测井兼回灌井数量，必要时可进行坑外回灌。支撑拆除过程中，选择人工凿除或绳锯切割方式进行支撑梁端部切断，严禁采用震动较大的机械破除方式。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 6,
+      "opinion_text": "结合建筑总体布局和主体结构设计方案，合理确定支撑标高，尽量先127未来出行产业园项目基坑工程对地铁十号线安全性影响评价报告换撑后拆撑，控制基坑变形。根据分区分块、对称平衡的原则，结合地块开发时序，合理制定土方开挖、支撑架设、主体结构浇筑等分部分项工程施工工序和管控要求。优化加强支撑平面布设方案，临近地铁侧各层边桁架支撑应增设封板加大支撑整体刚度，控制基坑变形。",
+      "topics": [
+        "围护结构和基础质量"
+      ],
+      "related_clauses": [
+        "5.1.2",
+        "5.2.7"
+      ],
+      "related_fields": [
+        "foundation_type",
+        "measure_for_support",
+        "support_method"
+      ],
+      "keywords": [
+        "设计方案"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 7,
+      "opinion_text": "基坑工程施工方应编制针对地铁车站、区间隧道的专项保护方案，并制定应急预案、采取对应措施，所编方案需报地铁并组织专家评审。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 8,
+      "opinion_text": "施工期间，临地铁侧各30m范围内严禁堆载，地面超载按20kpa控制，施工车辆应避开该荷载控制范围。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2).pdf",
+      "source_doc": "未来出行产业园基坑工程安全影响评价报告20220908（含专家意见回复）(1)(2)",
+      "section": "7",
+      "section_title": "7. 建议",
+      "opinion_number": 9,
+      "opinion_text": "在施工过程中按专项监测方案加强监测，启用三级预警机制，加强对既有地铁区间隧道、车站结构的保护性监测，当监测数据超过预警值时，应停止基坑开挖并根据需要采取回填等应急措施，通知相关单位召开专家评审会并提出应对措施，根据应对措施对隧道进行加固治理。待隧道变形稳定后方可复工。根据《江苏省城市轨道交通工程监测规程》DGJ32/J195-2015，各项监测值不得大于以下表格中数值：基坑工程临近既有地铁10 号线施工期间控制值江苏省监测规 施工期间变化 变化速率序号 安全控制指标范变形控制值 控制值 （mm/d）",
+      "topics": [
+        "回填与降水控制",
+        "安全监测"
+      ],
+      "related_clauses": [
+        "5.5.1",
+        "7.1.1",
+        "7.1.2",
+        "7.1.3",
+        "7.2.6"
+      ],
+      "related_fields": [
+        "dewatering_type",
+        "groundwater_monitoring_required",
+        "measure_for_dewatering",
+        "monitoring_items",
+        "monitoring_required",
+        "monitoring_requirements"
+      ],
+      "keywords": [
+        "回填",
+        "监测"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5",
+      "section_title": "5. 分析结论和建议",
+      "opinion_number": 5,
+      "opinion_text": "1 分析结论（1） 根据《城市轨道交通结构安全保护技术规范》（CJJ/T202－2013）的规定，并结合南京的特殊软土特性，在既有地铁交通 1 号线旁边施工，将对既有地铁结构产生不利影响，需采取针对性的保护措施和施工方案。（2）C地块由于距离地铁区间隧道较远，基坑开挖对于区间隧道位移和内力基本没有影响。（3）D地块一层地下室基坑距离区间隧道最近约 11.6m，一层地下室基坑开挖深度 7.50m~7.80m；E地块二层地下室基坑距离区间隧道最近约 12.7m，两层地下室基坑开挖深度 11.90m~12.20m。基坑距离地铁区间隧道较近且场地工程地质条件较差，存在较厚的 2-2 层淤泥质粉质粘土，因此 DE 地块基坑施工对地铁区间隧道影响较大。（4） 经计算分析，DE区基坑不入岩方案基坑开挖对既有隧道影响较大，其引起隧道最大水平位移为 9.496mm，大于5mm 水平位移控制标准。（5）考虑分区开挖，且开挖中区围护墙入岩（嵌入中等风化层）、开挖一区、二区围护墙插入比满足1：1.3后， DE 区基坑开挖的影响较原方案减小，其引起左线隧道最大水平位移为 2.831mm，引起右线隧道最大水平位移为",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5",
+      "section_title": "5. 分析结论和建议",
+      "opinion_number": 4,
+      "opinion_text": "917mm，满足5mm位移控制标准。61银城国际NO.2019G38地块基坑工程对南京地铁1号线安全影响评价报告",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 1,
+      "opinion_text": "基坑施工前，应对基坑开挖影响范围内地铁区间隧道进行初始状态调查，并且作为基坑允许开挖的前提条件；对各类病害分类登记造册，根据变形控制要求，完善监控量测方案和相应报警值，同时会同地铁运营部门细化病害治理方案及时序，确保地铁运营安全。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 2,
+      "opinion_text": "鉴于工程建设场地分布有深厚软流塑地层，灵敏度高，基坑已进入地铁特殊保护区，设计方案应预留充分的安全储备，PU 边支护方案需根据地铁安全保护需求、地质条件、施工效果等就咬合桩、多道止水帷幕插打灌注桩等方案进行综合比选，合理选择支护方案；同时优化完善支撑体系和分区开挖方案。",
+      "topics": [
+        "围护结构和基础质量",
+        "特别保护区"
+      ],
+      "related_clauses": [
+        "3.1.5",
+        "5.1.2",
+        "5.2.7"
+      ],
+      "related_fields": [
+        "foundation_type",
+        "is_in_special_protection_zone",
+        "measure_for_support",
+        "special_zone_intrusion_length",
+        "support_method"
+      ],
+      "keywords": [
+        "保护区",
+        "设计方案"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 3,
+      "opinion_text": "施工前，应针对不同地层进行试桩，确定合理施工工艺，量化各项施工技术参数。临近地铁侧支护桩应采用长护筒超前防护措施和间隔跳打方式，尽量减小土体扰动。",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 4,
+      "opinion_text": "基坑止水帷幕按隔断基坑内外地下水联系的全封闭止水原则进行设计，可以最大限度减小基坑内部疏干降水对环境的影响，为确保止水帷幕的有效性，设计文件中应进一步明确止水帷幕的施工质量控制要求，基坑开挖前须进行降水试验，检验止水效果，满足止水要求后方可开挖。",
+      "topics": [
+        "回填与降水控制",
+        "围护结构和基础质量"
+      ],
+      "related_clauses": [
+        "5.1.2",
+        "5.2.7",
+        "5.5.1",
+        "7.2.6"
+      ],
+      "related_fields": [
+        "dewatering_type",
+        "foundation_type",
+        "groundwater_monitoring_required",
+        "measure_for_dewatering",
+        "measure_for_support",
+        "support_method"
+      ],
+      "keywords": [
+        "质量控制",
+        "降水"
+      ]
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 5,
+      "opinion_text": "基坑工程施工方应编制针对地铁隧道结构的专项保护方案，并制定应急预案、采取对应措施，所编方案需报地铁并组织专家评审；",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 6,
+      "opinion_text": "施工期间应重点加强对基坑围护、开挖、支护等全过程的管理，特别是基坑开挖前，应重点加强围护墙体的渗流检测，符合设计要求后方可开挖；土方开挖及支撑须严格按评估报告要求执行；",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 7,
+      "opinion_text": "施工期间，临地铁侧各30m 范围内严禁堆载，地面超载按 20kpa 控制，施工车辆应避开该荷载控制范围；",
+      "topics": [],
+      "related_clauses": [],
+      "related_fields": [],
+      "keywords": []
+    },
+    {
+      "source_file": "..\\安全评估报告\\银城中央门NO.2019G38地块安全影响评价报告20200210y正式版.pdf",
+      "source_doc": "银城中央门NO.2019G38地块安全影响评价报告20200210y正式版",
+      "section": "5.2",
+      "section_title": "5.2 建议",
+      "opinion_number": 8,
+      "opinion_text": "基坑开挖期间需加强对既有地铁区间隧道的保护性监测。根据《江苏省城市轨道交通工程监测规程》DGJ32/J195-2015，各项监测值不得大于以下表格中数值：62银城国际NO.2019G38地块基坑工程对南京地铁1号线安全影响评价报告表 5.2- 1 基坑工程临近既有地铁 1 号线区间施工期间控制值江苏省监测规范变形序号 安全控制指标 施工期间变化控制值控制值",
+      "topics": [
+        "安全监测"
+      ],
+      "related_clauses": [
+        "7.1.1",
+        "7.1.2",
+        "7.1.3"
+      ],
+      "related_fields": [
+        "monitoring_items",
+        "monitoring_required",
+        "monitoring_requirements"
+      ],
+      "keywords": [
+        "监测"
+      ]
+    }
+  ]
+}

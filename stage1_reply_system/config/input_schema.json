@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage1_reply_input_v1",
+  "title": "保护区智能系统第一阶段统一输入",
+  "description": "函件抽取、人工录入、地图回填、规程计算和历史回函匹配共用的数据结构。数值单位统一为米或平方米。未知数据使用 null，不允许使用 0 代替未知。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "source_documents",
+    "project",
+    "metro_structure",
+    "geology",
+    "pit",
+    "review_context"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "stage1_reply_input_v1"
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "项目唯一编号"
+    },
+    "source_documents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/source_document"
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_type",
+        "project_stage",
+        "relative_relationship",
+        "other_involvements",
+        "location"
+      ],
+      "properties": {
+        "project_name": {
+          "type": ["string", "null"]
+        },
+        "applicant": {
+          "type": ["string", "null"],
+          "description": "来函单位或报审单位"
+        },
+        "project_type": {
+          "enum": ["基坑"]
+        },
+        "project_stage": {
+          "enum": ["出让", "规划", "设计", "施工"]
+        },
+        "relative_relationship": {
+          "enum": ["交叉", "单侧", "双侧"]
+        },
+        "land_use_type": {
+          "type": ["string", "null"]
+        },
+        "project_address": {
+          "type": ["string", "null"]
+        },
+        "construction_content": {
+          "type": ["string", "null"],
+          "description": "从来函提取并经人工确认的建设规模或主要建设内容"
+        },
+        "other_involvements": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["红线", "接口", "临时结构", "协议"]
+          }
+        },
+        "location": {
+          "$ref": "#/$defs/location"
+        }
+      }
+    },
+    "metro_structure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structure_method", "structure_category", "structure_condition"],
+      "properties": {
+        "metro_line_name": {
+          "type": ["string", "null"]
+        },
+        "metro_section_name": {
+          "type": ["string", "null"]
+        },
+        "structure_method": {
+          "enum": ["明挖", "暗挖（矿山法）", "盾构", "高架"]
+        },
+        "structure_category": {
+          "enum": ["地下装配式", "地下现浇", "地面结构", "高架结构"]
+        },
+        "structure_condition": {
+          "enum": ["较好", "较差"]
+        },
+        "buried_depth_m": {
+          "$ref": "#/$defs/nullable_nonnegative_number"
+        },
+        "original_excavation_depth_m": {
+          "$ref": "#/$defs/nullable_positive_number",
+          "description": "明挖、盖挖法轨道结构建设时的基坑开挖深度 H，不等同于结构埋深"
+        },
+        "outer_diameter_or_width_m": {
+          "$ref": "#/$defs/nullable_positive_number",
+          "description": "盾构隧道外径 D，或需进行1.0D判断时的结构外径/宽度"
+        },
+        "mined_tunnel_span_m": {
+          "$ref": "#/$defs/nullable_positive_number",
+          "description": "矿山法隧道毛洞跨度 W"
+        },
+        "elevated_pile_diameter_m": {
+          "$ref": "#/$defs/nullable_positive_number",
+          "description": "高架桥梁单桩桩径 P"
+        },
+        "is_special_section": {
+          "type": ["boolean", "null"],
+          "description": "是否为联络通道等特殊区段"
+        },
+        "disease_severity": {
+          "enum": ["无明显病害", "一般", "严重", "未知"]
+        },
+        "is_cross_river_segment": {
+          "type": ["boolean", "null"],
+          "description": "是否为越江、河、湖地下结构或跨江桥梁区段，用于3.3.4净距放大"
+        },
+        "autofill_source": {
+          "$ref": "#/$defs/autofill_source"
+        }
+      }
+    },
+    "geology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["terrain_zone"],
+      "properties": {
+        "terrain_zone": {
+          "enum": ["漫滩", "非漫滩"]
+        },
+        "is_soft_soil": {
+          "type": ["boolean", "null"]
+        },
+        "is_complex_geology_or_hydrology": {
+          "type": ["boolean", "null"]
+        },
+        "has_geological_hazard": {
+          "type": ["boolean", "null"]
+        },
+        "geology_description": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "pit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["support_components"],
+      "properties": {
+        "pit_depth_m": {
+          "$ref": "#/$defs/nullable_nonnegative_number"
+        },
+        "pit_length_m": {
+          "$ref": "#/$defs/nullable_nonnegative_number"
+        },
+        "pit_width_m": {
+          "$ref": "#/$defs/nullable_nonnegative_number"
+        },
+        "pit_area_m2": {
+          "$ref": "#/$defs/nullable_nonnegative_number"
+        },
+        "minimum_horizontal_clearance_m": {
+          "$ref": "#/$defs/nullable_nonnegative_number",
+          "description": "外部作业结构外边线与轨道结构外边线的最小水平投影净距"
+        },
+        "minimum_vertical_clearance_m": {
+          "$ref": "#/$defs/nullable_nonnegative_number",
+          "description": "外部作业结构外边线与轨道结构外边线的最小竖向净距"
+        },
+        "support_components": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["围护桩", "地下连续墙", "非挤土工程桩", "挤土工程桩", "锚杆", "锚索", "土钉", "上方基坑", "其他"]
+          }
+        },
+        "retaining_structure_type": {
+          "type": ["string", "null"]
+        },
+        "dewatering_method": {
+          "type": ["string", "null"]
+        },
+        "dewatering_involved": {
+          "type": ["boolean", "null"]
+        },
+        "confined_water_drawdown": {
+          "type": ["boolean", "null"]
+        },
+        "expert_opinion_text": {
+          "type": ["string", "null"]
+        },
+        "expert_opinion_file": {
+          "type": ["string", "null"]
+        },
+        "scheme_file": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "review_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protection_zone_location": {
+          "type": "string",
+          "enum": ["特别保护区", "控制保护区（非特别保护区）", "保护区外", "待判断"]
+        },
+        "is_in_control_protection_zone": {
+          "type": ["boolean", "null"]
+        },
+        "is_in_special_protection_zone": {
+          "type": ["boolean", "null"]
+        },
+        "manual_notes": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nullable_nonnegative_number": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "nullable_positive_number": {
+      "type": ["number", "null"],
+      "exclusiveMinimum": 0
+    },
+    "source_document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "path"],
+      "properties": {
+        "role": {
+          "enum": ["incoming_letter", "scheme", "expert_opinion", "drawing", "other"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": ["string", "null"]
+        },
+        "text_extraction_method": {
+          "enum": ["direct", "ocr", "mixed", "manual", "not_extracted"]
+        },
+        "document_date": {
+          "type": ["string", "null"]
+        },
+        "page_count": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        }
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "longitude": {
+          "type": ["number", "null"],
+          "minimum": -180,
+          "maximum": 180
+        },
+        "latitude": {
+          "type": ["number", "null"],
+          "minimum": -90,
+          "maximum": 90
+        },
+        "map_label": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "autofill_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_type": {
+          "enum": ["manual", "segment_database", "historical_project", "document_extraction", "unknown"]
+        },
+        "source_id": {
+          "type": ["string", "null"]
+        },
+        "source_name": {
+          "type": ["string", "null"]
+        },
+        "distance_m": {
+          "$ref": "#/$defs/nullable_nonnegative_number"
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "confirmed_by_user": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

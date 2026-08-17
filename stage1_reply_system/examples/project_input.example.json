@@ -1,0 +1,79 @@
+{
+  "schema_version": "stage1_reply_input_v1",
+  "case_id": "TAIXINLU-PLANNING-001",
+  "source_documents": [
+    {
+      "role": "incoming_letter",
+      "path": "D:\\桌面\\华设项目\\华设\\1号线 太新路泵站及进出管道改扩建工程-无监测报审\\规划阶段\\报审单位提供资料\\关于太新路泵站及进出水管道改扩建工程规划方案征求地铁意见的函.pdf",
+      "sha256": null,
+      "text_extraction_method": "not_extracted"
+    }
+  ],
+  "project": {
+    "project_name": "太新路泵站及进出水管道改扩建工程",
+    "applicant": null,
+    "project_type": "基坑",
+    "project_stage": "规划",
+    "relative_relationship": "单侧",
+    "land_use_type": null,
+    "project_address": null,
+    "construction_content": null,
+    "other_involvements": [],
+    "location": {
+      "longitude": null,
+      "latitude": null,
+      "map_label": null
+    }
+  },
+  "metro_structure": {
+    "metro_line_name": "1号线",
+    "metro_section_name": null,
+    "structure_method": "盾构",
+    "structure_category": "地下装配式",
+    "structure_condition": "较好",
+    "buried_depth_m": null,
+    "original_excavation_depth_m": null,
+    "outer_diameter_or_width_m": null,
+    "mined_tunnel_span_m": null,
+    "elevated_pile_diameter_m": null,
+    "is_special_section": null,
+    "disease_severity": "未知",
+    "is_cross_river_segment": null,
+    "autofill_source": {
+      "source_type": "manual",
+      "source_id": null,
+      "source_name": null,
+      "distance_m": null,
+      "confidence": null,
+      "confirmed_by_user": false
+    }
+  },
+  "geology": {
+    "terrain_zone": "非漫滩",
+    "is_soft_soil": null,
+    "is_complex_geology_or_hydrology": null,
+    "has_geological_hazard": null,
+    "geology_description": null
+  },
+  "pit": {
+    "pit_depth_m": null,
+    "pit_length_m": null,
+    "pit_width_m": null,
+    "pit_area_m2": null,
+    "minimum_horizontal_clearance_m": null,
+    "minimum_vertical_clearance_m": null,
+    "support_components": [],
+    "retaining_structure_type": null,
+    "dewatering_method": null,
+    "dewatering_involved": null,
+    "confined_water_drawdown": null,
+    "expert_opinion_text": null,
+    "expert_opinion_file": null,
+    "scheme_file": null
+  },
+  "review_context": {
+    "is_in_control_protection_zone": null,
+    "is_in_special_protection_zone": null,
+    "manual_notes": null
+  }
+}

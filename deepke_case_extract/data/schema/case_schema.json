@@ -1,0 +1,2520 @@
+{
+  "modules": {
+    "Case": {
+      "case_id": {
+        "field": "case_id",
+        "meaning": "案例唯一编号",
+        "core": false
+      },
+      "case_name": {
+        "field": "case_name",
+        "meaning": "案例名称",
+        "core": true
+      },
+      "case_type": {
+        "field": "case_type",
+        "meaning": "案例类型/外部作业类别",
+        "core": true
+      },
+      "project_stage": {
+        "field": "project_stage",
+        "meaning": "项目阶段，如规划、方案、初设、施工图、施工、运营改造",
+        "core": true
+      },
+      "report_type": {
+        "field": "report_type",
+        "meaning": "报告类型，如安全评估报告、专项论证报告",
+        "core": true
+      },
+      "report_date": {
+        "field": "report_date",
+        "meaning": "报告日期",
+        "core": false
+      },
+      "source_file": {
+        "field": "source_file",
+        "meaning": "来源文件名称",
+        "core": false
+      },
+      "source_page_or_section": {
+        "field": "source_page_or_section",
+        "meaning": "来源页码或章节",
+        "core": false
+      },
+      "city": {
+        "field": "city",
+        "meaning": "项目所在城市",
+        "core": false
+      },
+      "district": {
+        "field": "district",
+        "meaning": "项目所在区县",
+        "core": false
+      },
+      "review_status": {
+        "field": "review_status",
+        "meaning": "审核状态",
+        "core": false
+      },
+      "final_conclusion": {
+        "field": "final_conclusion",
+        "meaning": "最终结论",
+        "core": true
+      },
+      "risk_level": {
+        "field": "risk_level",
+        "meaning": "案例总体风险等级",
+        "core": true
+      }
+    },
+    "ProjectInfo": {
+      "project_name": {
+        "field": "project_name",
+        "meaning": "项目名称",
+        "core": true
+      },
+      "construction_unit": {
+        "field": "construction_unit",
+        "meaning": "建设单位",
+        "core": true
+      },
+      "design_unit": {
+        "field": "design_unit",
+        "meaning": "设计单位",
+        "core": true
+      },
+      "assessment_unit": {
+        "field": "assessment_unit",
+        "meaning": "评估单位",
+        "core": true
+      },
+      "construction_unit_name": {
+        "field": "construction_unit_name",
+        "meaning": "施工单位名称",
+        "core": false
+      },
+      "supervision_unit": {
+        "field": "supervision_unit",
+        "meaning": "监理单位",
+        "core": false
+      },
+      "project_location": {
+        "field": "project_location",
+        "meaning": "项目地点",
+        "core": true
+      },
+      "land_use_type": {
+        "field": "land_use_type",
+        "meaning": "用地性质",
+        "core": false
+      },
+      "building_function": {
+        "field": "building_function",
+        "meaning": "建筑功能",
+        "core": false
+      },
+      "sensitive_function": {
+        "field": "sensitive_function",
+        "meaning": "敏感功能，如住宅、学校、医院等",
+        "core": false
+      },
+      "total_land_area": {
+        "field": "total_land_area",
+        "meaning": "总用地面积",
+        "core": true
+      },
+      "total_building_area": {
+        "field": "total_building_area",
+        "meaning": "总建筑面积",
+        "core": true
+      },
+      "underground_area": {
+        "field": "underground_area",
+        "meaning": "地下建筑面积",
+        "core": true
+      },
+      "aboveground_area": {
+        "field": "aboveground_area",
+        "meaning": "地上建筑面积",
+        "core": false
+      },
+      "building_count": {
+        "field": "building_count",
+        "meaning": "建筑栋数",
+        "core": false
+      },
+      "max_floor_count": {
+        "field": "max_floor_count",
+        "meaning": "最高层数",
+        "core": false
+      },
+      "max_building_height": {
+        "field": "max_building_height",
+        "meaning": "最大建筑高度",
+        "core": false
+      },
+      "basement_floor_count": {
+        "field": "basement_floor_count",
+        "meaning": "地下室层数",
+        "core": false
+      },
+      "basement_depth": {
+        "field": "basement_depth",
+        "meaning": "地下室埋深/基底深度",
+        "core": false
+      },
+      "main_structure_type": {
+        "field": "main_structure_type",
+        "meaning": "主体结构形式",
+        "core": false
+      },
+      "foundation_type": {
+        "field": "foundation_type",
+        "meaning": "基础形式",
+        "core": true
+      },
+      "project_schedule": {
+        "field": "project_schedule",
+        "meaning": "项目总体工期/时序",
+        "core": true
+      },
+      "key_milestones": {
+        "field": "key_milestones",
+        "meaning": "关键施工节点",
+        "core": false
+      },
+      "whether_existing_project": {
+        "field": "whether_existing_project",
+        "meaning": "是否既有项目",
+        "core": false
+      },
+      "whether_new_construction": {
+        "field": "whether_new_construction",
+        "meaning": "是否新建工程",
+        "core": false
+      },
+      "whether_demolition_involved": {
+        "field": "whether_demolition_involved",
+        "meaning": "是否涉及拆除",
+        "core": false
+      }
+    },
+    "MetroAsset": {
+      "metro_line_name": {
+        "field": "metro_line_name",
+        "meaning": "轨道交通线路名称",
+        "core": true
+      },
+      "metro_section_name": {
+        "field": "metro_section_name",
+        "meaning": "区间/车站/附属结构名称",
+        "core": true
+      },
+      "metro_asset_type": {
+        "field": "metro_asset_type",
+        "meaning": "轨道交通结构类型",
+        "core": true
+      },
+      "metro_operation_status": {
+        "field": "metro_operation_status",
+        "meaning": "地铁状态：规划、在建、运营等",
+        "core": true
+      },
+      "metro_structure_method": {
+        "field": "metro_structure_method",
+        "meaning": "地铁结构施工方法：盾构、明挖、矿山法等",
+        "core": true
+      },
+      "metro_structure_form": {
+        "field": "metro_structure_form",
+        "meaning": "结构形式，如装配式、现浇、桥梁等",
+        "core": false
+      },
+      "metro_outer_diameter_or_width": {
+        "field": "metro_outer_diameter_or_width",
+        "meaning": "隧道外径或结构宽度",
+        "core": false
+      },
+      "metro_buried_depth": {
+        "field": "metro_buried_depth",
+        "meaning": "结构埋深",
+        "core": true
+      },
+      "metro_track_depth": {
+        "field": "metro_track_depth",
+        "meaning": "轨面或轨顶埋深",
+        "core": false
+      },
+      "metro_line_direction": {
+        "field": "metro_line_direction",
+        "meaning": "线路走向",
+        "core": false
+      },
+      "metro_curve_radius": {
+        "field": "metro_curve_radius",
+        "meaning": "线路曲线半径",
+        "core": false
+      },
+      "metro_special_section": {
+        "field": "metro_special_section",
+        "meaning": "特殊区段，如联络通道、始发接收端、曲线段等",
+        "core": true
+      },
+      "metro_existing_condition": {
+        "field": "metro_existing_condition",
+        "meaning": "既有结构现状",
+        "core": false
+      },
+      "metro_disease_status": {
+        "field": "metro_disease_status",
+        "meaning": "既有病害状态",
+        "core": false
+      },
+      "metro_monitoring_history": {
+        "field": "metro_monitoring_history",
+        "meaning": "历史监测数据",
+        "core": false
+      },
+      "metro_design_documents_available": {
+        "field": "metro_design_documents_available",
+        "meaning": "是否有设计资料",
+        "core": false
+      },
+      "metro_as_built_documents_available": {
+        "field": "metro_as_built_documents_available",
+        "meaning": "是否有竣工资料",
+        "core": false
+      }
+    },
+    "SpatialRelation": {
+      "is_in_control_protection_zone": {
+        "field": "is_in_control_protection_zone",
+        "meaning": "是否位于控制保护区内",
+        "core": true
+      },
+      "is_in_special_protection_zone": {
+        "field": "is_in_special_protection_zone",
+        "meaning": "是否位于特别保护区内",
+        "core": true
+      },
+      "control_zone_intrusion_length": {
+        "field": "control_zone_intrusion_length",
+        "meaning": "侵入控制保护区长度/范围",
+        "core": true
+      },
+      "special_zone_intrusion_length": {
+        "field": "special_zone_intrusion_length",
+        "meaning": "侵入特别保护区长度/范围",
+        "core": true
+      },
+      "minimum_horizontal_clearance": {
+        "field": "minimum_horizontal_clearance",
+        "meaning": "最小水平净距",
+        "core": true
+      },
+      "minimum_vertical_clearance": {
+        "field": "minimum_vertical_clearance",
+        "meaning": "最小竖向净距",
+        "core": true
+      },
+      "minimum_3d_clearance": {
+        "field": "minimum_3d_clearance",
+        "meaning": "最小三维净距",
+        "core": false
+      },
+      "relation_type": {
+        "field": "relation_type",
+        "meaning": "空间关系类型，如上跨、下穿、侧穿、平行邻近等",
+        "core": true
+      },
+      "crossing_angle": {
+        "field": "crossing_angle",
+        "meaning": "交叉角度",
+        "core": false
+      },
+      "parallel_length": {
+        "field": "parallel_length",
+        "meaning": "平行影响长度",
+        "core": false
+      },
+      "overlap_length": {
+        "field": "overlap_length",
+        "meaning": "平面重叠或覆盖长度",
+        "core": false
+      },
+      "relative_position": {
+        "field": "relative_position",
+        "meaning": "相对位置，如正上方、侧方、侧上方等",
+        "core": true
+      },
+      "nearest_metro_asset": {
+        "field": "nearest_metro_asset",
+        "meaning": "最近的轨道交通结构对象",
+        "core": true
+      },
+      "nearest_metro_ring_or_stationing": {
+        "field": "nearest_metro_ring_or_stationing",
+        "meaning": "最近环号或里程位置",
+        "core": false
+      },
+      "distance_to_tunnel_outer_edge": {
+        "field": "distance_to_tunnel_outer_edge",
+        "meaning": "距隧道外边线距离",
+        "core": false
+      },
+      "distance_to_station_outer_edge": {
+        "field": "distance_to_station_outer_edge",
+        "meaning": "距车站外边线距离",
+        "core": false
+      },
+      "distance_to_auxiliary_structure": {
+        "field": "distance_to_auxiliary_structure",
+        "meaning": "距附属结构外边线距离",
+        "core": false
+      },
+      "whether_above_metro": {
+        "field": "whether_above_metro",
+        "meaning": "是否位于地铁上方",
+        "core": false
+      },
+      "whether_below_metro": {
+        "field": "whether_below_metro",
+        "meaning": "是否位于地铁下方",
+        "core": false
+      },
+      "whether_side_of_metro": {
+        "field": "whether_side_of_metro",
+        "meaning": "是否位于地铁侧方",
+        "core": false
+      },
+      "whether_crossing_metro": {
+        "field": "whether_crossing_metro",
+        "meaning": "是否穿越/交叉地铁结构",
+        "core": false
+      },
+      "whether_parallel_metro": {
+        "field": "whether_parallel_metro",
+        "meaning": "是否与地铁平行邻近",
+        "core": false
+      },
+      "whether_between_multiple_lines": {
+        "field": "whether_between_multiple_lines",
+        "meaning": "是否位于多线之间或被包夹",
+        "core": false
+      },
+      "number_of_affected_lines": {
+        "field": "number_of_affected_lines",
+        "meaning": "受影响线路数量",
+        "core": false
+      },
+      "number_of_affected_tunnels": {
+        "field": "number_of_affected_tunnels",
+        "meaning": "受影响隧道/结构数量",
+        "core": false
+      },
+      "spatial_calculation_source": {
+        "field": "spatial_calculation_source",
+        "meaning": "空间计算来源，如CAD/GIS/BIM/报告文本",
+        "core": false
+      }
+    },
+    "ExternalWork": {
+      "external_work_types": {
+        "field": "external_work_types",
+        "meaning": "外部作业类型集合",
+        "core": false
+      },
+      "main_external_work_type": {
+        "field": "main_external_work_type",
+        "meaning": "主要外部作业类型",
+        "core": false
+      },
+      "work_stage": {
+        "field": "work_stage",
+        "meaning": "作业阶段",
+        "core": false
+      },
+      "work_scope": {
+        "field": "work_scope",
+        "meaning": "作业范围",
+        "core": false
+      },
+      "work_area": {
+        "field": "work_area",
+        "meaning": "作业面积",
+        "core": false
+      },
+      "work_depth": {
+        "field": "work_depth",
+        "meaning": "作业深度",
+        "core": false
+      },
+      "work_length": {
+        "field": "work_length",
+        "meaning": "作业长度",
+        "core": false
+      },
+      "work_width": {
+        "field": "work_width",
+        "meaning": "作业宽度",
+        "core": false
+      },
+      "work_duration": {
+        "field": "work_duration",
+        "meaning": "作业持续时间",
+        "core": false
+      },
+      "construction_sequence": {
+        "field": "construction_sequence",
+        "meaning": "施工顺序",
+        "core": false
+      },
+      "whether_multiple_works": {
+        "field": "whether_multiple_works",
+        "meaning": "是否存在多项外部作业",
+        "core": false
+      },
+      "whether_simultaneous_works": {
+        "field": "whether_simultaneous_works",
+        "meaning": "是否存在时空相近/同步作业",
+        "core": false
+      },
+      "whether_adjacent_projects": {
+        "field": "whether_adjacent_projects",
+        "meaning": "是否存在邻近项目叠加影响",
+        "core": false
+      },
+      "whether_design_change": {
+        "field": "whether_design_change",
+        "meaning": "是否发生设计变更",
+        "core": false
+      },
+      "whether_construction_change": {
+        "field": "whether_construction_change",
+        "meaning": "是否发生施工变更",
+        "core": false
+      },
+      "whether_major_impact_work": {
+        "field": "whether_major_impact_work",
+        "meaning": "是否属于重大影响外部作业",
+        "core": false
+      },
+      "impact_level": {
+        "field": "impact_level",
+        "meaning": "外部作业影响等级",
+        "core": false
+      },
+      "impact_level_basis": {
+        "field": "impact_level_basis",
+        "meaning": "影响等级判定依据",
+        "core": false
+      },
+      "need_special_assessment": {
+        "field": "need_special_assessment",
+        "meaning": "是否需要专项评估/论证",
+        "core": false
+      },
+      "need_expert_review": {
+        "field": "need_expert_review",
+        "meaning": "是否需要专家审查",
+        "core": false
+      }
+    },
+    "LoadChange": {
+      "load_change_type": {
+        "field": "load_change_type",
+        "meaning": "荷载变化类型：加载、卸载、拆除、回填等",
+        "core": false
+      },
+      "unloading_area": {
+        "field": "unloading_area",
+        "meaning": "卸载面积",
+        "core": false
+      },
+      "unloading_depth": {
+        "field": "unloading_depth",
+        "meaning": "卸载深度",
+        "core": false
+      },
+      "unloading_volume": {
+        "field": "unloading_volume",
+        "meaning": "卸载体积",
+        "core": false
+      },
+      "estimated_unloading_value": {
+        "field": "estimated_unloading_value",
+        "meaning": "估算卸载量",
+        "core": false
+      },
+      "loading_area": {
+        "field": "loading_area",
+        "meaning": "加载面积",
+        "core": false
+      },
+      "additional_load_value": {
+        "field": "additional_load_value",
+        "meaning": "附加荷载值",
+        "core": false
+      },
+      "temporary_stack_load": {
+        "field": "temporary_stack_load",
+        "meaning": "临时堆载",
+        "core": false
+      },
+      "construction_vehicle_load": {
+        "field": "construction_vehicle_load",
+        "meaning": "施工车辆荷载",
+        "core": false
+      },
+      "heavy_equipment_load": {
+        "field": "heavy_equipment_load",
+        "meaning": "重型设备荷载",
+        "core": false
+      },
+      "whether_large_area_unloading": {
+        "field": "whether_large_area_unloading",
+        "meaning": "是否大面积卸载",
+        "core": false
+      },
+      "whether_above_metro_unloading": {
+        "field": "whether_above_metro_unloading",
+        "meaning": "是否在地铁上方卸载",
+        "core": false
+      },
+      "whether_above_metro_loading": {
+        "field": "whether_above_metro_loading",
+        "meaning": "是否在地铁上方加载",
+        "core": false
+      },
+      "distance_from_load_change_to_metro": {
+        "field": "distance_from_load_change_to_metro",
+        "meaning": "荷载变化区域至地铁距离",
+        "core": false
+      },
+      "load_change_duration": {
+        "field": "load_change_duration",
+        "meaning": "荷载变化持续时间",
+        "core": false
+      },
+      "backfill_material": {
+        "field": "backfill_material",
+        "meaning": "回填材料",
+        "core": false
+      },
+      "backfill_compaction_requirement": {
+        "field": "backfill_compaction_requirement",
+        "meaning": "回填密实要求",
+        "core": false
+      },
+      "whether_load_change_calculated": {
+        "field": "whether_load_change_calculated",
+        "meaning": "是否验算加载/卸载影响",
+        "core": false
+      },
+      "calculated_additional_stress": {
+        "field": "calculated_additional_stress",
+        "meaning": "计算得到的附加应力/附加荷载",
+        "core": false
+      },
+      "calculated_metro_deformation": {
+        "field": "calculated_metro_deformation",
+        "meaning": "计算得到的地铁结构变形",
+        "core": false
+      },
+      "control_measure": {
+        "field": "control_measure",
+        "meaning": "加载/卸载控制措施",
+        "core": false
+      }
+    },
+    "FoundationWork": {
+      "foundation_type": {
+        "field": "foundation_type",
+        "meaning": "基础形式",
+        "core": false
+      },
+      "pile_involved": {
+        "field": "pile_involved",
+        "meaning": "是否涉及桩基",
+        "core": false
+      },
+      "pile_type": {
+        "field": "pile_type",
+        "meaning": "桩型",
+        "core": false
+      },
+      "pile_diameter": {
+        "field": "pile_diameter",
+        "meaning": "桩径",
+        "core": false
+      },
+      "pile_length": {
+        "field": "pile_length",
+        "meaning": "桩长",
+        "core": false
+      },
+      "pile_spacing": {
+        "field": "pile_spacing",
+        "meaning": "桩间距",
+        "core": false
+      },
+      "pile_count": {
+        "field": "pile_count",
+        "meaning": "桩数量",
+        "core": false
+      },
+      "pile_tip_elevation": {
+        "field": "pile_tip_elevation",
+        "meaning": "桩端标高",
+        "core": false
+      },
+      "pile_tip_soil_layer": {
+        "field": "pile_tip_soil_layer",
+        "meaning": "桩端持力层",
+        "core": false
+      },
+      "pile_construction_method": {
+        "field": "pile_construction_method",
+        "meaning": "桩基施工工艺",
+        "core": false
+      },
+      "pile_soil_displacement_type": {
+        "field": "pile_soil_displacement_type",
+        "meaning": "桩基挤土属性：挤土/半挤土/非挤土",
+        "core": false
+      },
+      "minimum_clearance_pile_to_metro": {
+        "field": "minimum_clearance_pile_to_metro",
+        "meaning": "桩基至地铁结构最小净距",
+        "core": false
+      },
+      "pile_tip_relation_to_tunnel": {
+        "field": "pile_tip_relation_to_tunnel",
+        "meaning": "桩端与隧道底部/结构的位置关系",
+        "core": false
+      },
+      "pile_bottom_below_tunnel_bottom": {
+        "field": "pile_bottom_below_tunnel_bottom",
+        "meaning": "桩底是否超过隧道底部规定深度",
+        "core": false
+      },
+      "within_2d_range": {
+        "field": "within_2d_range",
+        "meaning": "是否位于隧道2D范围内",
+        "core": false
+      },
+      "whether_rock_socketed_pile": {
+        "field": "whether_rock_socketed_pile",
+        "meaning": "是否嵌岩桩",
+        "core": false
+      },
+      "whether_friction_pile": {
+        "field": "whether_friction_pile",
+        "meaning": "是否摩擦桩",
+        "core": false
+      },
+      "whether_test_pile": {
+        "field": "whether_test_pile",
+        "meaning": "是否试桩",
+        "core": false
+      },
+      "test_pile_count": {
+        "field": "test_pile_count",
+        "meaning": "试桩数量",
+        "core": false
+      },
+      "pile_sequence": {
+        "field": "pile_sequence",
+        "meaning": "成桩施工顺序",
+        "core": false
+      },
+      "whether_jump_piling": {
+        "field": "whether_jump_piling",
+        "meaning": "是否跳桩施工",
+        "core": false
+      },
+      "whether_near_to_far_or_far_to_near": {
+        "field": "whether_near_to_far_or_far_to_near",
+        "meaning": "施工顺序为先近后远或先远后近",
+        "core": false
+      },
+      "whether_anti_squeezing_measure": {
+        "field": "whether_anti_squeezing_measure",
+        "meaning": "是否采取防挤土措施",
+        "core": false
+      },
+      "whether_casing_used": {
+        "field": "whether_casing_used",
+        "meaning": "是否采用套筒/护筒",
+        "core": false
+      },
+      "whether_mud_wall_protection": {
+        "field": "whether_mud_wall_protection",
+        "meaning": "是否泥浆护壁",
+        "core": false
+      },
+      "whether_hole_collapse_risk": {
+        "field": "whether_hole_collapse_risk",
+        "meaning": "是否存在塌孔风险",
+        "core": false
+      },
+      "whether_pile_effect_assessed": {
+        "field": "whether_pile_effect_assessed",
+        "meaning": "是否评估桩基影响",
+        "core": false
+      }
+    },
+    "AdditionalSettlement": {
+      "whether_additional_settlement_considered": {
+        "field": "whether_additional_settlement_considered",
+        "meaning": "是否考虑附加沉降/后续沉降",
+        "core": false
+      },
+      "building_load_model": {
+        "field": "building_load_model",
+        "meaning": "建筑荷载模型",
+        "core": false
+      },
+      "foundation_settlement_calculation_method": {
+        "field": "foundation_settlement_calculation_method",
+        "meaning": "基础沉降计算方法",
+        "core": false
+      },
+      "predicted_total_settlement": {
+        "field": "predicted_total_settlement",
+        "meaning": "预测总沉降",
+        "core": false
+      },
+      "predicted_differential_settlement": {
+        "field": "predicted_differential_settlement",
+        "meaning": "预测差异沉降",
+        "core": false
+      },
+      "predicted_post_construction_settlement": {
+        "field": "predicted_post_construction_settlement",
+        "meaning": "预测工后沉降",
+        "core": false
+      },
+      "predicted_long_term_settlement": {
+        "field": "predicted_long_term_settlement",
+        "meaning": "预测长期沉降",
+        "core": false
+      },
+      "predicted_tunnel_additional_settlement": {
+        "field": "predicted_tunnel_additional_settlement",
+        "meaning": "预测隧道附加沉降",
+        "core": false
+      },
+      "predicted_tunnel_uplift": {
+        "field": "predicted_tunnel_uplift",
+        "meaning": "预测隧道上浮",
+        "core": false
+      },
+      "predicted_tunnel_horizontal_displacement": {
+        "field": "predicted_tunnel_horizontal_displacement",
+        "meaning": "预测隧道水平位移",
+        "core": false
+      },
+      "predicted_tunnel_convergence": {
+        "field": "predicted_tunnel_convergence",
+        "meaning": "预测隧道收敛",
+        "core": false
+      },
+      "settlement_control_value": {
+        "field": "settlement_control_value",
+        "meaning": "沉降控制值",
+        "core": false
+      },
+      "differential_settlement_control_value": {
+        "field": "differential_settlement_control_value",
+        "meaning": "差异沉降控制值",
+        "core": false
+      },
+      "whether_high_rise_building": {
+        "field": "whether_high_rise_building",
+        "meaning": "是否高层建筑",
+        "core": false
+      },
+      "whether_non_rock_socketed_friction_pile": {
+        "field": "whether_non_rock_socketed_friction_pile",
+        "meaning": "是否非嵌岩摩擦桩",
+        "core": false
+      },
+      "whether_soft_soil_area": {
+        "field": "whether_soft_soil_area",
+        "meaning": "是否软土地区",
+        "core": false
+      },
+      "whether_additional_deformation_monitoring_required": {
+        "field": "whether_additional_deformation_monitoring_required",
+        "meaning": "是否需要附加变形影响测量",
+        "core": false
+      },
+      "monitoring_duration_after_completion": {
+        "field": "monitoring_duration_after_completion",
+        "meaning": "完成后监测持续时间",
+        "core": false
+      },
+      "settlement_stability_criterion": {
+        "field": "settlement_stability_criterion",
+        "meaning": "沉降稳定判据",
+        "core": false
+      }
+    },
+    "ExcavationWork": {
+      "pit_involved": {
+        "field": "pit_involved",
+        "meaning": "是否涉及基坑",
+        "core": false
+      },
+      "pit_length": {
+        "field": "pit_length",
+        "meaning": "基坑长度",
+        "core": false
+      },
+      "pit_width": {
+        "field": "pit_width",
+        "meaning": "基坑宽度",
+        "core": false
+      },
+      "pit_area": {
+        "field": "pit_area",
+        "meaning": "基坑面积",
+        "core": false
+      },
+      "pit_depth": {
+        "field": "pit_depth",
+        "meaning": "基坑深度",
+        "core": true
+      },
+      "local_deep_pit_depth": {
+        "field": "local_deep_pit_depth",
+        "meaning": "局部深坑深度",
+        "core": false
+      },
+      "distance_pit_edge_to_metro": {
+        "field": "distance_pit_edge_to_metro",
+        "meaning": "基坑边至地铁结构距离",
+        "core": false
+      },
+      "pit_position_relative_to_metro": {
+        "field": "pit_position_relative_to_metro",
+        "meaning": "基坑与地铁相对位置",
+        "core": false
+      },
+      "whether_pit_crosses_metro": {
+        "field": "whether_pit_crosses_metro",
+        "meaning": "基坑是否横跨地铁结构",
+        "core": false
+      },
+      "whether_pit_above_metro": {
+        "field": "whether_pit_above_metro",
+        "meaning": "基坑是否位于地铁正上方",
+        "core": false
+      },
+      "whether_side_pit": {
+        "field": "whether_side_pit",
+        "meaning": "是否侧方基坑",
+        "core": false
+      },
+      "whether_split_pit": {
+        "field": "whether_split_pit",
+        "meaning": "是否分坑/分区",
+        "core": false
+      },
+      "split_pit_scheme": {
+        "field": "split_pit_scheme",
+        "meaning": "分坑或分区方案",
+        "core": false
+      },
+      "excavation_sequence": {
+        "field": "excavation_sequence",
+        "meaning": "开挖顺序",
+        "core": true
+      },
+      "excavation_layering": {
+        "field": "excavation_layering",
+        "meaning": "是否分层开挖",
+        "core": false
+      },
+      "excavation_blocking": {
+        "field": "excavation_blocking",
+        "meaning": "是否分块开挖",
+        "core": false
+      },
+      "time_limit_for_excavation": {
+        "field": "time_limit_for_excavation",
+        "meaning": "限时开挖要求",
+        "core": false
+      },
+      "whether_time_space_effect_considered": {
+        "field": "whether_time_space_effect_considered",
+        "meaning": "是否考虑时空效应",
+        "core": false
+      },
+      "predicted_retaining_wall_displacement": {
+        "field": "predicted_retaining_wall_displacement",
+        "meaning": "预测围护结构位移",
+        "core": false
+      },
+      "predicted_ground_settlement": {
+        "field": "predicted_ground_settlement",
+        "meaning": "预测地表沉降",
+        "core": false
+      },
+      "predicted_metro_vertical_displacement": {
+        "field": "predicted_metro_vertical_displacement",
+        "meaning": "预测地铁竖向位移",
+        "core": false
+      },
+      "predicted_metro_horizontal_displacement": {
+        "field": "predicted_metro_horizontal_displacement",
+        "meaning": "预测地铁水平位移",
+        "core": false
+      },
+      "predicted_metro_convergence": {
+        "field": "predicted_metro_convergence",
+        "meaning": "预测地铁收敛",
+        "core": false
+      },
+      "predicted_metro_differential_settlement": {
+        "field": "predicted_metro_differential_settlement",
+        "meaning": "预测地铁差异沉降",
+        "core": false
+      },
+      "whether_bottom_slab_timely_cast": {
+        "field": "whether_bottom_slab_timely_cast",
+        "meaning": "是否及时施作垫层和底板",
+        "core": false
+      },
+      "whether_long_exposure_risk": {
+        "field": "whether_long_exposure_risk",
+        "meaning": "是否存在基坑长时间暴露风险",
+        "core": false
+      },
+      "whether_local_deep_pit_after_slab": {
+        "field": "whether_local_deep_pit_after_slab",
+        "meaning": "局部深坑是否在浅部底板完成后开挖",
+        "core": false
+      }
+    },
+    "RetainingSupportSystem": {
+      "support_method": {
+        "field": "support_method",
+        "meaning": "支护工法",
+        "core": false
+      },
+      "retaining_structure_type": {
+        "field": "retaining_structure_type",
+        "meaning": "围护结构类型",
+        "core": true
+      },
+      "retaining_structure_depth": {
+        "field": "retaining_structure_depth",
+        "meaning": "围护结构深度",
+        "core": false
+      },
+      "retaining_structure_stiffness": {
+        "field": "retaining_structure_stiffness",
+        "meaning": "围护结构刚度",
+        "core": false
+      },
+      "support_system_type": {
+        "field": "support_system_type",
+        "meaning": "支撑体系类型",
+        "core": false
+      },
+      "strut_type": {
+        "field": "strut_type",
+        "meaning": "支撑类型",
+        "core": false
+      },
+      "anchor_involved": {
+        "field": "anchor_involved",
+        "meaning": "是否涉及锚杆/锚索",
+        "core": false
+      },
+      "anchor_length": {
+        "field": "anchor_length",
+        "meaning": "锚杆/锚索长度",
+        "core": false
+      },
+      "anchor_end_clearance_to_metro": {
+        "field": "anchor_end_clearance_to_metro",
+        "meaning": "锚杆/锚索末端至地铁净距",
+        "core": false
+      },
+      "soil_nail_involved": {
+        "field": "soil_nail_involved",
+        "meaning": "是否涉及土钉",
+        "core": false
+      },
+      "soil_nail_clearance_to_metro": {
+        "field": "soil_nail_clearance_to_metro",
+        "meaning": "土钉末端至地铁净距",
+        "core": false
+      },
+      "whether_anchor_intrudes_protection_zone": {
+        "field": "whether_anchor_intrudes_protection_zone",
+        "meaning": "锚杆/锚索/土钉是否侵入保护范围",
+        "core": false
+      },
+      "whether_support_near_metro_strengthened": {
+        "field": "whether_support_near_metro_strengthened",
+        "meaning": "临近地铁侧是否加强支护",
+        "core": false
+      },
+      "whether_servo_strut_used": {
+        "field": "whether_servo_strut_used",
+        "meaning": "是否采用自动伺服钢支撑",
+        "core": false
+      },
+      "whether_support_removal_plan": {
+        "field": "whether_support_removal_plan",
+        "meaning": "是否有支撑拆除方案",
+        "core": false
+      },
+      "whether_replacement_support_plan": {
+        "field": "whether_replacement_support_plan",
+        "meaning": "是否有换撑方案",
+        "core": false
+      },
+      "gap_between_retaining_and_basement_wall": {
+        "field": "gap_between_retaining_and_basement_wall",
+        "meaning": "围护结构与地下室外墙之间空隙",
+        "core": false
+      },
+      "gap_backfill_material": {
+        "field": "gap_backfill_material",
+        "meaning": "空隙回填材料",
+        "core": false
+      },
+      "waterproof_level_near_metro": {
+        "field": "waterproof_level_near_metro",
+        "meaning": "临近地铁侧防水等级",
+        "core": false
+      },
+      "risk_of_support_failure": {
+        "field": "risk_of_support_failure",
+        "meaning": "支护失效风险",
+        "core": false
+      }
+    },
+    "DewateringWork": {
+      "dewatering_involved": {
+        "field": "dewatering_involved",
+        "meaning": "是否涉及降水",
+        "core": false
+      },
+      "dewatering_type": {
+        "field": "dewatering_type",
+        "meaning": "降水类型",
+        "core": true
+      },
+      "whether_confined_water": {
+        "field": "whether_confined_water",
+        "meaning": "是否存在承压水",
+        "core": false
+      },
+      "whether_confined_water_drawdown": {
+        "field": "whether_confined_water_drawdown",
+        "meaning": "是否抽降承压水",
+        "core": false
+      },
+      "dewatering_depth": {
+        "field": "dewatering_depth",
+        "meaning": "降水深度",
+        "core": false
+      },
+      "water_level_drawdown": {
+        "field": "water_level_drawdown",
+        "meaning": "水位降深",
+        "core": false
+      },
+      "dewatering_duration": {
+        "field": "dewatering_duration",
+        "meaning": "降水持续时间",
+        "core": false
+      },
+      "target_water_level": {
+        "field": "target_water_level",
+        "meaning": "目标水位",
+        "core": false
+      },
+      "aquifer_type": {
+        "field": "aquifer_type",
+        "meaning": "含水层类型",
+        "core": false
+      },
+      "permeable_layer_thickness": {
+        "field": "permeable_layer_thickness",
+        "meaning": "透水层厚度",
+        "core": false
+      },
+      "whether_deep_sand_layer": {
+        "field": "whether_deep_sand_layer",
+        "meaning": "是否深厚砂层",
+        "core": false
+      },
+      "whether_soft_soil": {
+        "field": "whether_soft_soil",
+        "meaning": "是否软土",
+        "core": false
+      },
+      "cutoff_wall_type": {
+        "field": "cutoff_wall_type",
+        "meaning": "止水帷幕类型",
+        "core": false
+      },
+      "cutoff_wall_depth": {
+        "field": "cutoff_wall_depth",
+        "meaning": "止水帷幕深度",
+        "core": false
+      },
+      "whether_closed_cutoff": {
+        "field": "whether_closed_cutoff",
+        "meaning": "是否封闭截水",
+        "core": false
+      },
+      "whether_recharge": {
+        "field": "whether_recharge",
+        "meaning": "是否回灌",
+        "core": false
+      },
+      "recharge_scheme": {
+        "field": "recharge_scheme",
+        "meaning": "回灌方案",
+        "core": false
+      },
+      "whether_pumping_test": {
+        "field": "whether_pumping_test",
+        "meaning": "是否抽水试验",
+        "core": false
+      },
+      "whether_seepage_analysis": {
+        "field": "whether_seepage_analysis",
+        "meaning": "是否渗流分析",
+        "core": false
+      },
+      "whether_metro_structural_safety_checked": {
+        "field": "whether_metro_structural_safety_checked",
+        "meaning": "是否验算地铁结构受力安全",
+        "core": false
+      },
+      "predicted_groundwater_change_near_metro": {
+        "field": "predicted_groundwater_change_near_metro",
+        "meaning": "预测地铁周边水位变化",
+        "core": false
+      },
+      "predicted_settlement_due_to_dewatering": {
+        "field": "predicted_settlement_due_to_dewatering",
+        "meaning": "预测降水引起沉降",
+        "core": false
+      },
+      "groundwater_monitoring_required": {
+        "field": "groundwater_monitoring_required",
+        "meaning": "是否需地下水位监测",
+        "core": false
+      },
+      "confined_water_monitoring_required": {
+        "field": "confined_water_monitoring_required",
+        "meaning": "是否需承压水位监测",
+        "core": false
+      },
+      "stop_dewatering_condition": {
+        "field": "stop_dewatering_condition",
+        "meaning": "停止降水条件",
+        "core": false
+      },
+      "emergency_measure_for_water_inrush": {
+        "field": "emergency_measure_for_water_inrush",
+        "meaning": "突涌/涌水应急措施",
+        "core": false
+      },
+      "risk_of_quicksand": {
+        "field": "risk_of_quicksand",
+        "meaning": "流砂风险",
+        "core": false
+      },
+      "risk_of_piping": {
+        "field": "risk_of_piping",
+        "meaning": "管涌风险",
+        "core": false
+      },
+      "risk_of_bottom_heave": {
+        "field": "risk_of_bottom_heave",
+        "meaning": "坑底突涌/隆起风险",
+        "core": false
+      }
+    },
+    "GeologyHydrology": {
+      "geomorphology": {
+        "field": "geomorphology",
+        "meaning": "地貌类型",
+        "core": false
+      },
+      "site_elevation": {
+        "field": "site_elevation",
+        "meaning": "场地高程",
+        "core": false
+      },
+      "soil_layers": {
+        "field": "soil_layers",
+        "meaning": "土层分布",
+        "core": false
+      },
+      "main_soil_near_metro": {
+        "field": "main_soil_near_metro",
+        "meaning": "地铁周边主要土层",
+        "core": false
+      },
+      "soft_soil_present": {
+        "field": "soft_soil_present",
+        "meaning": "是否存在软弱土",
+        "core": false
+      },
+      "muddy_soil_present": {
+        "field": "muddy_soil_present",
+        "meaning": "是否存在淤泥/淤泥质土",
+        "core": false
+      },
+      "sand_layer_present": {
+        "field": "sand_layer_present",
+        "meaning": "是否存在砂层",
+        "core": false
+      },
+      "karst_present": {
+        "field": "karst_present",
+        "meaning": "是否岩溶",
+        "core": false
+      },
+      "fault_fracture_zone_present": {
+        "field": "fault_fracture_zone_present",
+        "meaning": "是否断裂破碎带",
+        "core": false
+      },
+      "bad_geology_present": {
+        "field": "bad_geology_present",
+        "meaning": "是否存在不良地质体",
+        "core": false
+      },
+      "special_soil_present": {
+        "field": "special_soil_present",
+        "meaning": "是否特殊性岩土",
+        "core": false
+      },
+      "groundwater_type": {
+        "field": "groundwater_type",
+        "meaning": "地下水类型",
+        "core": false
+      },
+      "phreatic_water_level": {
+        "field": "phreatic_water_level",
+        "meaning": "潜水水位",
+        "core": false
+      },
+      "confined_water_level": {
+        "field": "confined_water_level",
+        "meaning": "承压水位",
+        "core": false
+      },
+      "hydraulic_connection": {
+        "field": "hydraulic_connection",
+        "meaning": "水力联系",
+        "core": false
+      },
+      "permeability_coefficient": {
+        "field": "permeability_coefficient",
+        "meaning": "渗透系数",
+        "core": false
+      },
+      "soil_compression": {
+        "field": "soil_compression",
+        "meaning": "土层压缩性",
+        "core": false
+      },
+      "soil_shear_strength": {
+        "field": "soil_shear_strength",
+        "meaning": "土体抗剪强度",
+        "core": false
+      },
+      "geotechnical_report_source": {
+        "field": "geotechnical_report_source",
+        "meaning": "岩土勘察资料来源",
+        "core": false
+      },
+      "geology_risk_summary": {
+        "field": "geology_risk_summary",
+        "meaning": "地质水文风险概述",
+        "core": false
+      }
+    },
+    "ImpactLevel": {
+      "approach_degree": {
+        "field": "approach_degree",
+        "meaning": "接近程度",
+        "core": false
+      },
+      "engineering_influence_zone": {
+        "field": "engineering_influence_zone",
+        "meaning": "工程影响分区",
+        "core": false
+      },
+      "initial_impact_level": {
+        "field": "initial_impact_level",
+        "meaning": "初判影响等级",
+        "core": false
+      },
+      "adjusted_impact_level": {
+        "field": "adjusted_impact_level",
+        "meaning": "调整后影响等级",
+        "core": false
+      },
+      "final_impact_level": {
+        "field": "final_impact_level",
+        "meaning": "最终影响等级",
+        "core": false
+      },
+      "impact_level_adjustment_reasons": {
+        "field": "impact_level_adjustment_reasons",
+        "meaning": "影响等级调整原因",
+        "core": false
+      },
+      "whether_level_raised_due_to_geology": {
+        "field": "whether_level_raised_due_to_geology",
+        "meaning": "是否因复杂地质水文提高等级",
+        "core": false
+      },
+      "whether_level_raised_due_to_confined_water": {
+        "field": "whether_level_raised_due_to_confined_water",
+        "meaning": "是否因抽降承压水提高等级",
+        "core": false
+      },
+      "whether_level_raised_due_to_existing_disease": {
+        "field": "whether_level_raised_due_to_existing_disease",
+        "meaning": "是否因既有病害/变形提高等级",
+        "core": false
+      },
+      "whether_level_raised_due_to_large_pit": {
+        "field": "whether_level_raised_due_to_large_pit",
+        "meaning": "是否因大面积/深基坑提高等级",
+        "core": false
+      },
+      "whether_special_grade": {
+        "field": "whether_special_grade",
+        "meaning": "是否特级影响",
+        "core": false
+      },
+      "whether_first_grade": {
+        "field": "whether_first_grade",
+        "meaning": "是否一级影响",
+        "core": false
+      },
+      "whether_second_grade": {
+        "field": "whether_second_grade",
+        "meaning": "是否二级影响",
+        "core": false
+      },
+      "whether_major_impact_work": {
+        "field": "whether_major_impact_work",
+        "meaning": "是否重大影响外部作业",
+        "core": false
+      }
+    },
+    "AssessmentCalculation": {
+      "assessment_required": {
+        "field": "assessment_required",
+        "meaning": "是否需要安全评估",
+        "core": false
+      },
+      "assessment_performed": {
+        "field": "assessment_performed",
+        "meaning": "是否已开展安全评估",
+        "core": false
+      },
+      "assessment_stage": {
+        "field": "assessment_stage",
+        "meaning": "安全评估阶段",
+        "core": false
+      },
+      "calculation_methods": {
+        "field": "calculation_methods",
+        "meaning": "计算/评估方法",
+        "core": false
+      },
+      "software_used": {
+        "field": "software_used",
+        "meaning": "计算软件",
+        "core": false
+      },
+      "model_dimension": {
+        "field": "model_dimension",
+        "meaning": "模型维度：平面/三维",
+        "core": false
+      },
+      "model_boundary_condition": {
+        "field": "model_boundary_condition",
+        "meaning": "模型边界条件",
+        "core": false
+      },
+      "construction_stages_modeled": {
+        "field": "construction_stages_modeled",
+        "meaning": "模拟施工阶段",
+        "core": false
+      },
+      "load_cases": {
+        "field": "load_cases",
+        "meaning": "计算工况",
+        "core": false
+      },
+      "dewatering_modeled": {
+        "field": "dewatering_modeled",
+        "meaning": "是否模拟降水影响",
+        "core": false
+      },
+      "pile_construction_modeled": {
+        "field": "pile_construction_modeled",
+        "meaning": "是否模拟桩基影响",
+        "core": false
+      },
+      "excavation_modeled": {
+        "field": "excavation_modeled",
+        "meaning": "是否模拟基坑开挖影响",
+        "core": false
+      },
+      "metro_structure_modeled": {
+        "field": "metro_structure_modeled",
+        "meaning": "是否建立地铁结构模型",
+        "core": false
+      },
+      "soil_structure_interaction_considered": {
+        "field": "soil_structure_interaction_considered",
+        "meaning": "是否考虑土-结构相互作用",
+        "core": false
+      },
+      "calculation_control_standard": {
+        "field": "calculation_control_standard",
+        "meaning": "计算控制标准",
+        "core": false
+      },
+      "calculation_result_summary": {
+        "field": "calculation_result_summary",
+        "meaning": "计算结果摘要",
+        "core": false
+      },
+      "max_metro_vertical_displacement": {
+        "field": "max_metro_vertical_displacement",
+        "meaning": "地铁最大竖向位移",
+        "core": false
+      },
+      "max_metro_horizontal_displacement": {
+        "field": "max_metro_horizontal_displacement",
+        "meaning": "地铁最大水平位移",
+        "core": false
+      },
+      "max_metro_convergence": {
+        "field": "max_metro_convergence",
+        "meaning": "地铁最大收敛",
+        "core": false
+      },
+      "max_metro_differential_settlement": {
+        "field": "max_metro_differential_settlement",
+        "meaning": "地铁最大差异沉降",
+        "core": false
+      },
+      "max_metro_curvature_radius": {
+        "field": "max_metro_curvature_radius",
+        "meaning": "地铁变形曲率半径",
+        "core": false
+      },
+      "max_additional_stress": {
+        "field": "max_additional_stress",
+        "meaning": "最大附加应力/附加荷载",
+        "core": false
+      },
+      "max_vibration_velocity": {
+        "field": "max_vibration_velocity",
+        "meaning": "最大振动速度",
+        "core": false
+      },
+      "max_building_settlement": {
+        "field": "max_building_settlement",
+        "meaning": "建筑最大沉降",
+        "core": false
+      },
+      "max_building_differential_settlement": {
+        "field": "max_building_differential_settlement",
+        "meaning": "建筑最大差异沉降",
+        "core": false
+      },
+      "max_building_tilt": {
+        "field": "max_building_tilt",
+        "meaning": "建筑最大倾斜",
+        "core": false
+      },
+      "whether_result_within_limit": {
+        "field": "whether_result_within_limit",
+        "meaning": "计算结果是否满足限值",
+        "core": false
+      },
+      "calculation_conclusion": {
+        "field": "calculation_conclusion",
+        "meaning": "计算结论",
+        "core": false
+      }
+    },
+    "MonitoringPlan": {
+      "monitoring_required": {
+        "field": "monitoring_required",
+        "meaning": "是否需要监测",
+        "core": true
+      },
+      "monitoring_objects": {
+        "field": "monitoring_objects",
+        "meaning": "监测对象",
+        "core": false
+      },
+      "monitoring_items": {
+        "field": "monitoring_items",
+        "meaning": "监测项目",
+        "core": true
+      },
+      "monitoring_layout_range": {
+        "field": "monitoring_layout_range",
+        "meaning": "监测布设范围",
+        "core": false
+      },
+      "monitoring_section_spacing": {
+        "field": "monitoring_section_spacing",
+        "meaning": "监测断面间距",
+        "core": false
+      },
+      "monitoring_point_count": {
+        "field": "monitoring_point_count",
+        "meaning": "监测点数量",
+        "core": false
+      },
+      "automatic_monitoring_required": {
+        "field": "automatic_monitoring_required",
+        "meaning": "是否需要自动化监测",
+        "core": false
+      },
+      "initial_value_collection_required": {
+        "field": "initial_value_collection_required",
+        "meaning": "是否需采集初始值",
+        "core": false
+      },
+      "monitoring_frequency": {
+        "field": "monitoring_frequency",
+        "meaning": "监测频率",
+        "core": true
+      },
+      "monitoring_duration": {
+        "field": "monitoring_duration",
+        "meaning": "监测周期",
+        "core": false
+      },
+      "warning_thresholds": {
+        "field": "warning_thresholds",
+        "meaning": "预警阈值",
+        "core": false
+      },
+      "alarm_response_measures": {
+        "field": "alarm_response_measures",
+        "meaning": "报警响应措施",
+        "core": false
+      },
+      "whether_track_bed_monitoring": {
+        "field": "whether_track_bed_monitoring",
+        "meaning": "是否监测道床",
+        "core": false
+      },
+      "whether_track_geometry_monitoring": {
+        "field": "whether_track_geometry_monitoring",
+        "meaning": "是否监测轨道变位/轨道几何",
+        "core": false
+      },
+      "whether_groundwater_monitoring": {
+        "field": "whether_groundwater_monitoring",
+        "meaning": "是否监测地下水位",
+        "core": false
+      },
+      "whether_confined_water_monitoring": {
+        "field": "whether_confined_water_monitoring",
+        "meaning": "是否监测承压水位",
+        "core": false
+      },
+      "whether_deep_soil_displacement_monitoring": {
+        "field": "whether_deep_soil_displacement_monitoring",
+        "meaning": "是否监测深层土体位移",
+        "core": false
+      },
+      "whether_vibration_monitoring": {
+        "field": "whether_vibration_monitoring",
+        "meaning": "是否监测振动速度",
+        "core": false
+      },
+      "whether_video_patrol": {
+        "field": "whether_video_patrol",
+        "meaning": "是否视频巡查",
+        "core": false
+      },
+      "whether_manual_patrol": {
+        "field": "whether_manual_patrol",
+        "meaning": "是否人工巡查",
+        "core": false
+      },
+      "monitoring_stability_criterion": {
+        "field": "monitoring_stability_criterion",
+        "meaning": "监测稳定判据",
+        "core": false
+      }
+    },
+    "ExistingConditionAndDisease": {
+      "pre_construction_investigation_required": {
+        "field": "pre_construction_investigation_required",
+        "meaning": "是否需要工前现状调查",
+        "core": false
+      },
+      "pre_construction_investigation_done": {
+        "field": "pre_construction_investigation_done",
+        "meaning": "是否已完成工前调查",
+        "core": false
+      },
+      "investigation_scope": {
+        "field": "investigation_scope",
+        "meaning": "调查范围",
+        "core": false
+      },
+      "investigation_content": {
+        "field": "investigation_content",
+        "meaning": "调查内容",
+        "core": false
+      },
+      "existing_deformation": {
+        "field": "existing_deformation",
+        "meaning": "既有结构已有变形",
+        "core": false
+      },
+      "existing_settlement": {
+        "field": "existing_settlement",
+        "meaning": "既有沉降",
+        "core": false
+      },
+      "existing_convergence": {
+        "field": "existing_convergence",
+        "meaning": "既有收敛变形",
+        "core": false
+      },
+      "existing_cracks": {
+        "field": "existing_cracks",
+        "meaning": "既有裂缝",
+        "core": false
+      },
+      "existing_leakage": {
+        "field": "existing_leakage",
+        "meaning": "既有渗漏水",
+        "core": false
+      },
+      "segment_joint_opening": {
+        "field": "segment_joint_opening",
+        "meaning": "管片接缝张开量",
+        "core": false
+      },
+      "segment_dislocation": {
+        "field": "segment_dislocation",
+        "meaning": "管片错台",
+        "core": false
+      },
+      "track_bed_void": {
+        "field": "track_bed_void",
+        "meaning": "道床脱空",
+        "core": false
+      },
+      "disease_type": {
+        "field": "disease_type",
+        "meaning": "病害类型",
+        "core": false
+      },
+      "disease_grade": {
+        "field": "disease_grade",
+        "meaning": "病害等级",
+        "core": false
+      },
+      "structure_safety_state_grade": {
+        "field": "structure_safety_state_grade",
+        "meaning": "结构安全状态等级",
+        "core": false
+      },
+      "whether_disease_treatment_required": {
+        "field": "whether_disease_treatment_required",
+        "meaning": "是否需要病害治理",
+        "core": false
+      },
+      "whether_special_disease_assessment_required": {
+        "field": "whether_special_disease_assessment_required",
+        "meaning": "是否需要病害治理专项论证",
+        "core": false
+      },
+      "remaining_deformation_capacity": {
+        "field": "remaining_deformation_capacity",
+        "meaning": "剩余抗变形能力",
+        "core": false
+      },
+      "existing_monitoring_data_available": {
+        "field": "existing_monitoring_data_available",
+        "meaning": "是否有既有监测数据",
+        "core": false
+      }
+    },
+    "ProtectionMeasures": {
+      "protection_scheme_required": {
+        "field": "protection_scheme_required",
+        "meaning": "是否需要结构安全保护方案",
+        "core": true
+      },
+      "protection_scheme_provided": {
+        "field": "protection_scheme_provided",
+        "meaning": "是否已提供保护方案",
+        "core": false
+      },
+      "measure_for_excavation": {
+        "field": "measure_for_excavation",
+        "meaning": "基坑开挖保护措施",
+        "core": true
+      },
+      "measure_for_support": {
+        "field": "measure_for_support",
+        "meaning": "支护/围护保护措施",
+        "core": true
+      },
+      "measure_for_pile": {
+        "field": "measure_for_pile",
+        "meaning": "桩基施工保护措施",
+        "core": false
+      },
+      "measure_for_dewatering": {
+        "field": "measure_for_dewatering",
+        "meaning": "降水保护措施",
+        "core": true
+      },
+      "measure_for_load_change": {
+        "field": "measure_for_load_change",
+        "meaning": "加载/卸载保护措施",
+        "core": false
+      },
+      "measure_for_vibration": {
+        "field": "measure_for_vibration",
+        "meaning": "振动控制措施",
+        "core": false
+      },
+      "measure_for_existing_disease": {
+        "field": "measure_for_existing_disease",
+        "meaning": "既有病害治理或加固措施",
+        "core": false
+      },
+      "measure_for_emergency": {
+        "field": "measure_for_emergency",
+        "meaning": "应急措施",
+        "core": true
+      },
+      "measure_for_construction_sequence": {
+        "field": "measure_for_construction_sequence",
+        "meaning": "施工时序控制措施",
+        "core": false
+      },
+      "measure_for_backfill": {
+        "field": "measure_for_backfill",
+        "meaning": "回填控制措施",
+        "core": true
+      },
+      "measure_for_waterproof": {
+        "field": "measure_for_waterproof",
+        "meaning": "防水防渗措施",
+        "core": false
+      },
+      "measure_for_third_party_facilities": {
+        "field": "measure_for_third_party_facilities",
+        "meaning": "周边管线/建构筑物保护措施",
+        "core": false
+      },
+      "whether_measures_match_risk": {
+        "field": "whether_measures_match_risk",
+        "meaning": "保护措施是否匹配风险",
+        "core": false
+      },
+      "whether_dynamic_adjustment_mechanism": {
+        "field": "whether_dynamic_adjustment_mechanism",
+        "meaning": "是否有动态调整机制",
+        "core": false
+      },
+      "whether_emergency_plan_required": {
+        "field": "whether_emergency_plan_required",
+        "meaning": "是否需要应急预案",
+        "core": false
+      },
+      "whether_emergency_plan_provided": {
+        "field": "whether_emergency_plan_provided",
+        "meaning": "是否已提供应急预案",
+        "core": false
+      }
+    },
+    "EnvironmentalImpact": {
+      "environmental_impact_involved": {
+        "field": "environmental_impact_involved",
+        "meaning": "是否涉及环境影响",
+        "core": false
+      },
+      "vibration_assessment_required": {
+        "field": "vibration_assessment_required",
+        "meaning": "是否需要环境振动评价",
+        "core": false
+      },
+      "noise_assessment_required": {
+        "field": "noise_assessment_required",
+        "meaning": "是否需要噪声评价",
+        "core": false
+      },
+      "sensitive_target_type": {
+        "field": "sensitive_target_type",
+        "meaning": "敏感目标类型",
+        "core": false
+      },
+      "sensitive_target_distance_to_track_center": {
+        "field": "sensitive_target_distance_to_track_center",
+        "meaning": "敏感目标至轨道中心线距离",
+        "core": false
+      },
+      "sensitive_target_distance_to_tunnel": {
+        "field": "sensitive_target_distance_to_tunnel",
+        "meaning": "敏感目标至隧道距离",
+        "core": false
+      },
+      "train_speed": {
+        "field": "train_speed",
+        "meaning": "列车速度",
+        "core": false
+      },
+      "train_marshalling": {
+        "field": "train_marshalling",
+        "meaning": "列车编组",
+        "core": false
+      },
+      "operation_period": {
+        "field": "operation_period",
+        "meaning": "运营时段",
+        "core": false
+      },
+      "daytime_limit": {
+        "field": "daytime_limit",
+        "meaning": "昼间环境限值",
+        "core": false
+      },
+      "nighttime_limit": {
+        "field": "nighttime_limit",
+        "meaning": "夜间环境限值",
+        "core": false
+      },
+      "predicted_vibration_daytime": {
+        "field": "predicted_vibration_daytime",
+        "meaning": "预测昼间环境振动",
+        "core": false
+      },
+      "predicted_vibration_nighttime": {
+        "field": "predicted_vibration_nighttime",
+        "meaning": "预测夜间环境振动",
+        "core": false
+      },
+      "predicted_secondary_noise": {
+        "field": "predicted_secondary_noise",
+        "meaning": "预测二次结构噪声",
+        "core": false
+      },
+      "vibration_compliance": {
+        "field": "vibration_compliance",
+        "meaning": "环境振动是否达标",
+        "core": false
+      },
+      "noise_compliance": {
+        "field": "noise_compliance",
+        "meaning": "噪声是否达标",
+        "core": false
+      },
+      "required_vibration_reduction_distance": {
+        "field": "required_vibration_reduction_distance",
+        "meaning": "环境振动达标距离",
+        "core": false
+      },
+      "actual_distance": {
+        "field": "actual_distance",
+        "meaning": "实际距离",
+        "core": false
+      },
+      "whether_vibration_mitigation_required": {
+        "field": "whether_vibration_mitigation_required",
+        "meaning": "是否需要减振隔振措施",
+        "core": false
+      },
+      "vibration_mitigation_measures": {
+        "field": "vibration_mitigation_measures",
+        "meaning": "减振隔振措施",
+        "core": false
+      },
+      "whether_environmental_special_review_required": {
+        "field": "whether_environmental_special_review_required",
+        "meaning": "是否需要环境专项审查",
+        "core": false
+      }
+    },
+    "ComplianceCheck": {
+      "rule_id": {
+        "field": "rule_id",
+        "meaning": "规则/条文编号",
+        "core": false
+      },
+      "rule_title": {
+        "field": "rule_title",
+        "meaning": "规则/条文标题",
+        "core": false
+      },
+      "applicable": {
+        "field": "applicable",
+        "meaning": "规则是否适用",
+        "core": false
+      },
+      "input_fields": {
+        "field": "input_fields",
+        "meaning": "规则使用的输入字段",
+        "core": false
+      },
+      "check_status": {
+        "field": "check_status",
+        "meaning": "审核状态：通过/不通过/缺资料等",
+        "core": false
+      },
+      "risk_level": {
+        "field": "risk_level",
+        "meaning": "规则风险等级",
+        "core": false
+      },
+      "finding": {
+        "field": "finding",
+        "meaning": "发现的问题或判断结论",
+        "core": false
+      },
+      "basis_text": {
+        "field": "basis_text",
+        "meaning": "依据条文文本",
+        "core": false
+      },
+      "evidence_from_case": {
+        "field": "evidence_from_case",
+        "meaning": "案例证据",
+        "core": false
+      },
+      "missing_fields": {
+        "field": "missing_fields",
+        "meaning": "缺失字段",
+        "core": false
+      },
+      "recommendation": {
+        "field": "recommendation",
+        "meaning": "整改或补充建议",
+        "core": false
+      },
+      "need_manual_review": {
+        "field": "need_manual_review",
+        "meaning": "是否需要人工复核",
+        "core": false
+      }
+    },
+    "ReviewConclusion": {
+      "overall_conclusion": {
+        "field": "overall_conclusion",
+        "meaning": "总体审查结论",
+        "core": true
+      },
+      "main_risks": {
+        "field": "main_risks",
+        "meaning": "主要风险",
+        "core": true
+      },
+      "non_compliance_items": {
+        "field": "non_compliance_items",
+        "meaning": "不符合项",
+        "core": false
+      },
+      "conditional_requirements": {
+        "field": "conditional_requirements",
+        "meaning": "有条件通过要求",
+        "core": false
+      },
+      "supplement_required": {
+        "field": "supplement_required",
+        "meaning": "需补充资料",
+        "core": false
+      },
+      "special_assessment_required": {
+        "field": "special_assessment_required",
+        "meaning": "是否需专项评估/论证",
+        "core": false
+      },
+      "expert_review_required": {
+        "field": "expert_review_required",
+        "meaning": "是否需专家评审",
+        "core": false
+      },
+      "construction_restrictions": {
+        "field": "construction_restrictions",
+        "meaning": "施工限制条件",
+        "core": true
+      },
+      "monitoring_requirements": {
+        "field": "monitoring_requirements",
+        "meaning": "监测要求",
+        "core": true
+      },
+      "environmental_requirements": {
+        "field": "environmental_requirements",
+        "meaning": "环境影响相关要求",
+        "core": false
+      },
+      "follow_up_requirements": {
+        "field": "follow_up_requirements",
+        "meaning": "后续跟踪要求",
+        "core": false
+      },
+      "final_review_opinion": {
+        "field": "final_review_opinion",
+        "meaning": "最终审查意见",
+        "core": true
+      }
+    },
+    "Evidence": {
+      "field_name": {
+        "field": "field_name",
+        "meaning": "字段名称",
+        "core": false
+      },
+      "field_value": {
+        "field": "field_value",
+        "meaning": "字段取值",
+        "core": false
+      },
+      "source_file": {
+        "field": "source_file",
+        "meaning": "来源文件",
+        "core": false
+      },
+      "source_section": {
+        "field": "source_section",
+        "meaning": "来源章节",
+        "core": false
+      },
+      "source_page": {
+        "field": "source_page",
+        "meaning": "来源页码",
+        "core": false
+      },
+      "source_paragraph": {
+        "field": "source_paragraph",
+        "meaning": "来源段落",
+        "core": false
+      },
+      "source_table": {
+        "field": "source_table",
+        "meaning": "来源表格",
+        "core": false
+      },
+      "source_figure": {
+        "field": "source_figure",
+        "meaning": "来源图纸/图片",
+        "core": false
+      },
+      "extraction_method": {
+        "field": "extraction_method",
+        "meaning": "抽取方式",
+        "core": false
+      },
+      "confidence": {
+        "field": "confidence",
+        "meaning": "抽取置信度",
+        "core": false
+      },
+      "manual_verified": {
+        "field": "manual_verified",
+        "meaning": "是否人工确认",
+        "core": false
+      }
+    }
+  },
+  "core_modules": {
+    "Case": {
+      "case_name": {
+        "field": "case_name",
+        "meaning": "案例名称",
+        "core": true
+      },
+      "case_type": {
+        "field": "case_type",
+        "meaning": "案例类型/外部作业类别",
+        "core": true
+      },
+      "project_stage": {
+        "field": "project_stage",
+        "meaning": "项目阶段，如规划、方案、初设、施工图、施工、运营改造",
+        "core": true
+      },
+      "report_type": {
+        "field": "report_type",
+        "meaning": "报告类型，如安全评估报告、专项论证报告",
+        "core": true
+      },
+      "final_conclusion": {
+        "field": "final_conclusion",
+        "meaning": "最终结论",
+        "core": true
+      },
+      "risk_level": {
+        "field": "risk_level",
+        "meaning": "案例总体风险等级",
+        "core": true
+      }
+    },
+    "ProjectInfo": {
+      "project_name": {
+        "field": "project_name",
+        "meaning": "项目名称",
+        "core": true
+      },
+      "construction_unit": {
+        "field": "construction_unit",
+        "meaning": "建设单位",
+        "core": true
+      },
+      "design_unit": {
+        "field": "design_unit",
+        "meaning": "设计单位",
+        "core": true
+      },
+      "assessment_unit": {
+        "field": "assessment_unit",
+        "meaning": "评估单位",
+        "core": true
+      },
+      "project_location": {
+        "field": "project_location",
+        "meaning": "项目地点",
+        "core": true
+      },
+      "total_land_area": {
+        "field": "total_land_area",
+        "meaning": "总用地面积",
+        "core": true
+      },
+      "total_building_area": {
+        "field": "total_building_area",
+        "meaning": "总建筑面积",
+        "core": true
+      },
+      "underground_area": {
+        "field": "underground_area",
+        "meaning": "地下建筑面积",
+        "core": true
+      },
+      "foundation_type": {
+        "field": "foundation_type",
+        "meaning": "基础形式",
+        "core": true
+      },
+      "project_schedule": {
+        "field": "project_schedule",
+        "meaning": "项目总体工期/时序",
+        "core": true
+      }
+    },
+    "MetroAsset": {
+      "metro_line_name": {
+        "field": "metro_line_name",
+        "meaning": "轨道交通线路名称",
+        "core": true
+      },
+      "metro_section_name": {
+        "field": "metro_section_name",
+        "meaning": "区间/车站/附属结构名称",
+        "core": true
+      },
+      "metro_asset_type": {
+        "field": "metro_asset_type",
+        "meaning": "轨道交通结构类型",
+        "core": true
+      },
+      "metro_operation_status": {
+        "field": "metro_operation_status",
+        "meaning": "地铁状态：规划、在建、运营等",
+        "core": true
+      },
+      "metro_structure_method": {
+        "field": "metro_structure_method",
+        "meaning": "地铁结构施工方法：盾构、明挖、矿山法等",
+        "core": true
+      },
+      "metro_buried_depth": {
+        "field": "metro_buried_depth",
+        "meaning": "结构埋深",
+        "core": true
+      },
+      "metro_special_section": {
+        "field": "metro_special_section",
+        "meaning": "特殊区段，如联络通道、始发接收端、曲线段等",
+        "core": true
+      }
+    },
+    "SpatialRelation": {
+      "is_in_control_protection_zone": {
+        "field": "is_in_control_protection_zone",
+        "meaning": "是否位于控制保护区内",
+        "core": true
+      },
+      "is_in_special_protection_zone": {
+        "field": "is_in_special_protection_zone",
+        "meaning": "是否位于特别保护区内",
+        "core": true
+      },
+      "control_zone_intrusion_length": {
+        "field": "control_zone_intrusion_length",
+        "meaning": "侵入控制保护区长度/范围",
+        "core": true
+      },
+      "special_zone_intrusion_length": {
+        "field": "special_zone_intrusion_length",
+        "meaning": "侵入特别保护区长度/范围",
+        "core": true
+      },
+      "minimum_horizontal_clearance": {
+        "field": "minimum_horizontal_clearance",
+        "meaning": "最小水平净距",
+        "core": true
+      },
+      "minimum_vertical_clearance": {
+        "field": "minimum_vertical_clearance",
+        "meaning": "最小竖向净距",
+        "core": true
+      },
+      "relation_type": {
+        "field": "relation_type",
+        "meaning": "空间关系类型，如上跨、下穿、侧穿、平行邻近等",
+        "core": true
+      },
+      "relative_position": {
+        "field": "relative_position",
+        "meaning": "相对位置，如正上方、侧方、侧上方等",
+        "core": true
+      },
+      "nearest_metro_asset": {
+        "field": "nearest_metro_asset",
+        "meaning": "最近的轨道交通结构对象",
+        "core": true
+      }
+    },
+    "ExcavationWork": {
+      "pit_depth": {
+        "field": "pit_depth",
+        "meaning": "基坑深度",
+        "core": true
+      },
+      "excavation_sequence": {
+        "field": "excavation_sequence",
+        "meaning": "开挖顺序",
+        "core": true
+      }
+    },
+    "RetainingSupportSystem": {
+      "retaining_structure_type": {
+        "field": "retaining_structure_type",
+        "meaning": "围护结构类型",
+        "core": true
+      }
+    },
+    "DewateringWork": {
+      "dewatering_type": {
+        "field": "dewatering_type",
+        "meaning": "降水类型",
+        "core": true
+      }
+    },
+    "MonitoringPlan": {
+      "monitoring_required": {
+        "field": "monitoring_required",
+        "meaning": "是否需要监测",
+        "core": true
+      },
+      "monitoring_items": {
+        "field": "monitoring_items",
+        "meaning": "监测项目",
+        "core": true
+      },
+      "monitoring_frequency": {
+        "field": "monitoring_frequency",
+        "meaning": "监测频率",
+        "core": true
+      }
+    },
+    "ProtectionMeasures": {
+      "protection_scheme_required": {
+        "field": "protection_scheme_required",
+        "meaning": "是否需要结构安全保护方案",
+        "core": true
+      },
+      "measure_for_excavation": {
+        "field": "measure_for_excavation",
+        "meaning": "基坑开挖保护措施",
+        "core": true
+      },
+      "measure_for_support": {
+        "field": "measure_for_support",
+        "meaning": "支护/围护保护措施",
+        "core": true
+      },
+      "measure_for_dewatering": {
+        "field": "measure_for_dewatering",
+        "meaning": "降水保护措施",
+        "core": true
+      },
+      "measure_for_emergency": {
+        "field": "measure_for_emergency",
+        "meaning": "应急措施",
+        "core": true
+      },
+      "measure_for_backfill": {
+        "field": "measure_for_backfill",
+        "meaning": "回填控制措施",
+        "core": true
+      }
+    },
+    "ReviewConclusion": {
+      "overall_conclusion": {
+        "field": "overall_conclusion",
+        "meaning": "总体审查结论",
+        "core": true
+      },
+      "main_risks": {
+        "field": "main_risks",
+        "meaning": "主要风险",
+        "core": true
+      },
+      "construction_restrictions": {
+        "field": "construction_restrictions",
+        "meaning": "施工限制条件",
+        "core": true
+      },
+      "monitoring_requirements": {
+        "field": "monitoring_requirements",
+        "meaning": "监测要求",
+        "core": true
+      },
+      "final_review_opinion": {
+        "field": "final_review_opinion",
+        "meaning": "最终审查意见",
+        "core": true
+      }
+    }
+  },
+  "core_field_plan": {
+    "Case": [
+      "case_name",
+      "case_type",
+      "project_stage",
+      "report_type",
+      "final_conclusion",
+      "risk_level"
+    ],
+    "ProjectInfo": [
+      "project_name",
+      "construction_unit",
+      "design_unit",
+      "assessment_unit",
+      "project_location",
+      "total_land_area",
+      "total_building_area",
+      "underground_area",
+      "foundation_type",
+      "project_schedule"
+    ],
+    "MetroAsset": [
+      "metro_line_name",
+      "metro_section_name",
+      "metro_asset_type",
+      "metro_operation_status",
+      "metro_structure_method",
+      "metro_buried_depth",
+      "metro_special_section"
+    ],
+    "SpatialRelation": [
+      "is_in_control_protection_zone",
+      "is_in_special_protection_zone",
+      "control_zone_intrusion_length",
+      "special_zone_intrusion_length",
+      "minimum_horizontal_clearance",
+      "minimum_vertical_clearance",
+      "relation_type",
+      "relative_position",
+      "nearest_metro_asset"
+    ],
+    "ExternalWork": [
+      "external_work_type",
+      "case_type"
+    ],
+    "ExcavationWork": [
+      "pit_depth",
+      "pit_size",
+      "excavation_method",
+      "excavation_sequence"
+    ],
+    "RetainingSupportSystem": [
+      "support_type",
+      "retaining_structure_type"
+    ],
+    "DewateringWork": [
+      "dewatering_type",
+      "groundwater_type",
+      "dewatering_stop_condition"
+    ],
+    "GeologyHydrology": [
+      "soil_layer",
+      "groundwater_level",
+      "soft_soil_involved",
+      "sand_layer_involved"
+    ],
+    "AssessmentCalculation": [
+      "calculation_method",
+      "software_name",
+      "max_settlement",
+      "max_horizontal_displacement",
+      "max_differential_settlement",
+      "max_tilt"
+    ],
+    "MonitoringPlan": [
+      "monitoring_required",
+      "monitoring_items",
+      "monitoring_frequency",
+      "alarm_thresholds"
+    ],
+    "ProtectionMeasures": [
+      "protection_scheme_required",
+      "protection_measures",
+      "measure_for_excavation",
+      "measure_for_support",
+      "measure_for_dewatering",
+      "measure_for_backfill",
+      "measure_for_emergency"
+    ],
+    "ReviewConclusion": [
+      "overall_conclusion",
+      "main_risks",
+      "construction_restrictions",
+      "monitoring_requirements",
+      "final_review_opinion"
+    ]
+  }
+}

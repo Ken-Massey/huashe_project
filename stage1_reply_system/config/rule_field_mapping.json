@@ -1,0 +1,148 @@
+{
+  "format_version": "stage1_rule_field_mapping_v1",
+  "regulation_source": "../../城市轨道交通结构安全保护技术规程.md",
+  "chapter_function_root": "../../chapter_1_functions",
+  "policy": "正式结论必须由已核验的确定性计算函数产生；chapter_* 的 clause 函数用于返回条文依据和审核记录，不能代替表格计算。",
+  "decisions": {
+    "setback_distance": {
+      "label": "退让距离/净距控制",
+      "output_field": "calculated.setback_distance_result",
+      "planned_engine_function": "rules.setback.evaluate_setback_distance",
+      "legacy_function": "reply_calculation.is_safe_distance_satisfied",
+      "legacy_status": "deprecated_for_stage1",
+      "clause_functions": [
+        "chapter_3_functions.clause_3_3_1",
+        "chapter_3_functions.clause_3_3_4",
+        "chapter_3_functions.clause_3_3_5"
+      ],
+      "regulation_clauses": ["3.3.1", "3.3.4", "3.3.5", "5.2.4"],
+      "input_fields": [
+        "metro_structure.structure_category",
+        "metro_structure.outer_diameter_or_width_m",
+        "geology.is_soft_soil",
+        "pit.support_components",
+        "pit.minimum_horizontal_clearance_m",
+        "pit.minimum_vertical_clearance_m"
+      ],
+      "result_values": [
+        "满足常规净距控制值",
+        "不满足常规净距控制值，需专题专项论证",
+        "资料不足"
+      ],
+      "calculation_note": "按表3.3.1逐个支护构件判断，不能只输出一个笼统布尔值；上方基坑竖向净距取不小于1.0D且不小于4.0m。"
+    },
+    "impact_level": {
+      "label": "影响等级及提级",
+      "output_field": "calculated.final_impact_level",
+      "planned_engine_function": "rules.impact_level.evaluate_impact_level",
+      "legacy_functions": [
+        "reply_calculation.get_proximity_level",
+        "reply_calculation.get_affected_area",
+        "reply_calculation.get_affected_level",
+        "reply_calculation.promote_affected_level"
+      ],
+      "legacy_status": "formula_requires_verification_before_reuse",
+      "clause_functions": [
+        "chapter_3_functions.clause_3_2_1",
+        "chapter_3_functions.clause_3_2_2",
+        "chapter_3_functions.clause_3_2_4",
+        "chapter_3_functions.clause_3_2_5",
+        "chapter_3_functions.clause_3_2_6"
+      ],
+      "regulation_clauses": ["3.2.1", "3.2.2", "3.2.4", "3.2.5", "3.2.6", "附录A.0.1-A.0.3"],
+      "input_fields": [
+        "project.relative_relationship",
+        "metro_structure.structure_method",
+        "metro_structure.structure_condition",
+        "metro_structure.original_excavation_depth_m",
+        "metro_structure.outer_diameter_or_width_m",
+        "metro_structure.mined_tunnel_span_m",
+        "metro_structure.elevated_pile_diameter_m",
+        "metro_structure.is_special_section",
+        "metro_structure.disease_severity",
+        "geology.is_soft_soil",
+        "geology.is_complex_geology_or_hydrology",
+        "geology.has_geological_hazard",
+        "pit.pit_depth_m",
+        "pit.pit_length_m",
+        "pit.pit_area_m2",
+        "pit.minimum_horizontal_clearance_m",
+        "pit.minimum_vertical_clearance_m",
+        "pit.confined_water_drawdown"
+      ],
+      "intermediate_outputs": [
+        "calculated.minimum_relative_clearance_m",
+        "calculated.approach_degree",
+        "calculated.engineering_influence_zone",
+        "calculated.initial_impact_level",
+        "calculated.level_raise_reasons",
+        "calculated.final_impact_level",
+        "calculated.is_major_impact_work"
+      ],
+      "result_values": ["特级", "一级", "二级", "三级", "四级", "资料不足"]
+    },
+    "safety_assessment": {
+      "label": "是否需要安全评估",
+      "output_field": "calculated.safety_assessment_result",
+      "planned_engine_function": "rules.assessment.evaluate_safety_assessment_need",
+      "legacy_function": "reply_calculation.is_safety_estimation_needed",
+      "legacy_status": "deprecated_for_stage1",
+      "clause_functions": [
+        "chapter_3_functions.clause_3_2_6",
+        "chapter_4_functions.clause_4_1_2",
+        "chapter_4_functions.clause_4_3_1",
+        "chapter_4_functions.clause_4_3_6"
+      ],
+      "regulation_clauses": ["3.2.6", "4.1.2", "4.3.1", "4.3.6"],
+      "input_fields": [
+        "review_context.is_in_control_protection_zone",
+        "calculated.final_impact_level",
+        "calculated.is_major_impact_work"
+      ],
+      "result_values": ["必须进行", "建议进行", "通常不要求", "资料不足"],
+      "calculation_note": "控制保护区内的重大影响外部作业应进行安全评估；二级影响宜按上述规定执行。"
+    },
+    "protective_monitoring": {
+      "label": "是否需要保护监测",
+      "output_field": "calculated.protective_monitoring_result",
+      "planned_engine_function": "rules.monitoring.evaluate_monitoring_need",
+      "legacy_function": "reply_calculation.is_protection_monitor_needed",
+      "legacy_status": "deprecated_for_stage1",
+      "clause_functions": [
+        "chapter_4_functions.clause_4_1_2",
+        "chapter_7_functions.clause_7_1_1",
+        "chapter_7_functions.clause_7_1_2",
+        "chapter_7_functions.clause_7_1_3"
+      ],
+      "regulation_clauses": ["4.1.2", "7.1.1", "7.1.2", "7.1.3"],
+      "input_fields": [
+        "review_context.is_in_control_protection_zone",
+        "calculated.final_impact_level"
+      ],
+      "result_values": ["必须监测", "必须监测且建议自动化", "通常不触发", "资料不足"],
+      "calculation_note": "7.1.1规定控制保护区内外部作业应进行安全监测；特级、一级按7.1.3宜采用自动化监测。"
+    }
+  },
+  "audit_routes": [
+    {
+      "condition": "project.project_type == '基坑'",
+      "function_pattern": "chapter_5_functions.clause_5_2_*",
+      "purpose": "基坑工程专项审核"
+    },
+    {
+      "condition": "'接口' in project.other_involvements",
+      "function_pattern": "chapter_6_functions.clause_6_1_*|chapter_6_functions.clause_6_2_*|chapter_6_functions.clause_6_3_*",
+      "purpose": "接口改造专项审核"
+    },
+    {
+      "condition": "review_context.is_in_control_protection_zone == true",
+      "function_pattern": "chapter_4_functions.clause_4_1_*|chapter_7_functions.clause_7_1_*",
+      "purpose": "既有结构保护及安全监测审核"
+    },
+    {
+      "condition": "pit.dewatering_involved == true",
+      "function_pattern": "chapter_5_functions.clause_5_5_*",
+      "purpose": "降水工程审核"
+    }
+  ]
+}

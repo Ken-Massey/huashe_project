@@ -1,0 +1,79 @@
+{
+  "schema_version": "stage1_reply_input_v1",
+  "case_id": "DEMO-NOT-REAL-001",
+  "source_documents": [
+    {
+      "role": "incoming_letter",
+      "path": "演示数据，不对应真实函件.pdf",
+      "sha256": null,
+      "text_extraction_method": "manual"
+    }
+  ],
+  "project": {
+    "project_name": "规程计算演示项目",
+    "applicant": "演示单位",
+    "project_type": "基坑",
+    "project_stage": "规划",
+    "relative_relationship": "单侧",
+    "land_use_type": "演示",
+    "project_address": "演示地址",
+    "construction_content": "演示建设内容",
+    "other_involvements": [],
+    "location": {
+      "longitude": null,
+      "latitude": null,
+      "map_label": null
+    }
+  },
+  "metro_structure": {
+    "metro_line_name": "演示线",
+    "metro_section_name": "演示区间",
+    "structure_method": "盾构",
+    "structure_category": "地下装配式",
+    "structure_condition": "较好",
+    "buried_depth_m": 12.0,
+    "original_excavation_depth_m": null,
+    "outer_diameter_or_width_m": 6.0,
+    "mined_tunnel_span_m": null,
+    "elevated_pile_diameter_m": null,
+    "is_special_section": false,
+    "disease_severity": "无明显病害",
+    "is_cross_river_segment": false,
+    "autofill_source": {
+      "source_type": "manual",
+      "source_id": null,
+      "source_name": null,
+      "distance_m": null,
+      "confidence": null,
+      "confirmed_by_user": true
+    }
+  },
+  "geology": {
+    "terrain_zone": "非漫滩",
+    "is_soft_soil": false,
+    "is_complex_geology_or_hydrology": false,
+    "has_geological_hazard": false,
+    "geology_description": "演示条件"
+  },
+  "pit": {
+    "pit_depth_m": 8.0,
+    "pit_length_m": 80.0,
+    "pit_width_m": 30.0,
+    "pit_area_m2": 2400.0,
+    "minimum_horizontal_clearance_m": 8.0,
+    "minimum_vertical_clearance_m": null,
+    "support_components": ["围护桩"],
+    "retaining_structure_type": "演示围护结构",
+    "dewatering_method": "止水帷幕结合坑内疏干",
+    "dewatering_involved": true,
+    "confined_water_drawdown": false,
+    "expert_opinion_text": null,
+    "expert_opinion_file": null,
+    "scheme_file": null
+  },
+  "review_context": {
+    "is_in_control_protection_zone": true,
+    "is_in_special_protection_zone": false,
+    "manual_notes": "仅用于程序测试"
+  }
+}

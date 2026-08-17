@@ -1,0 +1,136 @@
+{
+  "format_version": "stage_form_config_v1",
+  "description": "控制界面字段显示、必填提示和计算缺项提示。这里的 required_for_form 仅控制界面，不改变 input_schema 对未知值使用 null 的约定。",
+  "common_sections": {
+    "project": [
+      "project.project_name",
+      "project.applicant",
+      "project.project_type",
+      "project.project_stage",
+      "project.relative_relationship",
+      "project.other_involvements",
+      "project.project_address",
+      "project.location"
+    ],
+    "metro_structure": [
+      "metro_structure.metro_line_name",
+      "metro_structure.metro_section_name",
+      "metro_structure.structure_method",
+      "metro_structure.structure_category",
+      "metro_structure.structure_condition",
+      "metro_structure.buried_depth_m"
+    ],
+    "geology": [
+      "geology.terrain_zone",
+      "geology.is_soft_soil",
+      "geology.is_complex_geology_or_hydrology",
+      "geology.has_geological_hazard"
+    ],
+    "calculation_common": [
+      "pit.minimum_horizontal_clearance_m",
+      "pit.minimum_vertical_clearance_m",
+      "review_context.is_in_control_protection_zone"
+    ]
+  },
+  "stages": {
+    "出让": {
+      "visible_fields": [
+        "project.land_use_type",
+        "pit.minimum_horizontal_clearance_m"
+      ],
+      "required_for_form": [
+        "project.land_use_type",
+        "pit.minimum_horizontal_clearance_m"
+      ]
+    },
+    "规划": {
+      "visible_fields": [
+        "pit.pit_depth_m",
+        "pit.pit_length_m",
+        "pit.minimum_horizontal_clearance_m",
+        "pit.minimum_vertical_clearance_m",
+        "pit.support_components"
+      ],
+      "required_for_form": [
+        "pit.pit_depth_m",
+        "pit.pit_length_m",
+        "pit.minimum_horizontal_clearance_m",
+        "pit.minimum_vertical_clearance_m"
+      ]
+    },
+    "设计": {
+      "visible_fields": [
+        "pit.pit_depth_m",
+        "pit.pit_length_m",
+        "pit.pit_width_m",
+        "pit.pit_area_m2",
+        "pit.minimum_horizontal_clearance_m",
+        "pit.minimum_vertical_clearance_m",
+        "pit.support_components",
+        "pit.retaining_structure_type",
+        "pit.dewatering_method",
+        "pit.dewatering_involved",
+        "pit.confined_water_drawdown",
+        "pit.expert_opinion_text",
+        "pit.expert_opinion_file",
+        "pit.scheme_file"
+      ],
+      "required_for_form": [
+        "pit.pit_depth_m",
+        "pit.dewatering_method",
+        "pit.scheme_file"
+      ]
+    },
+    "施工": {
+      "visible_fields": [
+        "pit.pit_depth_m",
+        "pit.pit_length_m",
+        "pit.pit_width_m",
+        "pit.pit_area_m2",
+        "pit.minimum_horizontal_clearance_m",
+        "pit.minimum_vertical_clearance_m",
+        "pit.support_components",
+        "pit.retaining_structure_type",
+        "pit.dewatering_method",
+        "pit.dewatering_involved",
+        "pit.confined_water_drawdown",
+        "pit.expert_opinion_text",
+        "pit.expert_opinion_file",
+        "pit.scheme_file"
+      ],
+      "required_for_form": [
+        "pit.pit_depth_m",
+        "pit.dewatering_method",
+        "pit.scheme_file"
+      ]
+    }
+  },
+  "method_specific_fields": {
+    "明挖": ["metro_structure.original_excavation_depth_m"],
+    "暗挖（矿山法）": ["metro_structure.mined_tunnel_span_m"],
+    "盾构": ["metro_structure.outer_diameter_or_width_m"],
+    "高架": ["metro_structure.elevated_pile_diameter_m"]
+  },
+  "calculation_requirements": {
+    "setback_distance": [
+      "metro_structure.structure_category",
+      "pit.support_components",
+      "pit.minimum_horizontal_clearance_m|pit.minimum_vertical_clearance_m"
+    ],
+    "impact_level": [
+      "metro_structure.structure_method",
+      "pit.pit_depth_m",
+      "pit.minimum_horizontal_clearance_m|pit.minimum_vertical_clearance_m",
+      "metro_structure.original_excavation_depth_m|metro_structure.mined_tunnel_span_m|metro_structure.outer_diameter_or_width_m|metro_structure.elevated_pile_diameter_m"
+    ],
+    "safety_assessment": [
+      "calculated.final_impact_level",
+      "calculated.is_major_impact_work",
+      "review_context.is_in_control_protection_zone"
+    ],
+    "protective_monitoring": [
+      "review_context.is_in_control_protection_zone",
+      "calculated.final_impact_level"
+    ]
+  }
+}

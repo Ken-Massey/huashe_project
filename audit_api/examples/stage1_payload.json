@@ -1,0 +1,32 @@
+{
+  "project_type": "基坑",
+  "project_stage": "规划",
+  "relative_relationship": "单侧",
+  "project_address": null,
+  "map_label": null,
+  "longitude": null,
+  "latitude": null,
+  "other_involvements": [],
+  "structure_method": "盾构",
+  "structure_category": "地下装配式",
+  "structure_condition": "较好",
+  "outer_diameter_or_width_m": 6.2,
+  "is_special_section": null,
+  "is_cross_river_segment": false,
+  "disease_severity": "无明显病害",
+  "pit_depth_m": 8.0,
+  "pit_length_m": 80.0,
+  "pit_area_m2": 5000.0,
+  "minimum_horizontal_clearance_m": 12.0,
+  "minimum_vertical_clearance_m": null,
+  "support_components": [
+    "围护桩"
+  ],
+  "is_in_control_protection_zone": true,
+  "is_soft_soil": false,
+  "is_complex_geology_or_hydrology": false,
+  "has_geological_hazard": false,
+  "confined_water_drawdown": false,
+  "terrain_zone": "非漫滩",
+  "is_in_special_protection_zone": false
+}
