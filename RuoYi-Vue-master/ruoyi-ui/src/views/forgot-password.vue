@@ -108,12 +108,13 @@ export default {
 </script>
 
 <style rel="stylesheet/scss" lang="scss" scoped>
-$primary: #7b9ec8;
-$primary-dark: #5a82b0;
-$primary-light: #a8c4e0;
-$text-dark: #3a5a7c;
-$text-muted: #8aa4bc;
-$border: #c8d8ea;
+$primary: #6b92c0;
+$primary-dark: #4e76a8;
+$primary-light: #9dbdd8;
+$text-dark: #2c4a6a;
+$text-body: #4a6a8a;
+$text-muted: #7a96b2;
+$border: #b8cce0;
 $card-bg: linear-gradient(145deg, rgba(180, 205, 228, 0.9) 0%, rgba(200, 222, 242, 0.93) 50%, rgba(170, 198, 225, 0.9) 100%);
 
 .forgot {
@@ -180,13 +181,37 @@ $card-bg: linear-gradient(145deg, rgba(180, 205, 228, 0.9) 0%, rgba(200, 222, 24
   padding: 40px 56px;
   background: $card-bg;
   border-radius: 24px;
-  box-shadow: 0 8px 32px rgba(122, 158, 200, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 8px 32px rgba(122, 158, 200, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  position: relative;
+  overflow: hidden;
   transition: box-shadow 0.3s ease, transform 0.3s ease;
 
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+      ellipse at 30% 20%,
+      rgba(255, 255, 255, 0.25) 0%,
+      transparent 50%
+    );
+    pointer-events: none;
+  }
+
   &:hover {
-    box-shadow: 0 12px 40px rgba(122, 158, 200, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    box-shadow:
+      0 12px 40px rgba(122, 158, 200, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.4);
     transform: translateY(-2px);
   }
 }
@@ -216,7 +241,7 @@ $card-bg: linear-gradient(145deg, rgba(180, 205, 228, 0.9) 0%, rgba(200, 222, 24
 .label-left {
   font-size: 14px;
   font-weight: 600;
-  color: $text-dark;
+  color: $text-body;
 }
 
 .label-right {
@@ -231,7 +256,7 @@ $card-bg: linear-gradient(145deg, rgba(180, 205, 228, 0.9) 0%, rgba(200, 222, 24
 
   ::v-deep .el-form-item__error {
     top: 48px !important;
-    color: #d4847c;
+    color: #b8605a;
   }
 
   ::v-deep .el-input {
@@ -246,7 +271,7 @@ $card-bg: linear-gradient(145deg, rgba(180, 205, 228, 0.9) 0%, rgba(200, 222, 24
       border: 1.5px solid $border;
       background: rgba(255, 255, 255, 0.5);
       padding: 0 18px;
-      color: $text-dark;
+      color: $text-body;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
       &::placeholder {
