@@ -3,10 +3,8 @@
       <div class="knowledge-switch">
         <button :class="{active:libraryMode==='regulations'}" @click="libraryMode='regulations'"><i class="el-icon-notebook-2" />技术规程</button>
         <button :class="{active:libraryMode==='cases'}" @click="libraryMode='cases'"><i class="el-icon-folder-opened" />案例文件</button>
-        <button :class="{active:libraryMode==='replies'}" @click="libraryMode='replies'"><i class="el-icon-message" />回函</button>
       </div>
     <regulation-library v-if="libraryMode==='regulations'" />
-    <reply-library v-else-if="libraryMode==='replies'" />
     <div v-else class="knowledge-page">
     <aside class="library-nav">
       <div class="library-title">
@@ -20,7 +18,7 @@
         @dragleave="dragOverFolder=''"
         @drop.prevent.stop="dropToFolder('all',$event)"
       >
-        <i class="el-icon-collection-tag" /><span>全部案例</span><em>{{ cases.length }}</em>
+        <i class="el-icon-collection-tag" /><span>全部案例文件</span><em>{{ cases.length + assets.length }}</em>
       </button>
       <div
         v-for="entry in folderTreeRows"
@@ -128,7 +126,11 @@
           @click="selectAsset(item)"
         >
           <span class="file-icon asset-icon"><i :class="assetIcon(item)" /></span>
-          <span class="case-copy"><strong>{{ item.display_name }}</strong><small>{{ item.original_file_name }} · {{ formatSize(item.file_size) }}</small></span>
+          <span class="case-copy">
+            <strong>{{ item.display_name }}</strong>
+            <small>{{ assetLibraryLabel(item) }} · {{ item.original_file_name }} · {{ formatSize(item.file_size) }}</small>
+          </span>
+          <el-tag v-if="item.library_type === 'reply'" size="mini" type="success">复函</el-tag>
           <el-dropdown trigger="click" @command="command => manageAsset(command, item)">
             <button class="row-more" title="管理资料" @click.stop><i class="el-icon-more" /></button>
             <el-dropdown-menu slot="dropdown">
@@ -147,7 +149,7 @@
       <div v-if="!detail&&!assetDetail" class="empty-detail"><i class="el-icon-chat-dot-square" /><p>选择文件查看详情</p></div>
       <template v-else-if="assetDetail">
         <header class="detail-head asset-head">
-          <div><span class="detail-icon"><i :class="assetIcon(assetDetail)" /></span><div><h2>{{ assetDetail.display_name }}</h2><p>{{ assetDetail.original_file_name }} · {{ formatSize(assetDetail.file_size) }}</p></div></div>
+          <div><span class="detail-icon"><i :class="assetIcon(assetDetail)" /></span><div><h2>{{ assetDetail.display_name }}</h2><p>{{ assetLibraryLabel(assetDetail) }} · {{ assetDetail.original_file_name }} · {{ formatSize(assetDetail.file_size) }}</p></div></div>
           <div class="commands"><el-button icon="el-icon-download" circle title="下载文件" @click="downloadAsset(assetDetail)" /></div>
         </header>
         <div class="asset-preview">
@@ -215,7 +217,6 @@
 <script>
 import { saveAs } from 'file-saver'
 import RegulationLibrary from './RegulationLibrary.vue'
-import ReplyLibrary from './ReplyLibrary.vue'
 import LibraryAssetDialog from './LibraryAssetDialog.vue'
 import {
   listKnowledge, getKnowledge, getKnowledgeContent,
@@ -226,7 +227,7 @@ import {
 } from '@/api/rail/audit'
 
 export default {
-  name: 'RailKnowledge', components: { RegulationLibrary, ReplyLibrary, LibraryAssetDialog },
+  name: 'RailKnowledge', components: { RegulationLibrary, LibraryAssetDialog },
   data() {
     return {
       libraryMode: 'regulations', loading: false, keyword: '', filter: 'all', cases: [], assets: [], folders: [], selectedId: '', selectedAssetId: '', detail: null, assetDetail: null, detailTab: 'features', content: '', contentLoading: false, previewUrl: '', previewError: '',
@@ -236,7 +237,7 @@ export default {
   },
   computed: {
     currentFilterLabel() {
-      if (this.filter === 'all') return '全部案例'
+      if (this.filter === 'all') return '全部案例文件'
       const folder = this.folders.find(item => item.folder_id === this.filter)
       return folder ? folder.name : '案例知识库'
     },
@@ -293,9 +294,10 @@ export default {
           item.folder_name
         ].filter(Boolean).join(' ').toLowerCase().includes(token)
         if (token) return matches
+        const displayFolderId = this.assetDisplayFolderId(item)
         const inFolder = this.filter === 'all'
-          ? !item.folder_id
-          : item.folder_id === this.filter
+          ? !displayFolderId
+          : displayFolderId === this.filter
         return inFolder
       })
     }
@@ -469,6 +471,13 @@ export default {
       if (item.file_kind === 'image') return 'el-icon-picture-outline'
       if (item.file_kind === 'archive') return 'el-icon-box'
       return 'el-icon-document'
+    },
+    assetLibraryLabel(item) {
+      return item && item.library_type === 'reply' ? '复函' : '资料'
+    },
+    assetDisplayFolderId(item) {
+      const folderId = String(item && item.folder_id || '')
+      return folderId.startsWith('reply:') || folderId.startsWith('reply-project:') ? '' : folderId
     },
     formatSize(value) {
       if (value < 1024) return `${value} B`

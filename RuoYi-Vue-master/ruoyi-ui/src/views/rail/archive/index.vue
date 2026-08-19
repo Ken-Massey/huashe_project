@@ -65,7 +65,7 @@
               :key="stage.stage_id"
               class="stage-card"
               :class="{ active: stage.stage_id === selectedStageId, archived: stage.status === 'archived' }"
-              @click="selectStage(stage.stage_id)"
+              @click="openStageInAudit(stage)"
             >
               <div class="stage-axis"><span>{{ stage.stage_order }}</span><i /></div>
               <div class="stage-main">
@@ -141,7 +141,7 @@
               <h4>本阶段审核未完成</h4>
               <p>{{ auditRecord.error_message || '审核任务执行失败，可返回案例审核页面重新提交。' }}</p>
               <small>已尝试 {{ auditRecord.attempt_count || 1 }} 次</small>
-              <el-button type="primary" plain @click="goAudit">重新审核</el-button>
+              <el-button type="primary" plain @click="goAudit()">重新审核</el-button>
             </div>
             <div v-else-if="auditRecord && ['pending','running'].includes(auditRecord.status)" class="audit-state running-state">
               <i class="el-icon-loading" />
@@ -152,7 +152,7 @@
               <i class="el-icon-document-add" />
               <h4>该阶段尚未审核</h4>
               <p>前往案例审核并绑定当前项目与阶段，完成后结果将自动归档。</p>
-              <el-button v-if="selectedStage.status === 'active' && projectDetail.status === 'active'" type="primary" @click="goAudit">前往审核</el-button>
+              <el-button v-if="selectedStage.status === 'active' && projectDetail.status === 'active'" type="primary" @click="goAudit()">前往审核</el-button>
             </div>
           </div>
         </template>
@@ -400,8 +400,31 @@ export default {
       await this.loadProjectDetail(stage.stage_id)
       await this.loadProjects()
     },
-    goAudit() {
-      this.$router.push({ path: '/rail/audit', query: { projectId: this.selectedProjectId, stageId: this.selectedStageId } })
+    async openStageInAudit(stage) {
+      if (!stage || !stage.stage_id) return
+      this.selectedStageId = stage.stage_id
+      this.auditLoading = true
+      try {
+        const record = await getStageAudit(stage.stage_id)
+        this.auditRecord = record
+        this.goAudit(stage, record)
+      } catch (error) {
+        this.goAudit(stage)
+      } finally {
+        this.auditLoading = false
+      }
+    },
+    goAudit(stage = null, record = null) {
+      const targetStage = stage || this.selectedStage
+      const audit = record || this.auditRecord || {}
+      const resultData = audit.result_data || {}
+      const sessionId = audit.audit_session_id || resultData.audit_session_id || ''
+      const query = {
+        projectId: this.selectedProjectId,
+        stageId: targetStage && targetStage.stage_id ? targetStage.stage_id : this.selectedStageId
+      }
+      if (sessionId) query.sessionId = sessionId
+      this.$router.push({ path: '/rail/audit', query })
     },
     auditStatusLabel(value) { return ({ pending: '排队中', running: '审核中', success: '已审核', failed: '审核失败' })[value] || '未审核' },
     auditStatusType(value) { return ({ pending: 'info', running: 'warning', success: 'success', failed: 'danger' })[value] || 'info' },

@@ -237,7 +237,7 @@ class AuditSessionApiTests(unittest.TestCase):
                 return {
                     "reply": "已补充施工监测要求。",
                     "items": [
-                        {"title": "既有结论", "conclusion": "保留原审核结论。"},
+                        {"title": "既有结论", "conclusion": "应保留原审核控制要求并继续落实。"},
                         {
                             "title": "施工监测要求",
                             "conclusion": "施工前应补充专项监测方案。",
@@ -251,7 +251,7 @@ class AuditSessionApiTests(unittest.TestCase):
         fake = FakeAgent()
         with patch.object(main, "agent", fake):
             session = main.create_audit_session(main.AuditSessionCreatePayload(
-                items=[main.AuditReviewItemPayload(title="既有结论", conclusion="保留原审核结论。")],
+                items=[main.AuditReviewItemPayload(title="既有结论", conclusion="应保留原审核控制要求并继续落实。")],
             ))
             response = main.revise_audit_session_by_chat(
                 session["session_id"],
@@ -262,7 +262,64 @@ class AuditSessionApiTests(unittest.TestCase):
         self.assertIn("添加一条关于施工监测", fake.prompt)
         self.assertEqual(len(response["review_items"]), 2)
         self.assertEqual(response["review_items"][1]["title"], "施工监测要求")
-        self.assertEqual(response["message"]["content"], "已补充施工监测要求。")
+        self.assertIn("已补充施工监测要求", response["message"]["content"])
+
+    def test_chat_instruction_detail_fallback_changes_target_item(self):
+        class FakeAgent:
+            def complete_json(self, system, prompt, max_tokens):
+                return {
+                    "reply": "已细化第五条。",
+                    "items": [
+                        {"title": f"第{index}条", "conclusion": f"第{index}条应补充完善相关资料。", "risk_level": "中"}
+                        for index in range(1, 7)
+                    ],
+                }
+
+        with patch.object(main, "agent", FakeAgent()):
+            session = main.create_audit_session(main.AuditSessionCreatePayload(
+                items=[
+                    main.AuditReviewItemPayload(title=f"第{index}条", conclusion=f"第{index}条应补充完善相关资料。", risk_level="中")
+                    for index in range(1, 7)
+                ],
+            ))
+            response = main.revise_audit_session_by_chat(
+                session["session_id"],
+                main.AuditSessionChatPayload(instruction="将第五点写的详细一点"),
+            )
+
+        fifth = response["review_items"][4]
+        self.assertEqual(fifth["order_no"], 5)
+        self.assertIn("资料补充要求", fifth["conclusion"])
+        self.assertIn("技术复核要求", fifth["conclusion"])
+        self.assertGreater(len(fifth["conclusion"]), len("第5条应补充完善相关资料。") + 60)
+
+    def test_chat_review_updates_increment_assistant_message_versions(self):
+        class FakeAgent:
+            def complete_json(self, system, prompt, max_tokens):
+                return {
+                    "reply": "已更新。",
+                    "items": [
+                        {"title": "监测方案完善", "conclusion": "应补充完善专项监测方案并明确报警阈值。", "risk_level": "中"}
+                    ],
+                }
+
+        with patch.object(main, "agent", FakeAgent()):
+            session = main.create_audit_session(main.AuditSessionCreatePayload(
+                items=[main.AuditReviewItemPayload(title="监测方案", conclusion="应补充监测方案。", risk_level="中")],
+            ))
+            first = main.revise_audit_session_by_chat(
+                session["session_id"],
+                main.AuditSessionChatPayload(instruction="将第一条意见写得详细一点"),
+            )
+            second = main.revise_audit_session_by_chat(
+                session["session_id"],
+                main.AuditSessionChatPayload(instruction="将第一条意见再详细一点"),
+            )
+
+        self.assertEqual(first["message"]["version_no"], 2)
+        self.assertEqual(first["message"]["result_snapshot"]["version_no"], 2)
+        self.assertEqual(second["message"]["version_no"], 3)
+        self.assertEqual(second["message"]["result_snapshot"]["version_no"], 3)
 
 
 if __name__ == "__main__":

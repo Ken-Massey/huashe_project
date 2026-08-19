@@ -93,8 +93,60 @@ def _history_context(case_data: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _current_session_context(case_data: dict[str, Any]) -> dict[str, Any]:
+    value = case_data.get("manual_context") if isinstance(case_data, dict) else None
+    return value if isinstance(value, dict) else {}
+
+
 def _audit_context_hash(case_data: dict[str, Any]) -> str:
-    return _hash(json.dumps(_history_context(case_data), ensure_ascii=False, sort_keys=True))
+    return _hash(json.dumps({
+        "history": _history_context(case_data),
+        "current_session": _current_session_context(case_data),
+    }, ensure_ascii=False, sort_keys=True))
+
+
+def _current_session_context_text(case_data: dict[str, Any]) -> str:
+    context = _current_session_context(case_data)
+    if not context:
+        return ""
+    latest_items = context.get("latest_review_items") or []
+    documents = context.get("uploaded_documents") or []
+    rerun_context = context.get("rerun_context") or {}
+    lines = [
+        "以下是当前审核会话的连续复核上下文。若本轮新增附件或用户要求重新审核，应结合已有文件、新增附件、当前确认数据和上一版审核意见重新形成综合判断："
+    ]
+    if rerun_context:
+        lines.append(f"复核方式：{rerun_context.get('mode') or '补充附件后综合复核'}")
+        if rerun_context.get("latest_instruction"):
+            lines.append(f"最新用户意见：{rerun_context.get('latest_instruction')}")
+        if rerun_context.get("attachment_policy"):
+            lines.append(f"附件处理要求：{rerun_context.get('attachment_policy')}")
+    overall = context.get("latest_overall_opinion") or {}
+    if isinstance(overall, dict) and (overall.get("conclusion") or overall.get("recommendation")):
+        lines.append(f"上一版综合评价：{overall.get('conclusion') or overall.get('recommendation')}")
+    if latest_items:
+        lines.append("上一版主要审核意见：")
+        for item in latest_items[:8]:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                "{order}. {title}；风险等级：{risk}；意见：{opinion}".format(
+                    order=item.get("order_no") or "",
+                    title=item.get("title") or "未命名意见",
+                    risk=item.get("risk_level") or "未填写",
+                    opinion=item.get("opinion") or item.get("conclusion") or item.get("recommendation") or "无",
+                )
+            )
+    if documents:
+        lines.append("当前会话已上传资料清单：")
+        for doc in documents[:20]:
+            if not isinstance(doc, dict):
+                continue
+            excerpt = str(doc.get("text_excerpt") or doc.get("textPreview") or "")[:600]
+            lines.append(
+                f"- {doc.get('name') or '未命名文件'}；角色：{doc.get('role') or '未标注'}；摘要：{excerpt or '无'}"
+            )
+    return "\n".join(lines)[:18000]
 
 
 def _history_context_text(case_data: dict[str, Any]) -> str:
@@ -683,6 +735,7 @@ def run_ima_rag_audit(
     case_content_hash = _hash("\n".join(item["text"] for item in case_chunks))
     history_hash = _audit_context_hash(case_data)
     history_text = _history_context_text(case_data)
+    session_text = _current_session_context_text(case_data)
     case_id = "CASE:" + case_content_hash[:16]
     case_chunks = [
         {**item, "chunk_id": f"{case_id}:{item['chunk_id']}"}
@@ -732,6 +785,9 @@ def run_ima_rag_audit(
     if history_text:
         notify("已加载项目前序阶段审核记录，正在检查风险和整改延续性")
         case_scout = f"{case_scout}\n\n{history_text}"
+    if session_text:
+        notify("已加载当前会话既有审核意见和附件记录，正在执行综合复核")
+        case_scout = f"{case_scout}\n\n{session_text}"
     notify("正在生成多维审核检索计划")
     stage_started = time.perf_counter()
     dimensions = _fast_dimensions()
@@ -805,7 +861,7 @@ def run_ima_rag_audit(
     executor = ThreadPoolExecutor(max_workers=min(3, len(batches)))
     try:
         futures = {
-            executor.submit(_audit_packet_batch, agent, batch, history_text): (batch, time.perf_counter())
+            executor.submit(_audit_packet_batch, agent, batch, "\n\n".join([item for item in [history_text, session_text] if item])): (batch, time.perf_counter())
             for batch in batches
         }
         deadline = time.perf_counter() + AUDIT_DIMENSION_TOTAL_TIMEOUT_SECONDS
@@ -886,6 +942,7 @@ def run_ima_rag_audit(
         "cache_hit": False,
         "history_context_used": bool(history_text),
         "historical_stage_count": len((_history_context(case_data).get("previous_stages") or [])),
+        "current_session_context_used": bool(session_text),
         "history_context_hash": history_hash,
     })
     timings["total"] = round(time.perf_counter() - started, 3)

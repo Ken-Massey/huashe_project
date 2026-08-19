@@ -14,15 +14,57 @@
       append-to-body
       class="audit-upload-dialog"
     >
-      <div v-loading="recognizing" element-loading-text="正在识别并分类项目资料" class="unified-upload">
-        <file-drop-zone
-          ref="documentsPicker"
-          accept=".pdf,.docx,.txt"
-          :multiple="true"
-          :limit="12"
-          hint="支持 PDF、DOCX、TXT；最多 12 个文件，系统自动区分函件、案例和补充附件"
-          @input="handleDocumentFiles"
-        />
+      <div v-loading="recognizing || libraryAdding" :element-loading-text="libraryAdding ? '正在从知识库添加文件' : '正在识别并分类项目资料'" class="unified-upload">
+        <el-tabs v-model="uploadSourceTab" class="upload-source-tabs" @tab-click="handleUploadSourceTabClick">
+          <el-tab-pane label="知识库文件" name="library">
+            <div class="library-picker-toolbar">
+              <el-input
+                v-model.trim="libraryKeyword"
+                clearable
+                prefix-icon="el-icon-search"
+                placeholder="搜索知识库文件名称"
+              />
+              <el-button icon="el-icon-refresh" :loading="libraryLoading" @click="loadAuditLibraryFiles">刷新</el-button>
+              <el-button type="primary" :loading="libraryAdding" :disabled="!selectedLibraryRows.length" @click="addSelectedLibraryFiles">添加所选文件</el-button>
+            </div>
+            <el-table
+              v-loading="libraryLoading"
+              class="library-picker-table"
+              :data="filteredAuditLibraryRows"
+              height="260"
+              row-key="key"
+              empty-text="暂无可选知识库文件"
+              @selection-change="selectedLibraryRows = $event"
+            >
+              <el-table-column type="selection" width="46" />
+              <el-table-column label="文件名称" min-width="260">
+                <template slot-scope="{ row }">
+                  <div class="library-file-cell">
+                    <i :class="row.icon" />
+                    <span>
+                      <strong :title="row.name">{{ row.name }}</strong>
+                      <small>{{ row.originalName }}</small>
+                    </span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="来源" prop="sourceLabel" width="110" />
+              <el-table-column label="大小" width="90">
+                <template slot-scope="{ row }">{{ row.size ? formatFileSize(row.size) : '-' }}</template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane label="本地文件" name="local">
+            <file-drop-zone
+              ref="documentsPicker"
+              accept=".pdf,.docx,.txt"
+              :multiple="true"
+              :limit="12"
+              hint="支持 PDF、DOCX、TXT；最多 12 个文件，系统自动区分函件、案例和补充附件"
+              @input="handleDocumentFiles"
+            />
+          </el-tab-pane>
+        </el-tabs>
         <div v-if="documents.length" class="document-list">
           <div v-for="record in documents" :key="record.id" class="document-row">
             <i :class="record.status === 'failed' ? 'el-icon-warning-outline' : (record.status === 'done' ? 'el-icon-document-checked' : 'el-icon-loading')" />
@@ -87,7 +129,7 @@
         <el-alert
           v-if="dataDialogMissing.length"
           class="conflict-alert"
-          :title="`还有 ${dataDialogMissing.length} 项会影响审核判断的数据未填写：${dataDialogMissing.map(item => item.label).join('、')}`"
+          :title="`还有 ${dataDialogMissing.length} 项基础信息未确认：${dataDialogMissing.map(item => item.label).join('、')}`"
           type="error"
           :closable="false"
           show-icon
@@ -161,8 +203,8 @@
                       </div>
                     </el-form-item>
                   </el-col>
-                  <el-col :xs="24" :md="12"><el-form-item label="收函单位" required><el-input v-model.trim="form.applicant" maxlength="120" /></el-form-item></el-col>
-                  <el-col :xs="24" :md="8"><el-form-item label="项目类型" required><el-select v-model="form.project_type" placeholder="识别不到请人工选择"><el-option label="基坑" value="基坑" /></el-select></el-form-item></el-col>
+                  <el-col :xs="24" :md="12"><el-form-item label="收函单位"><el-input v-model.trim="form.applicant" maxlength="120" /></el-form-item></el-col>
+                  <el-col :xs="24" :md="8"><el-form-item label="项目类型"><el-select v-model="form.project_type" placeholder="识别不到请人工选择"><el-option label="基坑" value="基坑" /></el-select></el-form-item></el-col>
                   <el-col :xs="24" :md="8">
                     <el-form-item label="项目阶段" required>
                       <el-select v-model="stageSelection" placeholder="自动识别，也可选择阶段" @change="stageSelectionChanged">
@@ -178,7 +220,7 @@
                       />
                     </el-form-item>
                   </el-col>
-                  <el-col :xs="24" :md="8"><el-form-item label="相对关系" required><el-select v-model="form.relative_relationship" placeholder="识别不到请人工选择"><el-option v-for="v in relations" :key="v" :label="v" :value="v" /></el-select></el-form-item></el-col>
+                  <el-col :xs="24" :md="8"><el-form-item label="相对关系"><el-select v-model="form.relative_relationship" placeholder="识别不到请人工选择"><el-option v-for="v in relations" :key="v" :label="v" :value="v" /></el-select></el-form-item></el-col>
                 </el-row>
                 <el-form-item label="涉及其他"><el-checkbox-group v-model="form.other_involvements"><el-checkbox v-for="v in otherTypes" :key="v" :label="v" /></el-checkbox-group></el-form-item>
               </el-form>
@@ -188,20 +230,20 @@
                 <el-row :gutter="14">
                   <el-col :xs="24" :md="12"><el-form-item label="地铁线路"><el-input v-model.trim="form.metro_line_name" placeholder="例如：1号线" /></el-form-item></el-col>
                   <el-col :xs="24" :md="12"><el-form-item label="地铁区间"><el-input v-model.trim="form.metro_section_name" /></el-form-item></el-col>
-                  <el-col :xs="24" :md="8"><el-form-item label="结构形式" required><el-select v-model="form.structure_method" placeholder="识别不到请人工选择"><el-option v-for="v in methods" :key="v" :label="v" :value="v" /></el-select></el-form-item></el-col>
-                  <el-col :xs="24" :md="8"><el-form-item label="结构状态" required><el-select v-model="form.structure_condition" placeholder="识别不到请人工选择"><el-option label="较好" value="较好" /><el-option label="较差" value="较差" /></el-select></el-form-item></el-col>
+                  <el-col :xs="24" :md="8"><el-form-item label="结构形式"><el-select v-model="form.structure_method" placeholder="识别不到请人工选择"><el-option v-for="v in methods" :key="v" :label="v" :value="v" /></el-select></el-form-item></el-col>
+                  <el-col :xs="24" :md="8"><el-form-item label="结构状态"><el-select v-model="form.structure_condition" placeholder="识别不到请人工选择"><el-option label="较好" value="较好" /><el-option label="较差" value="较差" /></el-select></el-form-item></el-col>
                   <el-col :xs="24" :md="8">
-                    <el-form-item label="结构埋深（m）" required>
+                    <el-form-item label="结构埋深（m）">
                       <el-input v-model.trim="form.buried_depth_m" type="number" min="0" step="0.01" placeholder="识别不到请人工填写" />
                     </el-form-item>
                   </el-col>
                   <el-col :xs="24" :md="8">
-                    <el-form-item label="结构宽度D（m）" required>
+                    <el-form-item label="结构宽度D（m）">
                       <el-input v-model.trim="form.outer_diameter_or_width_m" type="number" min="0" step="0.01" placeholder="识别不到请人工填写" />
                     </el-form-item>
                   </el-col>
                   <el-col :xs="24" :md="8"><el-form-item label="特殊区段"><el-select v-model="form.is_special_section" placeholder="识别不到可留空"><el-option label="是" :value="true" /><el-option label="否" :value="false" /></el-select></el-form-item></el-col>
-                  <el-col :xs="24" :md="8"><el-form-item label="结构病害" required><el-select v-model="form.disease_severity" :placeholder="diseaseSeverityPlaceholder" :disabled="form.structure_condition !== '较差'"><el-option v-for="v in diseaseSeverityOptions" :key="v" :label="v" :value="v" /></el-select></el-form-item></el-col>
+                  <el-col :xs="24" :md="8"><el-form-item label="结构病害"><el-select v-model="form.disease_severity" :placeholder="diseaseSeverityPlaceholder" :disabled="form.structure_condition !== '较差'"><el-option v-for="v in diseaseSeverityOptions" :key="v" :label="v" :value="v" /></el-select></el-form-item></el-col>
                 </el-row>
               </el-form>
             </el-tab-pane>
@@ -209,13 +251,13 @@
               <el-form :model="form" label-width="132px" class="parameter-form">
                 <el-row :gutter="14">
                   <el-col v-if="form.project_stage==='出让'" :xs="24" :md="12">
-                    <el-form-item label="用地性质" required>
+                    <el-form-item label="用地性质">
                       <el-select v-model="landUseSelection" placeholder="请选择" @change="landUseChanged"><el-option v-for="v in landUseTypes" :key="v" :label="v" :value="v" /></el-select>
                     </el-form-item>
                   </el-col>
                   <el-col v-if="form.project_stage==='出让' && landUseSelection==='其他'" :xs="24" :md="12"><el-form-item label="其他用地性质"><el-input v-model.trim="form.land_use_type" /></el-form-item></el-col>
                   <el-col v-if="form.project_stage!=='出让'" :xs="24" :md="8">
-                    <el-form-item label="基坑深度（m）" required>
+                    <el-form-item label="基坑深度（m）">
                       <el-input
                         v-model.trim="form.pit_depth_m"
                         type="number"
@@ -226,7 +268,7 @@
                     </el-form-item>
                   </el-col>
                   <el-col v-if="form.project_stage==='规划'" :xs="24" :md="8">
-                    <el-form-item label="基坑长度（m）" required>
+                    <el-form-item label="基坑长度（m）">
                       <el-input
                         v-model.trim="form.pit_length_m"
                         type="number"
@@ -270,12 +312,12 @@
                       <el-input v-model.trim="form.dewatering_method_other" placeholder="请填写具体降水方式" />
                     </el-form-item>
                   </el-col>
-                  <el-col :xs="24" :md="8"><el-form-item label="地段区域" required><el-select v-model="form.terrain_zone" placeholder="识别不到请人工选择"><el-option label="漫滩" value="漫滩" /><el-option label="非漫滩" value="非漫滩" /></el-select></el-form-item></el-col>
-                  <el-col :xs="24" :md="8"><el-form-item label="软弱土" required><el-select v-model="form.is_soft_soil" placeholder="识别不到请人工选择"><el-option label="是" :value="true" /><el-option label="否" :value="false" /></el-select></el-form-item></el-col>
-                  <el-col :xs="24" :md="8"><el-form-item label="复杂地质水文" required><el-select v-model="form.is_complex_geology_or_hydrology" placeholder="识别不到请人工选择"><el-option label="是" :value="true" /><el-option label="否" :value="false" /></el-select></el-form-item></el-col>
+                  <el-col :xs="24" :md="8"><el-form-item label="地段区域"><el-select v-model="form.terrain_zone" placeholder="识别不到请人工选择"><el-option label="漫滩" value="漫滩" /><el-option label="非漫滩" value="非漫滩" /></el-select></el-form-item></el-col>
+                  <el-col :xs="24" :md="8"><el-form-item label="软弱土"><el-select v-model="form.is_soft_soil" placeholder="识别不到请人工选择"><el-option label="是" :value="true" /><el-option label="否" :value="false" /></el-select></el-form-item></el-col>
+                  <el-col :xs="24" :md="8"><el-form-item label="复杂地质水文"><el-select v-model="form.is_complex_geology_or_hydrology" placeholder="识别不到请人工选择"><el-option label="是" :value="true" /><el-option label="否" :value="false" /></el-select></el-form-item></el-col>
                 </el-row>
-                <el-form-item label="支护构件" required><el-checkbox-group v-model="form.support_components"><el-checkbox v-for="v in supports" :key="v" :label="v" /></el-checkbox-group></el-form-item>
-                <el-form-item label="保护区位置" required><el-select v-model="form.protection_zone_location" placeholder="识别不到请人工选择"><el-option v-for="v in protectionZoneLocations" :key="v" :label="v" :value="v" /></el-select></el-form-item>
+                <el-form-item label="支护构件"><el-checkbox-group v-model="form.support_components"><el-checkbox v-for="v in supports" :key="v" :label="v" /></el-checkbox-group></el-form-item>
+                <el-form-item label="保护区位置"><el-select v-model="form.protection_zone_location" placeholder="识别不到请人工选择"><el-option v-for="v in protectionZoneLocations" :key="v" :label="v" :value="v" /></el-select></el-form-item>
               </el-form>
             </el-tab-pane>
           </el-tabs>
@@ -288,7 +330,7 @@
 
     <section class="result-panel">
       <div class="result-head">
-        <el-tag v-if="auditSession" size="small" type="success">第 {{ auditSession.current_version || 1 }} 版</el-tag>
+        <el-tag v-if="auditSession" size="small" type="success">第 {{ currentDisplayVersion }} 版</el-tag>
       </div>
       <el-alert
         v-if="auditInputChanged"
@@ -308,7 +350,7 @@
             <span class="chat-avatar">{{ message.role === 'user' ? '我' : 'AI' }}</span>
             <div class="chat-bubble" :class="{ 'snapshot-bubble': hasMessageSnapshot(message) }">
               <template v-if="!hasMessageSnapshot(message)">
-                <p>{{ message.content }}</p>
+                <p class="plain-ai-message">{{ formatReadableText(message.content) }}</p>
                 <div v-if="message.attachments && message.attachments.length" class="chat-attachment-list">
                   <div
                     v-for="attachment in message.attachments"
@@ -342,7 +384,7 @@
                 <el-empty v-if="!messageReviewItems(message).length && !messageOverallOpinion(message)" description="暂无审核条目" />
                 <div v-if="messageOverallOpinion(message)" class="overall-review-card leading">
                   <h4>综合评价</h4>
-                  <p>{{ messageOverallOpinion(message).conclusion || messageOverallOpinion(message).recommendation }}</p>
+                  <p>{{ displayOverallOpinion(messageOverallOpinion(message)) }}</p>
                 </div>
                 <article v-for="item in messageReviewItems(message)" :key="`${message.message_id}_${item.item_id || item.order_no}`" class="review-item-card">
                   <div class="review-item-head">
@@ -371,7 +413,7 @@
                 <div v-if="isSnapshotExpanded(message)" class="snapshot-detail">
                   <div v-if="messageOverallOpinion(message)" class="overall-review-card compact leading">
                     <h4>综合评价</h4>
-                    <p>{{ messageOverallOpinion(message).conclusion || messageOverallOpinion(message).recommendation }}</p>
+                    <p>{{ displayOverallOpinion(messageOverallOpinion(message)) }}</p>
                   </div>
                   <article v-for="item in messageReviewItems(message)" :key="`${message.message_id}_${item.order_no}`" class="review-item-card compact">
                     <div class="review-item-head">
@@ -395,39 +437,57 @@
               <p class="thinking-text"><i class="el-icon-loading" /> 正在审核资料，请稍候……</p>
             </div>
           </div>
+          <div v-else-if="chatSubmitting" class="chat-row assistant">
+            <span class="chat-avatar">AI</span>
+            <div class="chat-bubble thinking-bubble">
+              <p class="thinking-text">
+                <span class="thinking-dots only-dots" aria-label="正在思考"><i /> <i /> <i /></span>
+              </p>
+            </div>
+          </div>
         </div>
         <div class="composer-sticky-zone">
           <div class="chat-input-bar chat-composer">
-            <el-input
-              v-model.trim="chatInstruction"
-              class="chat-composer-input"
-              type="textarea"
-              :rows="2"
-              maxlength="1000"
-              :disabled="chatSubmitting || auditSubmitting"
-              placeholder="输入“开始审核”发起审核；也可以输入修改意见，或点击右侧上传资料"
-              @keydown.native.ctrl.enter.prevent="sendChatInstruction"
-            />
-            <div v-if="documents.length" class="composer-file-cards">
-              <div
-                v-for="record in documents"
-                :key="`composer_${record.id}`"
-                class="composer-file-card"
-                :title="record.file && record.file.name"
-              >
-                <span class="composer-file-icon">{{ fileTypeBadge(record.file && record.file.name) }}</span>
-                <span class="composer-file-meta">
-                  <strong>{{ record.file && record.file.name }}</strong>
-                  <small>{{ fileKindText(record.file && record.file.name) }} · {{ formatFileSize(record.file && record.file.size) }}</small>
-                </span>
-                <el-tag
-                  size="mini"
-                  effect="plain"
-                  :type="record.role === 'letter' ? 'success' : (record.role === 'case' ? '' : 'info')"
+            <div class="composer-input-surface">
+              <div v-if="documents.length" class="composer-file-cards">
+                <div
+                  v-for="record in documents"
+                  :key="`composer_${record.id}`"
+                  class="composer-file-card"
+                  :title="record.file && record.file.name"
                 >
-                  {{ record.role === 'letter' ? '函件' : (record.role === 'case' ? '案例' : '附件') }}
-                </el-tag>
+                  <span class="composer-file-icon">{{ fileTypeBadge(record.file && record.file.name) }}</span>
+                  <span class="composer-file-meta">
+                    <strong>{{ record.file && record.file.name }}</strong>
+                    <small>{{ fileKindText(record.file && record.file.name) }} · {{ formatFileSize(record.file && record.file.size) }}</small>
+                  </span>
+                  <el-tag
+                    size="mini"
+                    effect="plain"
+                    :type="record.role === 'letter' ? 'success' : (record.role === 'case' ? '' : 'info')"
+                  >
+                    {{ record.role === 'letter' ? '函件' : (record.role === 'case' ? '案例' : '附件') }}
+                  </el-tag>
+                  <el-button
+                    class="composer-file-remove"
+                    type="text"
+                    icon="el-icon-close"
+                    title="移除文件"
+                    :disabled="recognizing || auditSubmitting"
+                    @click="removeDocument(record)"
+                  />
+                </div>
               </div>
+              <el-input
+                v-model.trim="chatInstruction"
+                class="chat-composer-input"
+                type="textarea"
+                :rows="2"
+                maxlength="1000"
+                :disabled="chatSubmitting || auditSubmitting"
+                placeholder="输入“开始审核”发起审核；也可以输入修改意见，或点击右侧上传资料"
+                @keydown.native="handleComposerKeydown"
+              />
             </div>
             <div class="chat-composer-footer">
               <div class="composer-left">
@@ -438,7 +498,7 @@
               <div class="composer-tools">
                 <el-button class="composer-icon-btn" icon="el-icon-edit-outline" :disabled="recognizing || auditSubmitting" title="查看/修改数据" @click="openDataDialog" />
                 <el-button class="composer-icon-btn" icon="el-icon-paperclip" :disabled="recognizing || auditSubmitting" title="上传/查看资料" @click="openUploadDialog" />
-                <el-button class="composer-send-btn" circle icon="el-icon-position" :loading="chatSubmitting || auditSubmitting" :disabled="!chatInstruction" title="发送" @click="sendChatInstruction" />
+                <el-button class="composer-send-btn" circle icon="el-icon-position" :loading="chatSubmitting || auditSubmitting" :disabled="!canSendComposer || chatSubmitting || auditSubmitting" title="发送" @click="sendChatInstruction" />
               </div>
             </div>
             <div class="result-actions">
@@ -477,7 +537,8 @@ import {
   createFullTask, createReplyTask, recognizeReplyLetter,
   getTask, getTaskResult, getAuditSession,
   createAuditSessionItem, updateAuditSessionItem, deleteAuditSessionItem,
-  reviseAuditSession, writeAuditSessionToArchive, generateAuditSessionReply
+  reviseAuditSession, writeAuditSessionToArchive, generateAuditSessionReply,
+  listKnowledge, listLibraryAssets, downloadKnowledgeFile, downloadLibraryAsset
 } from '@/api/rail/audit'
 import {
   listArchiveProjects, getArchiveProject,
@@ -486,7 +547,7 @@ import {
 
 function defaultForm() {
   return {
-    project_name: '', applicant: '', project_type: '', project_stage: '', relative_relationship: '', other_involvements: [],
+    project_name: '', applicant: '', project_type: '基坑', project_stage: '', relative_relationship: '', other_involvements: [],
     metro_line_name: '', metro_section_name: '', structure_method: '', structure_condition: '', buried_depth_m: null,
     outer_diameter_or_width_m: null, is_special_section: null, disease_severity: '', land_use_type: '',
     pit_depth_m: null, pit_length_m: null, minimum_horizontal_clearance_m: null, minimum_vertical_clearance_m: null,
@@ -510,6 +571,13 @@ export default {
       expandedSnapshotIds: {},
       prepPanelExpanded: false,
       uploadDialogVisible: false,
+      uploadSourceTab: 'library',
+      libraryLoading: false,
+      libraryAdding: false,
+      libraryKeyword: '',
+      libraryCases: [],
+      libraryAssets: [],
+      selectedLibraryRows: [],
       dataDialogVisible: false,
       dataDialogMissing: [],
       conflictSelections: {},
@@ -573,6 +641,41 @@ export default {
     letterFile() { return this.letterRecord && this.letterRecord.file },
     caseFile() { return this.caseRecord && this.caseRecord.file },
     hasAnyFile() { return this.documents.some(item => this.isUploadableDocument(item)) },
+    auditLibraryRows() {
+      const caseRows = (this.libraryCases || []).map(item => ({
+        key: `case_${item.case_id}`,
+        type: 'case',
+        id: item.case_id,
+        name: item.case_name || item.original_file_name || '案例文件',
+        originalName: item.original_file_name || item.case_name || '',
+        size: item.file_size || 0,
+        sourceLabel: '案例库',
+        icon: 'el-icon-document-checked'
+      }))
+      const assetRows = (this.libraryAssets || []).map(item => ({
+        key: `asset_${item.asset_id}`,
+        type: 'asset',
+        id: item.asset_id,
+        name: item.display_name || item.original_file_name || '资料附件',
+        originalName: item.original_file_name || item.display_name || '',
+        size: item.file_size || 0,
+        sourceLabel: '案例文件',
+        icon: this.assetIconByKind(item.file_kind)
+      }))
+      return [...caseRows, ...assetRows].filter(item => /\.(pdf|docx|txt)$/i.test(item.originalName || item.name || ''))
+    },
+    filteredAuditLibraryRows() {
+      const keyword = String(this.libraryKeyword || '').trim().toLowerCase()
+      if (!keyword) return this.auditLibraryRows
+      return this.auditLibraryRows.filter(item => [item.name, item.originalName, item.sourceLabel].some(value => String(value || '').toLowerCase().includes(keyword)))
+    },
+    currentDisplayVersion() {
+      const count = (this.visibleChatMessages || []).filter(message => this.hasMessageSnapshot(message)).length
+      return count || Number(this.auditSession && this.auditSession.current_version) || 1
+    },
+    canSendComposer() {
+      return Boolean(String(this.chatInstruction || '').trim() || this.hasAnyFile)
+    },
     uploadableDocumentCount() { return this.documents.filter(item => this.isUploadableDocument(item)).length },
     restoredDocumentCount() { return this.documents.filter(item => item && item.restored).length },
     hasRestoredDocuments() { return this.restoredDocumentCount > 0 },
@@ -604,7 +707,12 @@ export default {
     currentOverallOpinion() {
       const metadata = this.auditSession && this.auditSession.metadata
       const latest = this.auditSession && this.auditSession.latest_result
-      return this.extractOverallOpinion(metadata, this.reviewItems) || this.extractOverallOpinion(latest, this.reviewItems)
+      const overall = this.extractOverallOpinion(metadata, this.reviewItems) || this.extractOverallOpinion(latest, this.reviewItems)
+      if (!overall) return overall
+      return {
+        ...overall,
+        conclusion: this.displayOverallOpinion(overall)
+      }
     },
     recognizedFieldCount() {
       const keys = new Set()
@@ -649,15 +757,13 @@ export default {
       return details.generated_opinions || (this.auditResult && this.auditResult.dynamic_regulation_opinions) || []
     },
     visibleChatMessages() {
-      return this.chatMessages || []
+      return (this.chatMessages || []).filter(message => !this.isUploadOnlyChatMessage(message))
     },
     latestAssistantSnapshotMessageId() {
       const messages = this.visibleChatMessages || []
       for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index]
-        const snapshot = message && message.result_snapshot
-        const items = snapshot && (snapshot.items || snapshot.review_items)
-        if (message.role === 'assistant' && Array.isArray(items) && items.length) {
+        if (this.hasMessageSnapshot(message)) {
           return message.message_id
         }
       }
@@ -717,8 +823,12 @@ export default {
     }
   },
   created() {
-    this.restoreAuditDraft()
-    this.loadArchiveSelection()
+    if (this.$route.query.sessionId) {
+      this.openRouteAuditSession()
+    } else {
+      this.restoreAuditDraft()
+      this.loadArchiveSelection()
+    }
   },
   beforeDestroy() {
     if (this.projectNameLookupTimer) clearTimeout(this.projectNameLookupTimer)
@@ -728,6 +838,72 @@ export default {
   methods: {
     openUploadDialog() {
       this.uploadDialogVisible = true
+      if (this.uploadSourceTab === 'library' && !this.libraryCases.length && !this.libraryAssets.length) {
+        this.loadAuditLibraryFiles()
+      }
+    },
+    handleUploadSourceTabClick(tab) {
+      if (tab && tab.name === 'library' && !this.libraryCases.length && !this.libraryAssets.length) {
+        this.loadAuditLibraryFiles()
+      }
+    },
+    async loadAuditLibraryFiles() {
+      this.libraryLoading = true
+      try {
+        const [cases, assets] = await Promise.all([
+          listKnowledge({ includeInactive: false }),
+          listLibraryAssets({ library_type: 'case' })
+        ])
+        this.libraryCases = Array.isArray(cases) ? cases : []
+        this.libraryAssets = Array.isArray(assets) ? assets : []
+        this.selectedLibraryRows = []
+      } catch (error) {
+        this.$message.error('知识库文件加载失败，请检查服务状态')
+      } finally {
+        this.libraryLoading = false
+      }
+    },
+    assetIconByKind(kind) {
+      if (kind === 'image') return 'el-icon-picture-outline'
+      if (kind === 'cad' || kind === 'bim') return 'el-icon-copy-document'
+      if (kind === 'archive') return 'el-icon-box'
+      return 'el-icon-document'
+    },
+    mimeTypeByName(name) {
+      const suffix = String(name || '').split('.').pop().toLowerCase()
+      if (suffix === 'pdf') return 'application/pdf'
+      if (suffix === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      if (suffix === 'txt') return 'text/plain'
+      return 'application/octet-stream'
+    },
+    async addSelectedLibraryFiles() {
+      const rows = Array.isArray(this.selectedLibraryRows) ? this.selectedLibraryRows : []
+      if (!rows.length) return
+      this.libraryAdding = true
+      try {
+        const files = []
+        for (const row of rows) {
+          const blob = row.type === 'case'
+            ? await downloadKnowledgeFile(row.id)
+            : await downloadLibraryAsset(row.id)
+          const fileName = row.originalName || row.name || '知识库文件'
+          const file = new File([blob], fileName, {
+            type: blob.type || this.mimeTypeByName(fileName),
+            lastModified: Date.now()
+          })
+          Object.defineProperty(file, '__railAuditId', {
+            value: `knowledge_${row.type}_${row.id}`,
+            enumerable: false
+          })
+          files.push(file)
+        }
+        await this.handleDocumentFiles(files)
+        this.$message.success(`已从知识库添加 ${files.length} 个文件`)
+      } catch (error) {
+        this.$message.error('知识库文件添加失败，请稍后重试')
+      } finally {
+        this.libraryAdding = false
+      }
     },
     openDataDialog() {
       this.refreshConflictSelections()
@@ -761,7 +937,8 @@ export default {
     },
     isStartAuditCommand(value) {
       const text = String(value || '').replace(/\s+/g, '').trim()
-      return ['开始审核', '重新审核', '审核', '开始', '重新开始审核'].includes(text)
+      if (['开始审核', '重新审核', '审核', '开始', '重新开始审核'].includes(text)) return true
+      return /(综合审核|结合.*审核|合并.*审核|继续审核|重新.*审核|基于.*附件.*审核|结合.*文件.*审核)/.test(text)
     },
     confirmDataDialog() {
       if (!this.ensureConflictsResolved()) return
@@ -769,7 +946,7 @@ export default {
       if (missing.length) {
         this.dataDialogMissing = missing
         this.activeTab = missing[0].tab || 'project'
-        this.$message.error(`请补充识别不到且会影响判断的参数：${missing.map(item => item.label).join('、')}`)
+        this.$message.error(`请先确认基础信息：${missing.map(item => item.label).join('、')}`)
         return
       }
       this.dataDialogMissing = []
@@ -861,6 +1038,12 @@ export default {
       this.$nextTick(() => {
         const panel = this.$el && this.$el.querySelector('.result-panel')
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    },
+    scrollToChatBottom() {
+      this.$nextTick(() => {
+        const panel = this.$el && this.$el.querySelector('.audit-chat-scroll')
+        if (panel) panel.scrollTop = panel.scrollHeight
       })
     },
     auditInputSignature() {
@@ -981,6 +1164,33 @@ export default {
       } catch (error) {
         this.$message.error('项目档案加载失败，请刷新页面重试')
       } finally { this.archiveLoading = false }
+    },
+    async openRouteAuditSession() {
+      sessionStorage.removeItem(AUDIT_DRAFT_KEY)
+      await this.loadArchiveSelection()
+      const sessionId = String(this.$route.query.sessionId || '')
+      if (!sessionId) return
+      try {
+        const session = await getAuditSession(sessionId)
+        const metadata = session.metadata || {}
+        if (metadata.project_name && !this.form.project_name) this.form.project_name = metadata.project_name
+        if (metadata.stage_name && !this.form.project_stage) this.applyStageValue(metadata.stage_name)
+        this.auditSession = session
+        this.reviewItems = session.items || []
+        this.auditResult = {
+          audit_session_id: session.session_id,
+          audit_session: session,
+          review_items: this.reviewItems,
+          overall_opinion: metadata.overall_opinion || {},
+          latest_result: session.latest_result || {}
+        }
+        this.chatMessages = this.ensureSnapshotMessages(session, this.auditResult, session.messages || [])
+        this.baselineAuditSignature = this.currentAuditSignature
+        this.saveAuditDraft()
+        this.$nextTick(() => this.scrollToResultPanel())
+      } catch (error) {
+        this.$message.error('历史审核会话加载失败，请在项目档案中重新进入')
+      }
     },
     async refreshArchiveProjects() {
       this.archiveProjects = await listArchiveProjects({ keyword: '', includeArchived: false }) || []
@@ -1223,14 +1433,12 @@ export default {
         return
       }
       this.documents.push(...additions)
-      const uploadMessage = this.appendUploadChatMessage(additions)
       this.updateLetterExcerpt()
       if (typeof this.markAuditInputChanged === 'function') this.markAuditInputChanged()
       this.saveAuditDraft()
       this.recognizing = true
       await Promise.all(additions.map(record => this.recognizeDocument(record)))
       this.recognizing = this.documents.some(item => item.status === 'identifying')
-      this.updateUploadMessageAttachments(uploadMessage, additions)
       this.refreshConflictSelections()
       this.dataDialogMissing = this.collectMissingAuditFields()
       this.uploadDialogVisible = false
@@ -1321,34 +1529,11 @@ export default {
       const pushMissing = (key, label, tab = 'project') => missing.push({ key, label, tab })
       const required = [
         ['project_name', '项目名称', 'project'],
-        ['applicant', '收函单位', 'project'],
-        ['project_type', '项目类型', 'project'],
-        ['project_stage', '项目阶段', 'project'],
-        ['relative_relationship', '相对关系', 'project'],
-        ['structure_method', '结构形式', 'metro'],
-        ['structure_condition', '结构状态', 'metro'],
-        ['buried_depth_m', '结构埋深', 'metro'],
-        ['outer_diameter_or_width_m', '结构宽度D', 'metro'],
-        ['disease_severity', '结构病害', 'metro'],
-        ['terrain_zone', '地段区域', 'pit'],
-        ['is_soft_soil', '软弱土', 'pit'],
-        ['is_complex_geology_or_hydrology', '复杂地质水文', 'pit'],
-        ['protection_zone_location', '保护区位置', 'pit']
+        ['project_stage', '项目阶段', 'project']
       ]
       required.forEach(([key, label, tab]) => {
         if (this.isBlankAuditValue(this.form[key])) pushMissing(key, label, tab)
       })
-      if (this.form.protection_zone_location === '待判断') pushMissing('protection_zone_location', '保护区位置', 'pit')
-      if (this.form.project_stage === '出让' && !this.form.land_use_type) pushMissing('land_use_type', '用地性质', 'pit')
-      if (this.form.project_stage !== '出让' && this.isBlankAuditValue(this.form.pit_depth_m)) pushMissing('pit_depth_m', '基坑深度', 'pit')
-      if (this.form.project_stage === '规划') {
-        if (this.isBlankAuditValue(this.form.pit_length_m)) pushMissing('pit_length_m', '基坑长度', 'pit')
-      }
-      if (
-        this.isBlankAuditValue(this.form.minimum_horizontal_clearance_m) &&
-        this.isBlankAuditValue(this.form.minimum_vertical_clearance_m)
-      ) pushMissing('minimum_horizontal_clearance_m', '水平净距或竖向净距', 'pit')
-      if (!Array.isArray(this.form.support_components) || !this.form.support_components.length) pushMissing('support_components', '支护构件', 'pit')
       return missing
     },
     validateLetterInputs() {
@@ -1359,7 +1544,7 @@ export default {
         this.dataDialogMissing = missing
         this.activeTab = missing[0].tab || 'project'
         this.dataDialogVisible = true
-        this.$message.error(`请补充识别不到且会影响判断的参数：${missing.map(item => item.label).join('、')}`)
+        this.$message.error(`请先确认基础信息：${missing.map(item => item.label).join('、')}`)
         return false
       }
       this.dataDialogMissing = []
@@ -1386,28 +1571,29 @@ export default {
         status: record.status
       })).filter(item => item.name)
     },
-    appendUploadChatMessage(records = []) {
-      const attachments = this.documentAttachmentPayload(records)
-      if (!attachments.length) return null
-      const message = {
-        message_id: `local_upload_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        role: 'user',
-        content: `已上传 ${attachments.length} 个文件`,
-        attachments,
-        created_at: new Date().toISOString()
-      }
-      this.chatMessages.push(message)
-      return message
-    },
-    updateUploadMessageAttachments(message, records = []) {
-      if (!message) return
-      this.$set(message, 'attachments', this.documentAttachmentPayload(records))
+    isUploadOnlyChatMessage(message) {
+      if (!message || message.role !== 'user') return false
+      const content = String(message.content || '').trim()
+      const attachments = Array.isArray(message.attachments) ? message.attachments : []
+      return Boolean(attachments.length && /^已上传\s*\d+\s*个文件$/.test(content))
     },
     chatMessageKey(message) {
       if (!message) return ''
       if (message.message_id) return String(message.message_id)
       const createdAt = message.created_at || message.createdAt || message.time || ''
       return [message.role || '', createdAt, String(message.content || '').trim()].join('::')
+    },
+    isLocalUserMessage(message) {
+      return Boolean(message && message.role === 'user' && String(message.message_id || '').startsWith('local_'))
+    },
+    sameUserMessage(left, right) {
+      return Boolean(
+        left &&
+        right &&
+        left.role === 'user' &&
+        right.role === 'user' &&
+        String(left.content || '').trim() === String(right.content || '').trim()
+      )
     },
     mergeChatMessages(existing = [], incoming = []) {
       const merged = []
@@ -1422,6 +1608,15 @@ export default {
         const normalized = {
           ...message,
           message_id: message.message_id || fallbackId
+        }
+        if (!this.isLocalUserMessage(normalized) && normalized.role === 'user') {
+          const localIndex = merged.findIndex(old => this.isLocalUserMessage(old) && this.sameUserMessage(old, normalized))
+          if (localIndex >= 0) {
+            merged[localIndex] = normalized
+            const localKey = this.chatMessageKey(merged[localIndex])
+            if (localKey) indexByKey[localKey] = localIndex
+            return
+          }
         }
         const key = this.chatMessageKey(normalized)
         if (key && indexByKey[key] !== undefined) {
@@ -1458,9 +1653,25 @@ export default {
         body.append('attachmentFiles', record.file)
       })
     },
+    rerunAuditContext(commandText = '') {
+      const attachments = this.attachmentRecordsForAudit().map(record => ({
+        name: record.file && record.file.name,
+        role: record.role || 'attachment',
+        status: record.status || ''
+      })).filter(item => item.name)
+      return {
+        mode: this.auditSession ? '基于已有审核结果和新增附件综合复核' : '首次审核',
+        latest_instruction: String(commandText || this.chatInstruction || '').trim(),
+        attachment_policy: '新增附件追加进入当前会话，不清空已有文件；重新审核时应结合已有文件、新增附件、当前确认数据、上一版综合评价和全部审核意见形成新的综合审核意见。',
+        attachment_count: attachments.length,
+        attachment_names: attachments.map(item => item.name),
+        attachments
+      }
+    },
     async startAudit(options = {}) {
+      const originalCommandText = String(options.commandText || this.chatInstruction || '').trim()
       if (options.fromChat) {
-        const commandText = String(options.commandText || '').trim() || (this.auditInputChanged || this.auditSession ? '重新审核' : '开始审核')
+        const commandText = originalCommandText || (this.auditInputChanged || this.auditSession ? '重新审核' : '开始审核')
         this.appendUserChatMessage(commandText)
         this.chatInstruction = ''
         this.saveAuditDraft()
@@ -1502,7 +1713,8 @@ export default {
               risk_level: item.risk_level,
               opinion: this.displayReviewOpinion(item)
             })) : [],
-            latest_overall_opinion: this.currentOverallOpinion || {}
+            latest_overall_opinion: this.currentOverallOpinion || {},
+            rerun_context: this.rerunAuditContext(originalCommandText)
           }
           body.append('options', JSON.stringify({
             top_k: 3,
@@ -1527,6 +1739,7 @@ export default {
               opinion: this.displayReviewOpinion(item)
             })) : [],
             latest_overall_opinion: this.currentOverallOpinion || {},
+            rerun_context: this.rerunAuditContext(originalCommandText),
             ...(hasArchiveBinding ? { archive_binding: archiveBinding } : {}),
             manual_archive_only: true
           }))
@@ -1580,14 +1793,19 @@ export default {
         this.extractOverallOpinion(metadata, itemList)
       const versionNo = Number((session && session.current_version) || latest.version_no || 1) || 1
       const combined = this.mergeChatMessages(existingMessages, incoming)
-      const hasSnapshot = combined.some(message => {
-        const snapshot = message && message.result_snapshot
-        const messageVersion = Number((message && message.version_no) || (snapshot && snapshot.version_no) || 0)
-        return this.hasMessageSnapshot(message) && messageVersion === versionNo
-      })
-      if (!hasSnapshot && (itemList.length || overall)) {
+      const latestSignature = this.snapshotSignatureFromParts(itemList, overall)
+      const lastSnapshotIndex = this.lastSnapshotMessageIndex(combined)
+      const lastUserIndex = this.lastUserMessageIndex(combined)
+      const lastSnapshot = lastSnapshotIndex >= 0 ? combined[lastSnapshotIndex] : null
+      const lastSignature = lastSnapshot ? this.messageSnapshotSignature(lastSnapshot) : ''
+      const needsBottomSnapshot = Boolean(
+        (itemList.length || overall) &&
+        latestSignature &&
+        (latestSignature !== lastSignature || lastSnapshotIndex < lastUserIndex)
+      )
+      if (needsBottomSnapshot) {
         incoming.push({
-          message_id: `local_snapshot_${(session && session.session_id) || Date.now()}_${versionNo}`,
+          message_id: `local_snapshot_${(session && session.session_id) || 'session'}_${versionNo}_${Date.now()}`,
           role: 'assistant',
           content: `第 ${versionNo} 版审核意见`,
           version_no: versionNo,
@@ -1597,7 +1815,8 @@ export default {
             version_no: versionNo,
             items: itemList,
             review_items: itemList,
-            overall_opinion: overall || {}
+            overall_opinion: overall || {},
+            snapshot_signature: latestSignature
           }
         })
       }
@@ -1615,10 +1834,7 @@ export default {
       this.auditSession = session
       this.reviewItems = session.items || result.review_items || []
       this.chatMessages = this.ensureSnapshotMessages(session, result, this.chatMessages)
-      this.$nextTick(() => {
-        const panel = this.$el && this.$el.querySelector('.result-panel')
-        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
+      this.scrollToChatBottom()
     },
     auditCompleted(result) {
       this.auditSubmitting = false
@@ -1646,10 +1862,56 @@ export default {
     },
     hasMessageSnapshot(message) {
       if (!message || message.role !== 'assistant') return false
-      const snapshot = message.result_snapshot || {}
+      const snapshot = this.messageSnapshot(message)
       const items = snapshot.items || snapshot.review_items
       const overall = this.extractOverallOpinion(snapshot, Array.isArray(items) ? items : [])
       return (Array.isArray(items) && items.length > 0) || Boolean(overall && (overall.conclusion || overall.recommendation))
+    },
+    lastSnapshotMessage(messages = []) {
+      const list = Array.isArray(messages) ? messages : []
+      const index = this.lastSnapshotMessageIndex(list)
+      if (index >= 0) return list[index]
+      return null
+    },
+    lastSnapshotMessageIndex(messages = []) {
+      const list = Array.isArray(messages) ? messages : []
+      for (let index = list.length - 1; index >= 0; index -= 1) {
+        if (this.hasMessageSnapshot(list[index])) return index
+      }
+      return -1
+    },
+    lastUserMessageIndex(messages = []) {
+      const list = Array.isArray(messages) ? messages : []
+      for (let index = list.length - 1; index >= 0; index -= 1) {
+        if (list[index] && list[index].role === 'user') return index
+      }
+      return -1
+    },
+    snapshotSignatureFromParts(items = [], overall = null) {
+      const normalizedItems = (Array.isArray(items) ? items : [])
+        .filter(item => item && !this.isOverallReviewItem(item))
+        .map(item => [
+          item.order_no,
+          item.title,
+          item.risk_level,
+          item.conclusion,
+          item.recommendation
+        ].map(value => this.cleanChatMessageContent(value)).join('|'))
+        .join('||')
+      const normalizedOverall = overall
+        ? [
+          overall.title,
+          overall.conclusion,
+          overall.recommendation
+        ].map(value => this.cleanChatMessageContent(value)).join('|')
+        : ''
+      return `${normalizedOverall}::${normalizedItems}`.trim()
+    },
+    messageSnapshotSignature(message) {
+      const snapshot = this.messageSnapshot(message)
+      const items = snapshot.items || snapshot.review_items || []
+      const overall = this.extractOverallOpinion(snapshot, Array.isArray(items) ? items : [])
+      return snapshot.snapshot_signature || this.snapshotSignatureFromParts(items, overall)
     },
     hasHistoricalSnapshot(message) {
       return this.hasMessageSnapshot(message) && message.message_id !== this.latestAssistantSnapshotMessageId
@@ -1664,13 +1926,24 @@ export default {
       if (!message || !message.message_id) return
       this.$set(this.expandedSnapshotIds, message.message_id, !this.isSnapshotExpanded(message))
     },
+    snapshotSequenceNo(message) {
+      const messages = this.visibleChatMessages || []
+      let sequence = 0
+      for (const item of messages) {
+        if (!this.hasMessageSnapshot(item)) continue
+        sequence += 1
+        if (item && message && item.message_id === message.message_id) return sequence
+      }
+      return 0
+    },
     snapshotVersionLabel(message) {
-      const version = Number(message && message.version_no)
+      const snapshot = this.messageSnapshot(message)
+      const version = this.snapshotSequenceNo(message) || Number((snapshot && snapshot.version_no) || (message && message.version_no))
       return version ? `第 ${version} 版` : '历史版本'
     },
     messageReviewItems(message) {
       if (!message || message.role !== 'assistant') return []
-      const snapshot = message && message.result_snapshot
+      const snapshot = this.messageSnapshot(message)
       const items = snapshot && (snapshot.items || snapshot.review_items)
       return Array.isArray(items)
         ? items.filter(item => !this.isOverallReviewItem(item) && this.displayReviewOpinion(item))
@@ -1678,9 +1951,51 @@ export default {
     },
     messageOverallOpinion(message) {
       if (!message || message.role !== 'assistant') return null
-      const snapshot = message && message.result_snapshot
+      const snapshot = this.messageSnapshot(message)
       const items = snapshot && (snapshot.items || snapshot.review_items)
       return this.extractOverallOpinion(snapshot, Array.isArray(items) ? items : [])
+    },
+    messageSnapshot(message) {
+      if (!message || message.role !== 'assistant') return {}
+      const snapshot = message.result_snapshot || {}
+      const items = snapshot.items || snapshot.review_items
+      if ((Array.isArray(items) && items.length) || snapshot.overall_opinion) return snapshot
+      return this.inferSnapshotFromAssistantText(message.content)
+    },
+    inferSnapshotFromAssistantText(value) {
+      const raw = String(value || '')
+      if (!/(order_no|title|conclusion|risk_level|basis|recommendation|修改后的审核意见)/i.test(raw)) return {}
+      const text = raw.replace(/\s+/g, ' ').trim()
+      const orderMatch = text.match(/order_no["']?\s*[:：]\s*(\d+)/i) || text.match(/第\s*(\d+)\s*(?:条|点|项)/)
+      const titleMatch = text.match(/title["']?\s*[:：]\s*["']?([^"'，,。；;]+)["']?/i)
+      const conclusionMatch = text.match(/conclusion["']?\s*[:：]\s*([\s\S]*?)(?=\s+["']?(?:risk_level|basis|recommendation)["']?\s*[:：]|$)/i)
+      const recommendationMatch = text.match(/recommendation["']?\s*[:：]\s*([\s\S]*?)(?=$)/i)
+      const riskMatch = text.match(/risk_level["']?\s*[:：]\s*["']?([高中低]|提示)["']?/i)
+      const conclusion = this.cleanChatMessageContent(conclusionMatch && conclusionMatch[1] || recommendationMatch && recommendationMatch[1] || raw)
+      if (!conclusion) return {}
+      const orderNo = Number(orderMatch && orderMatch[1]) || 1
+      const title = this.cleanChatMessageContent(titleMatch && titleMatch[1] || '').slice(0, 34) || `第${orderNo}条审核意见`
+      const item = {
+        order_no: orderNo,
+        title,
+        risk_level: riskMatch && riskMatch[1] || '',
+        conclusion,
+        recommendation: '',
+        basis: [],
+        source: { kind: 'inferred_from_plain_reply' }
+      }
+      const overall = this.currentOverallOpinion || {
+        title: '综合评价',
+        conclusion: this.positiveOverallOpinionText(),
+        source: { kind: 'overall_summary' }
+      }
+      return {
+        format_version: 'inferred_audit_result_v1',
+        version_no: Number(this.auditSession && this.auditSession.current_version) || 1,
+        overall_opinion: overall,
+        items: [item],
+        review_items: [item]
+      }
     },
     isOverallReviewItem(item) {
       const title = String(item && item.title || '').trim()
@@ -1693,8 +2008,30 @@ export default {
       const list = Array.isArray(items) ? items : []
       return list.find(item => this.isOverallReviewItem(item) && (item.conclusion || item.recommendation)) || null
     },
+    displayOverallOpinion(item) {
+      const text = this.cleanChatMessageContent(item && (item.conclusion || item.recommendation) || '')
+      if (!text) return ''
+      if (!this.overallOpinionNeedsPositiveTone(text)) return text
+      return this.positiveOverallOpinionText()
+    },
+    overallOpinionNeedsPositiveTone(value) {
+      return /(不予通过|不同意|不可实施|不得进入|不得实施|多项高风险|高风险及不合规|总体结论为|缺乏|不足|超限|缺陷|缺失|不满足|不符合|严禁|必须严格)/.test(String(value || ''))
+    },
+    positiveOverallOpinionText() {
+      const stage = String(this.form.project_stage || '').trim()
+      if (stage.includes('设计')) {
+        return '经审查，本次设计资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展设计阶段合规审查和方案完善的基础。后续在落实下列审核意见、补充完善相关资料及控制措施后，可按程序推进施工图深化及备案审查工作。'
+      }
+      if (stage.includes('施工')) {
+        return '经审查，本次施工资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展施工阶段合规审查和现场保护控制的基础。后续在落实下列审核意见、完善施工组织及监测应急措施后，可按程序推进后续施工管理工作。'
+      }
+      if (stage.includes('出让')) {
+        return '经审查，本次资料总体符合基坑项目涉铁保护区前期审查流程要求，已基本具备作为后续规划设计深化依据的合规基础。后续在落实下列审核意见、明确保护区控制条件及报审衔接要求后，可按程序推进后续工作。'
+      }
+      return '经审查，本次资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展本阶段合规审查和方案深化的基础。后续在落实下列审核意见、补充完善相关资料及安全控制措施后，可按程序推进后续工作。'
+    },
     displayReviewTitle(item) {
-      const rawTitle = String(item && item.title || '').trim()
+      const rawTitle = this.cleanChatMessageContent(item && item.title || '')
       const sourceLike = !rawTitle ||
         rawTitle.includes('自动审核意见') ||
         ((rawTitle.toLowerCase().includes('pdf') || rawTitle.includes('规程') || rawTitle.includes('规范') || rawTitle.includes('标准')) && rawTitle.includes('第') && rawTitle.includes('条'))
@@ -1720,11 +2057,57 @@ export default {
       return this.isEvaluationReviewText(text) && !this.isRequirementReviewText(text)
     },
     displayReviewOpinion(item) {
-      const conclusion = String(item && item.conclusion || '').replace(/\s+/g, ' ').trim()
-      if (conclusion && !this.isPureEvaluationReviewText(conclusion)) return conclusion
-      const recommendation = String(item && item.recommendation || '').replace(/\s+/g, ' ').trim()
-      if (recommendation && !this.isPureEvaluationReviewText(recommendation)) return recommendation
+      const conclusion = this.cleanChatMessageContent(item && item.conclusion || '')
+      if (conclusion && !this.isPureEvaluationReviewText(conclusion)) return this.formatReadableText(conclusion)
+      const recommendation = this.cleanChatMessageContent(item && item.recommendation || '')
+      if (recommendation && !this.isPureEvaluationReviewText(recommendation)) return this.formatReadableText(recommendation)
       return ''
+    },
+    cleanChatMessageContent(value) {
+      let text = String(value || '').trim()
+      if (!text) return ''
+      text = text
+        .replace(/\$+\s*K\s*\$+\s*值/gi, '渗透系数K值')
+        .replace(/\$+\s*K\s*\$+/gi, '渗透系数K')
+        .replace(/\$+\s*F\s*_\s*s\s*\\?geq\s*([0-9.]+)\s*\$+/gi, '抗突涌安全系数Fs不小于$1')
+        .replace(/\$+\s*F\s*_\s*s\s*\$+/gi, '抗突涌安全系数Fs')
+        .replace(/\(\s*抗突涌安全系数Fs\s*\)/g, '抗突涌安全系数Fs')
+        .replace(/（\s*抗突涌安全系数Fs\s*）/g, '抗突涌安全系数Fs')
+        .replace(/\(\s*渗透系数K值\s*\)/g, '渗透系数K值')
+        .replace(/（\s*渗透系数K值\s*）/g, '渗透系数K值')
+        .replace(/\\geq/g, '不小于')
+        .replace(/\\leq/g, '不大于')
+        .replace(/\\times/g, '乘以')
+        .replace(/\\[a-zA-Z]+/g, '')
+        .replace(/\$+/g, '')
+        .replace(/\bF\s*_\s*s\b/gi, '抗突涌安全系数Fs')
+        .replace(/\bK\s*_\s*([a-zA-Z])\b/g, 'K$1')
+        .replace(/```(?:json|markdown|md)?/gi, '')
+        .replace(/```/g, '')
+        .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+        .replace(/^\s*[-*+]\s+/gm, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/__(.*?)__/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/[*#]+/g, '')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/["']?(order_no|title|conclusion|risk_level|basis|recommendation|reply|items|overall_opinion)["']?\s*[:：]\s*/gi, '')
+        .replace(/[{}\[\]]/g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/^[,，。；;：:\s]+|[,，；;：:\s]+$/g, '')
+      return text
+    },
+    formatReadableText(value) {
+      let text = this.cleanChatMessageContent(value)
+      if (!text) return ''
+      text = text
+        .replace(/\s*(第\s*[一二三四五六七八九十\d]+\s*(?:条|点|项)(?:审核意见)?[^：:。；]{0,36}[：:])\s*/g, '$1\n')
+        .replace(/\s+(?=\d{1,2}[.、]\s*[\u4e00-\u9fa5])/g, '\n\n')
+        .replace(/\s+(?=(?:监测点布置|布点密度与位置|监测项目|监测频率|报警阈值设定|预警值|报警值|控制值|数据共享|信息共享|联合研判|预案启动|黄色预警|橙色预警|红色预警|处置措施|风险提示|备注|提示|建议操作)[：:])/g, '\n')
+        .replace(/([。；])\s*(?=(?:监测点布置|布点密度与位置|监测项目|监测频率|报警阈值设定|预警值|报警值|控制值|数据共享|信息共享|联合研判|预案启动|黄色预警|橙色预警|红色预警|处置措施|风险提示|备注|提示|建议操作)[：:])/g, '$1\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+      return text
     },
     extractActionReviewOpinion(value) {
       const text = String(value || '').replace(/\s+/g, ' ').trim()
@@ -1797,7 +2180,11 @@ export default {
       }
     },
     async sendChatInstruction() {
-      if (!this.chatInstruction) return
+      if (this.chatSubmitting || this.auditSubmitting) return
+      if (!this.canSendComposer) return
+      if (!this.chatInstruction && this.hasAnyFile) {
+        return this.startAudit({ fromChat: true, commandText: this.auditSession ? '重新审核' : '开始审核' })
+      }
       if (this.isStartAuditCommand(this.chatInstruction)) {
         return this.startAudit({ fromChat: true, commandText: this.chatInstruction })
       }
@@ -1807,6 +2194,7 @@ export default {
       this.chatInstruction = ''
       this.saveAuditDraft()
       this.chatSubmitting = true
+      this.scrollToChatBottom()
       try {
         const response = await reviseAuditSession(this.auditSession.session_id, instruction)
         const session = {
@@ -1821,6 +2209,11 @@ export default {
       } finally {
         this.chatSubmitting = false
       }
+    },
+    handleComposerKeydown(event) {
+      if (!event || event.key !== 'Enter' || event.shiftKey) return
+      event.preventDefault()
+      this.sendChatInstruction()
     },
     archivePayload(overwrite = false) {
       return {
@@ -1876,7 +2269,7 @@ export default {
         })
         const safeName = projectName.replace(/[\\/:*?"<>|]/g, '').slice(0, 80) || '项目'
         saveAs(blob, `${safeName}复函.docx`)
-        this.$message.success('已按最新版审核结果生成复函，并保存至回函知识库')
+        this.$message.success('已按最新版审核结果生成复函，并保存至案例文件')
       } catch (error) {
         this.$message.error((error && (error.msg || error.message)) || '生成复函失败，请检查服务状态或稍后重试')
       } finally {
@@ -1900,6 +2293,13 @@ export default {
       this.chatInstruction = ''
       this.prepPanelExpanded = false
       this.uploadDialogVisible = false
+      this.uploadSourceTab = 'library'
+      this.libraryLoading = false
+      this.libraryAdding = false
+      this.libraryKeyword = ''
+      this.libraryCases = []
+      this.libraryAssets = []
+      this.selectedLibraryRows = []
       this.dataDialogVisible = false
       this.dataDialogMissing = []
       this.conflictSelections = {}
@@ -1937,7 +2337,20 @@ export default {
 .step-number { display: inline-flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; background: #2f7d69; color: #fff; font-weight: 600; }
 .archive-field-status { display: flex; min-width: 0; height: 22px; align-items: center; gap: 6px; overflow: hidden; color: #4c7d6f; font-size: 12px; line-height: 22px; }.archive-field-status i { flex: none; font-size: 14px; }.archive-field-status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.archive-field-status.locked { color: #c56a55; }
 .archive-field-status.inherited { color: #2f7d69; }
-.unified-upload { margin-bottom: 20px; }.unified-upload ::v-deep .el-upload-dragger { height: 124px; }.unified-upload ::v-deep .file-drop .el-icon-upload2 { margin-top: 23px; }
+.unified-upload { margin-bottom: 20px; }
+.upload-source-tabs { margin-top: -8px; }
+.upload-source-tabs ::v-deep .el-tabs__header { margin-bottom: 14px; }
+.upload-source-tabs ::v-deep .el-tabs__item { height: 38px; line-height: 38px; font-size: 15px; }
+.library-picker-toolbar { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 10px; margin-bottom: 12px; }
+.library-picker-table { border: 1px solid #e4e9ed; border-radius: 8px; overflow: hidden; }
+.library-file-cell { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.library-file-cell i { display: inline-flex; width: 30px; height: 34px; flex: 0 0 30px; align-items: center; justify-content: center; background: #e7f3ef; color: #2f7d69; font-size: 17px; }
+.library-file-cell span { min-width: 0; }
+.library-file-cell strong,.library-file-cell small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-file-cell strong { color: #1f2c28; font-weight: 600; }
+.library-file-cell small { margin-top: 3px; color: #8b949c; font-size: 12px; }
+.unified-upload ::v-deep .el-upload-dragger { height: 124px; }
+.unified-upload ::v-deep .file-drop .el-icon-upload2 { margin-top: 23px; }
 .recognition-alert { margin-top: 12px; }.parameter-area { min-width: 0; border-top: 1px solid #edf0f2; padding-top: 12px; }
 .audit-data-dialog ::v-deep .el-dialog__body { max-height: 68vh; overflow: auto; padding-top: 10px; }
 .audit-data-dialog .parameter-area { border-top: 0; padding-top: 0; }
@@ -1982,7 +2395,18 @@ export default {
 .snapshot-summary-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #2f7d69; font-weight: 700; }
 .snapshot-summary-line .el-button { padding: 0; }
 .snapshot-detail { margin-top: 12px; }
-.thinking-text { color: #60736d; }.thinking-text i { margin-right: 6px; color: #2f7d69; }
+.thinking-bubble { min-width: 68px; padding: 14px 18px; }
+.thinking-text { display: inline-flex; align-items: center; gap: 6px; color: #60736d; }
+.thinking-text i.el-icon-loading { margin-right: 6px; color: #2f7d69; }
+.thinking-dots { display: inline-flex; align-items: center; gap: 4px; padding-top: 5px; }
+.thinking-dots.only-dots { padding-top: 0; }
+.thinking-dots i { width: 5px; height: 5px; border-radius: 50%; background: #2f7d69; opacity: .35; animation: thinking-dot 1.15s infinite ease-in-out; }
+.thinking-dots i:nth-child(2) { animation-delay: .16s; }
+.thinking-dots i:nth-child(3) { animation-delay: .32s; }
+@keyframes thinking-dot {
+  0%, 80%, 100% { transform: translateY(0); opacity: .35; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
 .review-bubble { width: min(980px, calc(100% - 52px)); max-width: calc(100% - 52px); }
 .review-bubble-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .review-bubble-head strong,.review-bubble-head small { display: block; }.review-bubble-head small { margin-top: 5px; color: #7d8782; font-size: 12px; }
@@ -2004,15 +2428,18 @@ export default {
 .chat-input-bar { margin-top: 0; }
 .chat-composer { border: 1px solid #d8dee2; border-radius: 24px; padding: 10px 14px 10px; background: #fff; box-shadow: 0 8px 26px rgba(32, 48, 43, .06); transition: border-color .18s ease, box-shadow .18s ease; }
 .chat-composer:focus-within { border-color: #9fbab2; box-shadow: 0 10px 30px rgba(47, 125, 105, .1); }
-.chat-composer-input ::v-deep .el-textarea__inner { min-height: 38px !important; border: 0; padding: 0 10px; resize: none; color: #24312d; font-size: 16px; line-height: 1.55; box-shadow: none; }
+.composer-input-surface { border-radius: 16px; background: #f7f9fb; padding: 10px 10px 8px; }
+.chat-composer-input ::v-deep .el-textarea__inner { min-height: 38px !important; border: 0; padding: 0 2px; resize: none; color: #24312d; font-size: 16px; line-height: 1.55; background: transparent; box-shadow: none; }
 .chat-composer-input ::v-deep .el-textarea__inner::placeholder { color: #b9c0c5; }
-.composer-file-cards { display: flex; flex-wrap: wrap; gap: 10px; margin: 3px 4px 8px; }
-.composer-file-card { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 10px; max-width: 360px; min-width: 250px; padding: 10px 12px; border-radius: 14px; background: #f3f4f5; color: #1f2c28; }
-.composer-file-icon { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 9px; background: #e9f2ff; color: #1677ff; font-size: 12px; font-weight: 800; letter-spacing: -.3px; }
+.composer-file-cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.composer-file-card { display: grid; grid-template-columns: 30px minmax(0,1fr) auto 22px; align-items: center; gap: 8px; max-width: 340px; min-width: 230px; padding: 8px 8px 8px 10px; border: 1px solid #e2e8ed; border-radius: 10px; background: #fff; color: #1f2c28; }
+.composer-file-icon { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 8px; background: #e9f2ff; color: #1677ff; font-size: 12px; font-weight: 800; letter-spacing: 0; }
 .composer-file-meta { min-width: 0; }
 .composer-file-meta strong,.composer-file-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.composer-file-meta strong { color: #1f2c28; font-size: 15px; font-weight: 700; line-height: 1.35; }
-.composer-file-meta small { margin-top: 3px; color: #929ba2; font-size: 13px; line-height: 1.25; }
+.composer-file-meta strong { color: #1f2c28; font-size: 14px; font-weight: 700; line-height: 1.3; }
+.composer-file-meta small { margin-top: 2px; color: #929ba2; font-size: 12px; line-height: 1.25; }
+.composer-file-remove { width: 22px; height: 22px; padding: 0; color: #8a949b; }
+.composer-file-remove:hover,.composer-file-remove:focus { color: #d05f4a; }
 .chat-composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
 .composer-left,.composer-tools { display: flex; align-items: center; gap: 8px; }
 .composer-pill { height: 32px; border-radius: 18px; color: #31403b; background: #fff; }

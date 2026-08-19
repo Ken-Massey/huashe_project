@@ -13,7 +13,6 @@ try:
     from typing import Annotated
 except ImportError:  # Python 3.8 compatibility
     from typing_extensions import Annotated
-from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
@@ -27,7 +26,7 @@ from .knowledge_base import KnowledgeBase
 from .library_assets import LibraryAssetRepository
 from .project_archive import ProjectArchiveRepository
 from .regulation_rules import RegulationRepository, RuleEngine
-from .reply_writer import generate_formal_reply_content
+from .reply_writer import STAGE_STYLE_RULES, generate_formal_reply_content
 from .services import advice_worker, recognize_letter, stage1_worker, stage2_audit_worker, stage2_full_worker
 from .task_manager import TaskManager
 from stage1_reply_system.review_generation import render_reply_draft_docx
@@ -957,20 +956,15 @@ def _build_overall_review_item(result: dict[str, Any], selected_items: list[dict
         or "",
         40,
     )
-    summary = (
+    raw_summary = (
         report.get("overall_conclusion")
         or report.get("overview")
         or result.get("audit_summary")
         or result.get("summary")
     )
-    if not isinstance(summary, str):
-        summary = json.dumps(summary, ensure_ascii=False) if summary else ""
-    summary = _short_text(summary, 1600)
-    if not summary:
-        if selected_items:
-            summary = "综合来看，本项目存在上述需补充论证、复核或完善的事项，建议补充相关资料、落实控制措施并完成复核后，再按程序推进后续工作。"
-        else:
-            summary = "综合来看，本次资料未形成需单独列出的主要风险事项，后续仍应按规范落实保护区管理、施工控制和监测要求。"
+    if not isinstance(raw_summary, str):
+        raw_summary = json.dumps(raw_summary, ensure_ascii=False) if raw_summary else ""
+    summary = _formal_overall_review_text(result, selected_items, _short_text(raw_summary, 1600))
     return {
         "order_no": 0,
         "title": "综合评价",
@@ -1140,7 +1134,7 @@ _CHINESE_ORDINALS = {
 
 
 def _instruction_order_no(text: str) -> int | None:
-    match = re.search(r"第\s*(\d+|[一二两三四五六七八九十])\s*条", text)
+    match = re.search(r"第\s*(\d+|[一二两三四五六七八九十])\s*(?:条|点|项|个)", text)
     if not match:
         return None
     value = match.group(1)
@@ -1172,8 +1166,10 @@ def _sanitize_review_items(value: Any, fallback: list[dict[str, Any]]) -> list[d
     for index, item in enumerate(candidates[:50], start=1):
         if not isinstance(item, dict):
             continue
-        title = _short_text(item.get("title") or item.get("topic"), 200)
+        title = _short_text(_clean_assistant_plain_text(item.get("title") or item.get("topic")), 200)
         conclusion, recommendation = _extract_action_opinion(item)
+        conclusion = _clean_assistant_plain_text(conclusion)
+        recommendation = _clean_assistant_plain_text(recommendation)
         if not conclusion and recommendation:
             conclusion = recommendation
         if not title:
@@ -1197,6 +1193,112 @@ def _sanitize_review_items(value: Any, fallback: list[dict[str, Any]]) -> list[d
     return _select_key_review_items(items, REVIEW_ITEM_MAX_COUNT)
 
 
+def _merge_partial_review_items(
+    instruction: str,
+    current_items: list[dict[str, Any]],
+    incoming_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not current_items or not incoming_items:
+        return incoming_items
+    if len(incoming_items) >= min(len(current_items), REVIEW_ITEM_TARGET_COUNT):
+        return incoming_items
+
+    merged = [_public_review_item(item) for item in current_items]
+    target_order = _instruction_order_no(instruction)
+    incoming_by_order = {
+        int(item.get("order_no") or 0): item
+        for item in incoming_items
+        if int(item.get("order_no") or 0) > 0
+    }
+
+    if target_order and incoming_items:
+        replacement = dict(incoming_items[0])
+        replacement["order_no"] = target_order
+        incoming_by_order[target_order] = replacement
+
+    for index, item in enumerate(merged):
+        order_no = int(item.get("order_no") or index + 1)
+        replacement = incoming_by_order.get(order_no)
+        if replacement:
+            merged[index] = {
+                **item,
+                **replacement,
+                "order_no": order_no,
+            }
+
+    if not target_order:
+        existing_orders = {int(item.get("order_no") or 0) for item in merged}
+        for item in incoming_items:
+            order_no = int(item.get("order_no") or 0)
+            if order_no not in existing_orders and len(merged) < REVIEW_ITEM_MAX_COUNT:
+                appended = dict(item)
+                appended["order_no"] = len(merged) + 1
+                merged.append(appended)
+
+    for index, item in enumerate(merged, start=1):
+        item["order_no"] = index
+    return _select_key_review_items(merged, REVIEW_ITEM_MAX_COUNT)
+
+
+def _looks_like_detail_instruction(instruction: str) -> bool:
+    return bool(re.search(r"(详细|细化|展开|扩写|丰富|完善|具体|深化)", str(instruction or "")))
+
+
+def _item_changed_enough(before: dict[str, Any] | None, after: dict[str, Any] | None) -> bool:
+    if not before or not after:
+        return True
+    before_text = _clean_assistant_plain_text(
+        " ".join(str(before.get(key) or "") for key in ("title", "conclusion", "recommendation"))
+    )
+    after_text = _clean_assistant_plain_text(
+        " ".join(str(after.get(key) or "") for key in ("title", "conclusion", "recommendation"))
+    )
+    if not before_text:
+        return bool(after_text)
+    if len(after_text) >= len(before_text) + 60:
+        return True
+    return before_text != after_text and len(after_text) >= int(len(before_text) * 1.25)
+
+
+def _expand_review_item_by_instruction(item: dict[str, Any], instruction: str) -> dict[str, Any]:
+    expanded = dict(item)
+    title = _short_text(expanded.get("title") or "审核意见细化", 80)
+    base = _clean_assistant_plain_text(expanded.get("conclusion") or expanded.get("recommendation") or "")
+    if not base:
+        base = f"应围绕“{title}”补充完善相关资料、计算复核和实施控制要求。"
+    detail = (
+        f"{base}\n\n"
+        "1. 资料补充要求：应进一步说明该事项涉及的工程条件、控制目标、计算参数和已有资料依据，明确缺失资料由设计单位或勘察单位补充完善。\n\n"
+        "2. 技术复核要求：应结合基坑开挖、地下水控制、既有结构保护及现场实施条件，对相关计算、验算或专项方案进行复核，确保控制指标具备可核查依据。\n\n"
+        "3. 实施管理要求：应在正式报审或施工前形成闭环文件，明确责任单位、复核结论、监测或应急控制措施，并经相关专业人员确认后纳入后续方案。"
+    )
+    expanded["title"] = title
+    expanded["conclusion"] = _clean_assistant_plain_text(detail)
+    expanded["recommendation"] = ""
+    source = expanded.get("source") if isinstance(expanded.get("source"), dict) else {}
+    expanded["source"] = {**source, "modified_by": "detail_instruction_fallback"}
+    return expanded
+
+
+def _ensure_detail_instruction_applied(
+    instruction: str,
+    current_items: list[dict[str, Any]],
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    order_no = _instruction_order_no(instruction)
+    if not order_no or not _looks_like_detail_instruction(instruction):
+        return items
+    before = next((item for item in current_items if int(item.get("order_no") or 0) == order_no), None)
+    after_index = next((index for index, item in enumerate(items) if int(item.get("order_no") or 0) == order_no), -1)
+    if after_index < 0:
+        return items
+    if _item_changed_enough(before, items[after_index]):
+        return items
+    updated = [dict(item) for item in items]
+    updated[after_index] = _expand_review_item_by_instruction(updated[after_index], instruction)
+    return updated
+
+
 def _sanitize_overall_opinion(value: Any, fallback: dict[str, Any] | None, items: list[dict[str, Any]]) -> dict[str, Any]:
     source = value.get("overall_opinion") if isinstance(value, dict) else None
     if not isinstance(source, dict):
@@ -1205,6 +1307,8 @@ def _sanitize_overall_opinion(value: Any, fallback: dict[str, Any] | None, items
     risk_level = _short_text(source.get("risk_level") or "", 40)
     if not conclusion:
         conclusion = _build_overall_review_item({"risk_level": risk_level}, items).get("conclusion") or ""
+    elif _overall_text_needs_formal_tone(conclusion):
+        conclusion = _formal_overall_review_text({"risk_level": risk_level}, items, conclusion)
     return {
         "order_no": 0,
         "title": "综合评价",
@@ -1214,6 +1318,89 @@ def _sanitize_overall_opinion(value: Any, fallback: dict[str, Any] | None, items
         "recommendation": "",
         "source": {"kind": "overall_summary"},
     }
+
+
+def _stage_key_for_overall(stage: Any) -> str:
+    text = str(stage or "")
+    for key in STAGE_STYLE_RULES:
+        if key and key in text:
+            return key
+    return "规划"
+
+
+def _contains_hard_rejection_text(*parts: Any) -> bool:
+    text = " ".join(str(part or "") for part in parts)
+    return bool(re.search(r"(不予通过|不同意|不得(?:实施|施工|推进|进入)|不可(?:实施|施工)|退回|否决)", text))
+
+
+def _formal_overall_review_text(
+    result: dict[str, Any],
+    selected_items: list[dict[str, Any]],
+    raw_summary: str = "",
+) -> str:
+    archive_binding = result.get("archive_binding") or {}
+    stage = (
+        archive_binding.get("stage_name")
+        or result.get("project_stage")
+        or result.get("stage_name")
+        or ""
+    )
+    stage_key = _stage_key_for_overall(stage)
+    has_items = bool(selected_items)
+    hard_rejection = _contains_hard_rejection_text(
+        raw_summary,
+        *[
+            " ".join([
+                str(item.get("title") or ""),
+                str(item.get("conclusion") or ""),
+                str(item.get("recommendation") or ""),
+            ])
+            for item in selected_items
+        ],
+    )
+
+    if hard_rejection:
+        return (
+            "经审查，本次报审资料已按基坑项目涉铁保护区审查流程完成阶段性核查，资料组织和审查程序总体符合本阶段合规审查要求。"
+            "后续在落实下列审核意见、完成方案修改、资料补充和专项复核，并确认保护区安全控制措施完善后，可按程序推进后续工作。"
+        )
+    if not has_items:
+        return (
+            "经审查，本次报审资料与本阶段地铁保护区管理要求总体相符，资料内容和审查程序总体符合基坑项目合规审查要求，未发现需单独列出的主要风险事项。"
+            "后续仍应按规范落实保护区管理、施工控制、监测和报审要求。"
+        )
+    if stage_key == "规划":
+        return (
+            "经审查，本次规划资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展规划阶段合规审查和方案深化的基础。"
+            "后续在落实下列审核意见、完善线位布置、净距控制、专项评估及报审材料后，可按程序推进后续工作。"
+        )
+    if stage_key == "设计":
+        return (
+            "经审查，本次设计资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展设计阶段合规审查和方案完善的基础。"
+            "后续在落实下列审核意见、补充完善相关资料及安全控制措施后，可按程序推进施工图深化及备案审查工作。"
+        )
+    if stage_key == "施工":
+        return (
+            "经审查，本次施工资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展施工阶段合规审查和现场保护控制的基础。"
+            "后续在落实下列审核意见、完善施工组织及监测应急措施后，可按程序推进后续施工管理工作。"
+        )
+    if stage_key == "出让":
+        return (
+            "经审查，本次资料总体符合基坑项目涉铁保护区前期审查流程要求，已基本具备作为后续规划设计深化依据的合规基础。"
+            "后续在落实下列审核意见、明确保护区控制条件及报审衔接要求后，可按程序推进后续工作。"
+        )
+    return (
+        "经审查，本次资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展本阶段合规审查和方案深化的基础。"
+        "后续在落实下列审核意见、补充完善相关资料及安全控制措施后，可按程序推进后续工作。"
+    )
+
+
+def _overall_text_needs_formal_tone(text: str) -> bool:
+    return bool(re.search(
+        r"(不予通过|不同意|不可实施|不得进入|不得实施|多项高风险|高风险及不合规|总体结论为|"
+        r"缺乏|不足|超限|缺陷|缺失|不满足|不符合|严禁|必须严格)",
+        str(text or ""),
+    ))
 
 
 def _deterministic_instruction_items(
@@ -1241,18 +1428,108 @@ def _looks_like_review_edit_instruction(instruction: str) -> bool:
     text = str(instruction or "").strip()
     if not text:
         return False
+    if re.search(r"(是什么|为什么|依据|来源|哪[里儿]|怎么理解|解释|说明一下|含义|什么意思|是否|能否|可以吗|吗[？?]?)", text):
+        return False
     edit_verbs = (
         "添加", "新增", "补充", "增加", "加入",
         "删除", "删掉", "去掉", "不要", "移除",
         "修改", "调整", "改成", "改为", "替换", "恢复",
+        "详细", "细化", "展开", "扩写", "丰富", "完善", "优化",
         "上一版", "刚才一版", "回到", "撤销",
     )
     review_words = ("审核", "意见", "结果", "条目", "条", "结论", "建议", "风险", "依据")
     if any(verb in text for verb in edit_verbs) and any(word in text for word in review_words):
         return True
-    if re.search(r"第\s*(\d+|[一二三四五六七八九十]+)\s*条", text) and any(verb in text for verb in edit_verbs):
+    if re.search(r"第\s*(\d+|[一二三四五六七八九十]+)\s*(?:条|点|项|个)", text) and any(verb in text for verb in edit_verbs):
         return True
     return False
+
+
+def _format_basis_text(value: Any) -> str:
+    if not value:
+        return ""
+    values = value if isinstance(value, list) else [value]
+    parts: list[str] = []
+    for item in values:
+        if item is None:
+            continue
+        if isinstance(item, str):
+            text = item.strip()
+        elif isinstance(item, dict):
+            text = " ".join(str(item.get(key) or "").strip() for key in ("document", "document_title", "clause", "section", "quote", "text"))
+        else:
+            text = str(item).strip()
+        if text:
+            parts.append(text)
+    return "；".join(parts)
+
+
+def _deterministic_review_question_answer(
+    instruction: str,
+    session: dict[str, Any],
+) -> str | None:
+    order_no = _instruction_order_no(instruction)
+    if not order_no:
+        return None
+    if not re.search(r"(依据|来源|为什么|是什么|哪[里儿]|怎么理解|说明|解释)", instruction):
+        return None
+    target = None
+    for item in session.get("items") or []:
+        if int(item.get("order_no") or 0) == order_no:
+            target = _public_review_item(item)
+            break
+    if not target:
+        return f"1. 我没有找到第{order_no}条审核意见。\n\n2. 你可以先确认当前结果中是否存在该编号，或让我按现有条目重新编号后再查询。"
+
+    basis = _format_basis_text(target.get("basis"))
+    title = target.get("title") or f"第{order_no}条审核意见"
+    opinion = target.get("conclusion") or target.get("recommendation") or ""
+    lines = [
+        f"1. 第{order_no}条意见的主题是：{title}。",
+    ]
+    if basis:
+        lines.append(f"2. 直接依据是：{basis}。")
+        lines.append("3. 这条意见是结合上述依据与当前资料中的风险点形成的，主要用于明确需要补充、复核或落实的控制要求。")
+    else:
+        lines.append("2. 当前条目没有单独保存明确的规程条款依据。")
+        lines.append("3. 从意见正文看，它主要依据当前资料暴露出的风险点和保护区安全控制要求形成。")
+    if opinion:
+        lines.append(f"4. 对应意见正文是：{opinion}")
+    return _clean_assistant_plain_text("\n\n".join(lines))
+
+
+def _clean_assistant_plain_text(value: Any) -> str:
+    text = _short_text(value or "", 12000)
+    if not text:
+        return ""
+    text = re.sub(r"\$+\s*K\s*\$+\s*值", "渗透系数K值", text, flags=re.IGNORECASE)
+    text = re.sub(r"\$+\s*K\s*\$+", "渗透系数K", text, flags=re.IGNORECASE)
+    text = re.sub(r"\$+\s*F\s*_\s*s\s*\\?geq\s*([0-9.]+)\s*\$+", r"抗突涌安全系数Fs不小于\1", text, flags=re.IGNORECASE)
+    text = re.sub(r"\$+\s*F\s*_\s*s\s*\$+", "抗突涌安全系数Fs", text, flags=re.IGNORECASE)
+    text = re.sub(r"\(\s*抗突涌安全系数Fs\s*\)", "抗突涌安全系数Fs", text)
+    text = re.sub(r"（\s*抗突涌安全系数Fs\s*）", "抗突涌安全系数Fs", text)
+    text = re.sub(r"\(\s*渗透系数K值\s*\)", "渗透系数K值", text)
+    text = re.sub(r"（\s*渗透系数K值\s*）", "渗透系数K值", text)
+    text = re.sub(r"\\geq", "不小于", text)
+    text = re.sub(r"\\leq", "不大于", text)
+    text = re.sub(r"\\times", "乘以", text)
+    text = re.sub(r"\\[a-zA-Z]+", "", text)
+    text = re.sub(r"\$+", "", text)
+    text = re.sub(r"\bF\s*_\s*s\b", "抗突涌安全系数Fs", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bK\s*_\s*([a-zA-Z])\b", r"K\1", text)
+    text = re.sub(r"```(?:json|markdown|md)?", "", text, flags=re.IGNORECASE)
+    text = text.replace("```", "")
+    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
+    text = re.sub(r"(?m)^\s*[-*+]\s+", "", text)
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"__(.*?)__", r"\1", text)
+    text = re.sub(r"(?<!\*)\*(?!\*)(.*?)\*(?!\*)", r"\1", text)
+    text = re.sub(r"[*#]+", "", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r'["\']?(order_no|title|conclusion|risk_level|basis|recommendation|reply|items|overall_opinion)["\']?\s*:\s*', "", text)
+    text = re.sub(r"[{}\[\]]", "", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(" ，,。；;：:")
 
 
 def _ai_free_chat(instruction: str, session: dict[str, Any]) -> str:
@@ -1266,11 +1543,14 @@ def _ai_free_chat(instruction: str, session: dict[str, Any]) -> str:
     question = (
         "你正在案例审核模块中与用户自由对话。当前最新版审核意见如下，仅作为上下文参考；"
         "如果用户不是明确要求增删改查审核意见，请只回答问题，不要改动审核意见。\n\n"
+        "回复要求：使用简洁正式中文，内容较长时按1、2、3分段说明，每段只讲一个要点；"
+        "公式和变量必须写成中文工程表达，例如“渗透系数K值”“抗突涌安全系数Fs不小于1.05”；"
+        "不要输出Markdown、JSON、代码块、星号、井号、字段名或内部结构。\n\n"
         f"当前审核意见：{json.dumps(current_items, ensure_ascii=False)}\n\n"
         f"用户问题：{instruction}"
     )
     result = agent.chat(question, history, [], False)
-    return _short_text(result.get("answer") or "", 12000)
+    return _clean_assistant_plain_text(result.get("answer") or "")
 
 
 def _ai_rewrite_review_items(
@@ -1287,9 +1567,12 @@ def _ai_rewrite_review_items(
         "审核意见默认控制在5至6条核心条目，最多6条；合并重复或次要条目，优先保留高风险、关键合规、资料缺失和后续报审要求。"
         "每条审核意见应按技术规程审核逻辑展开，约100至200个汉字，避免只给一句简短建议；"
         "需要说明该项需补充、复核、明确或落实的内容，以及对应的安全控制/报审管理要求。"
+        "overall_opinion/综合评价必须与正式复函口径保持一致，采用正向、概括、公文式表达：先说明资料已收悉/已完成审查/具备审查基础，"
+        "再说明可在落实下列意见后按程序推进；不得在综合评价中集中罗列高风险、不合规、不可实施、不予通过等负面判断。"
         "items中的每一条只写具体处理意见、补充要求或管理要求，不写“符合要求、风险可控、已满足、已落实、低于限值、严于规范”等评价性判断；"
-        "评价性判断统一归入overall_opinion/综合评价，不得放入分条意见。"
+        "风险、缺陷、资料缺失、超限、需修改等负面内容统一放入分条意见，不得堆在综合评价中。"
         "不要把综合评价或综合意见作为items中的一条审核意见；items只保留逐条具体意见。"
+        "公式和变量必须写成中文工程表达，例如“渗透系数K值”“抗突涌安全系数Fs不小于1.05”，不得输出$、\\geq、下标或LaTeX格式。"
         "只输出JSON，不要输出Markdown。"
     )
     ctx = json.dumps({
@@ -1300,15 +1583,17 @@ def _ai_rewrite_review_items(
     prompt = (
         f"当前审核结果版本：{ctx}\n\n"
         f"用户修改指令：{instruction}\n\n"
-        "请返回JSON：{\"reply\":\"一句话说明本次改动\",\"overall_opinion\":{\"title\":\"综合评价\",\"conclusion\":\"综合评价正文\",\"risk_level\":\"高/中/低/提示/可为空\"},\"items\":[{\"order_no\":1,\"title\":\"8至20字的意见主题\",\"conclusion\":\"100至200字的正式审核意见，只写意见和要求，不写评价性判断\",\"risk_level\":\"高/中/低/提示/可为空\",\"basis\":[],\"recommendation\":\"可为空；如填写也必须是具体要求\"}]}\n"
+        "请返回JSON：{\"reply\":\"用1至3个短句说明本次改动，不要输出Markdown\",\"overall_opinion\":{\"title\":\"综合评价\",\"conclusion\":\"与复函评价一致的正向概括文字，不集中罗列负面问题\",\"risk_level\":\"高/中/低/提示/可为空\"},\"items\":[{\"order_no\":1,\"title\":\"8至20字的意见主题\",\"conclusion\":\"100至200字的正式审核意见，只写意见和要求，不写评价性判断；如内容较长可按1、2、3组织要点\",\"risk_level\":\"高/中/低/提示/可为空\",\"basis\":[],\"recommendation\":\"可为空；如填写也必须是具体要求\"}]}\n"
         "要求：items 必须是修改后的完整最新版审核结果列表，不是增量补丁；数量保持5至6条，最多6条；不要输出依据块或建议块。"
     )
     value = agent.complete_json(system, prompt, max_tokens=5200)
     items = _sanitize_review_items(value, current_items)
+    items = _merge_partial_review_items(instruction, current_items, items)
+    items = _ensure_detail_instruction_applied(instruction, current_items, items)
     overall = _sanitize_overall_opinion(value, current_overall, items)
     reply = "已根据你的指令更新审核结果。"
     if isinstance(value, dict) and value.get("reply"):
-        reply = _short_text(value.get("reply"), 1000)
+        reply = _clean_assistant_plain_text(value.get("reply"))[:1000] or reply
     return items, overall, reply
 
 
@@ -1325,7 +1610,10 @@ def _apply_audit_chat_instruction(session_id: str, instruction: str) -> dict[str
     elif _looks_like_review_edit_instruction(instruction):
         items, overall, reply = _ai_rewrite_review_items(instruction, session)
     else:
-        reply = _ai_free_chat(instruction, audit_sessions.get_session(session_id))
+        updated = audit_sessions.get_session(session_id)
+        reply = _deterministic_review_question_answer(instruction, updated)
+        if not reply:
+            reply = _clean_assistant_plain_text(_ai_free_chat(instruction, updated)) or "1. 我已收到你的问题。\n\n2. 当前没有检索到足够上下文，请换一种问法或指出具体第几条意见。"
         assistant_message = audit_sessions.add_message(session_id, {
             "role": "assistant",
             "content": reply,
@@ -1342,6 +1630,7 @@ def _apply_audit_chat_instruction(session_id: str, instruction: str) -> dict[str
     assistant_message = audit_sessions.add_message(session_id, {
         "role": "assistant",
         "content": reply,
+        "version_no": updated.get("current_version"),
         "result_snapshot": updated.get("latest_result") or {},
     })
     updated = audit_sessions.get_session(session_id)
@@ -1453,6 +1742,16 @@ def _session_reply_package(
     project = data["project"]
     items = [item for item in (session.get("items") or []) if not _is_overall_review_item(item)]
     overall_opinion = (session.get("metadata") or {}).get("overall_opinion") or {}
+    overall_conclusion = _short_text(overall_opinion.get("conclusion") or overall_opinion.get("recommendation") or "", 1600)
+    if not overall_conclusion or _overall_text_needs_formal_tone(overall_conclusion):
+        overall_conclusion = _formal_overall_review_text(
+            {
+                "project_stage": project.get("project_stage") or "",
+                "risk_level": _session_archive_data(session)["risk_level"],
+            },
+            items,
+            overall_conclusion,
+        )
     findings = []
     audit_opinions = []
     for item in items:
@@ -1486,7 +1785,7 @@ def _session_reply_package(
     dynamic_audit = {
         "risk_report": {
             "overall_risk_level": _session_archive_data(session)["risk_level"],
-            "overall_conclusion": overall_opinion.get("conclusion") or "已按最新版审核结果形成本次复函意见。",
+            "overall_conclusion": overall_conclusion or "已按最新版审核结果形成本次复函意见。",
             "required_supplements": [],
             "findings": findings,
         }
@@ -1529,10 +1828,6 @@ def _normalize_reply_library_stage(stage: Any) -> str:
     return "设计阶段"
 
 
-def _reply_library_folder_id(project_name: str, stage_name: str) -> str:
-    return f"reply:{quote(project_name, safe='')}:{quote(stage_name, safe='')}"
-
-
 def _save_generated_reply_to_library(
     session: dict[str, Any],
     payload: AuditSessionReplyPayload,
@@ -1550,8 +1845,8 @@ def _save_generated_reply_to_library(
     display_name = f"{project_name}{stage_name}复函（第{version}版）"
     return library_assets.add(
         target,
-        "reply",
-        _reply_library_folder_id(project_name, stage_name),
+        "case",
+        None,
         display_name,
     )
 
@@ -1612,6 +1907,63 @@ def _write_audit_session_to_archive(
         "project_created": bool(resolved.get("project_created")),
         "stage_created": bool(resolved.get("stage_created")),
     }
+
+
+def _ensure_archive_record_session(record: dict[str, Any]) -> dict[str, Any]:
+    if not record or record.get("status") != "success":
+        return record
+    result_data = record.get("result_data") if isinstance(record.get("result_data"), dict) else {}
+    session_id = str(result_data.get("audit_session_id") or "")
+    if session_id:
+        try:
+            audit_sessions.get_session(session_id)
+            record["audit_session_id"] = session_id
+            return record
+        except KeyError:
+            pass
+
+    latest = result_data.get("latest_result") if isinstance(result_data.get("latest_result"), dict) else {}
+    raw_items = result_data.get("review_items") or result_data.get("items") or latest.get("items") or latest.get("review_items") or []
+    items = _sanitize_review_items({"items": raw_items}, [])
+    if not items:
+        items = _audit_result_to_review_items(result_data)
+    overall = _sanitize_overall_opinion(
+        {"overall_opinion": result_data.get("overall_opinion") or latest.get("overall_opinion") or {}},
+        {},
+        items,
+    )
+    project_id = str(record.get("project_id") or "")
+    stage_id = str(record.get("stage_id") or "")
+    stage: dict[str, Any] = {}
+    project: dict[str, Any] = {}
+    try:
+        stage = project_archives.get_stage(stage_id)
+        project = project_archives.get_project(project_id)
+    except Exception:
+        pass
+    session = audit_sessions.create_session({
+        "source_task_id": record.get("source_task_id") or record.get("audit_id") or "",
+        "project_id": project_id,
+        "stage_id": stage_id,
+        "status": "reviewing",
+        "metadata": {
+            "task_type": "archive_restored_session",
+            "project_name": project.get("name") or stage.get("project_name") or "",
+            "stage_name": stage.get("name") or "",
+            "overall_opinion": overall,
+            "restored_from_archive_audit_id": record.get("audit_id"),
+        },
+        "items": items,
+        "initial_message": "已从项目档案恢复上一版审核结果，可以继续提问或修改。",
+    })
+    patched = dict(result_data)
+    patched["audit_session_id"] = session["session_id"]
+    patched["review_items"] = session.get("items") or items
+    patched["overall_opinion"] = overall
+    patched["latest_result"] = session.get("latest_result") or patched.get("latest_result") or {}
+    updated = project_archives.update_audit_result_data(record["audit_id"], patched)
+    updated["audit_session_id"] = session["session_id"]
+    return updated
 
 
 def _create_audit_task(
@@ -1908,7 +2260,8 @@ def restore_stage(stage_id: str) -> dict[str, Any]:
 )
 def get_archive_stage_audit(stage_id: str) -> dict[str, Any] | None:
     try:
-        return project_archives.get_stage_audit(stage_id)
+        record = project_archives.get_stage_audit(stage_id)
+        return _ensure_archive_record_session(record) if record else None
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="???????") from exc
 
@@ -2309,6 +2662,16 @@ def list_library_assets(
     folder_id: str | None = None,
     keyword: str | None = None,
 ) -> list[dict[str, Any]]:
+    if library_type == "case":
+        case_assets = library_assets.list("case", folder_id, keyword)
+        if folder_id:
+            return case_assets
+        reply_assets = library_assets.list("reply", None, keyword)
+        return sorted(
+            case_assets + reply_assets,
+            key=lambda item: (item.get("updated_at") or "", item.get("display_name") or ""),
+            reverse=True,
+        )
     return library_assets.list(library_type, folder_id, keyword)
 
 
