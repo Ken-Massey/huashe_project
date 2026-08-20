@@ -6,11 +6,11 @@
     </div>
     <nav class="business-links">
       <router-link
-        v-for="item in items"
+        v-for="item in visibleItems"
         :key="item.path"
         :to="item.path"
         class="business-link"
-        :class="{ active: isActive(item.path) }"
+        :class="{ active: isActive(item) }"
       >
         <i :class="item.icon" />
         <span>{{ item.label }}</span>
@@ -32,12 +32,28 @@ export default {
         { path: '/rail/patrol', label: '现场符合性巡查', icon: 'el-icon-location-outline' },
         { path: '/rail/knowledge', label: '知识库', icon: 'el-icon-collection' },
         { path: '/rail/agent', label: 'AI智能体', icon: 'el-icon-chat-dot-square' },
-        { path: '/rail/archive', label: '项目档案', icon: 'el-icon-document-copy' }
+        { path: '/rail/archive', label: '项目档案', icon: 'el-icon-document-copy' },
+        // 账号管理：进入用户管理页，需管理员权限
+        { path: '/system/user', label: '账号管理', icon: 'el-icon-s-tools', permission: 'system:user:list' }
       ]
     }
   },
+  computed: {
+    visibleItems() {
+      const perms = this.$store.getters.permissions || []
+      return this.items.filter(item => {
+        if (!item.permission) return true
+        return perms.includes('*:*:*') || perms.includes(item.permission)
+      })
+    }
+  },
   methods: {
-    isActive(path) {
+    isActive(item) {
+      const path = typeof item === 'string' ? item : item.path
+      // 系统管理：/system/ 下任意页面均高亮
+      if (path === '/system/user') {
+        return this.$route.path.startsWith('/system/')
+      }
       return this.$route.path === path || this.$route.path.startsWith(`${path}/`)
     }
   }
@@ -128,7 +144,7 @@ export default {
     border-right: 0;
   }
   .brand-mark { display: none; }
-  .business-links { display: grid; height: 100%; grid-template-columns: repeat(5, 1fr); }
+  .business-links { display: grid; height: 100%; grid-template-columns: repeat(6, 1fr); }
   .business-link { min-height: 68px; gap: 4px; padding: 5px 3px; font-size: 11px; }
   .business-link i { font-size: 20px; }
   .business-link.active::before { inset: 0 12px auto; width: auto; height: 3px; }
