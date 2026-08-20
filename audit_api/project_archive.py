@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import threading
 import uuid
@@ -49,6 +50,30 @@ def _json_load(value: str | None, fallback: Any) -> Any:
 
 def _clip(value: Any, maximum: int) -> str:
     return " ".join(str(value or "").split())[:maximum]
+
+
+def _optional_float(value: Any, *, field: str, minimum: float, maximum: float) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field}必须是数字。") from exc
+    if not minimum <= result <= maximum:
+        raise ValueError(f"{field}必须在{minimum}至{maximum}之间。")
+    return result
+
+
+def _haversine_meters(lng1: float, lat1: float, lng2: float, lat2: float) -> float:
+    radius = 6371000.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lng2 - lng1)
+    value = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return 2 * radius * math.atan2(math.sqrt(value), math.sqrt(1 - value))
 
 
 def _history_findings(result_data: dict[str, Any], limit: int) -> list[dict[str, Any]]:
@@ -113,6 +138,8 @@ class ProjectArchiveRepository:
                     name TEXT NOT NULL COLLATE NOCASE UNIQUE,
                     code TEXT NOT NULL DEFAULT '',
                     location TEXT NOT NULL DEFAULT '',
+                    longitude REAL,
+                    latitude REAL,
                     description TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL DEFAULT 'active'
                         CHECK(status IN ('active', 'archived')),
@@ -174,6 +201,14 @@ class ProjectArchiveRepository:
                     "INSERT INTO archive_schema(schema_version, updated_at) VALUES(1, ?)",
                     (_now(),),
                 )
+            columns = {
+                item["name"]
+                for item in connection.execute("PRAGMA table_info(projects)").fetchall()
+            }
+            if "longitude" not in columns:
+                connection.execute("ALTER TABLE projects ADD COLUMN longitude REAL")
+            if "latitude" not in columns:
+                connection.execute("ALTER TABLE projects ADD COLUMN latitude REAL")
 
     @staticmethod
     def _project(row: sqlite3.Row) -> dict[str, Any]:
@@ -268,6 +303,8 @@ class ProjectArchiveRepository:
             _text(data.get("name"), field="项目名称", required=True, maximum=120),
             _text(data.get("code"), field="项目编号", maximum=80),
             _text(data.get("location"), field="项目地点", maximum=200),
+            _optional_float(data.get("longitude"), field="经度", minimum=-180, maximum=180),
+            _optional_float(data.get("latitude"), field="纬度", minimum=-90, maximum=90),
             _text(data.get("description"), field="项目说明", maximum=2000),
             now,
             now,
@@ -277,8 +314,9 @@ class ProjectArchiveRepository:
                 connection.execute(
                     """
                     INSERT INTO projects(
-                        project_id, name, code, location, description, created_at, updated_at
-                    ) VALUES(?, ?, ?, ?, ?, ?, ?)
+                        project_id, name, code, location, longitude, latitude,
+                        description, created_at, updated_at
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     values,
                 )
@@ -291,19 +329,81 @@ class ProjectArchiveRepository:
         name = _text(data.get("name", current["name"]), field="项目名称", required=True, maximum=120)
         code = _text(data.get("code", current["code"]), field="项目编号", maximum=80)
         location = _text(data.get("location", current["location"]), field="项目地点", maximum=200)
+        longitude = _optional_float(data.get("longitude", current.get("longitude")), field="经度", minimum=-180, maximum=180)
+        latitude = _optional_float(data.get("latitude", current.get("latitude")), field="纬度", minimum=-90, maximum=90)
         description = _text(data.get("description", current["description"]), field="项目说明", maximum=2000)
         try:
             with self._lock, self._connect() as connection:
                 connection.execute(
                     """
-                    UPDATE projects SET name = ?, code = ?, location = ?, description = ?,
+                    UPDATE projects SET name = ?, code = ?, location = ?, longitude = ?,
+                        latitude = ?, description = ?,
                         updated_at = ? WHERE project_id = ?
                     """,
-                    (name, code, location, description, _now(), project_id),
+                    (name, code, location, longitude, latitude, description, _now(), project_id),
                 )
         except sqlite3.IntegrityError as exc:
             raise self._integrity_error(exc) from exc
         return self.get_project(project_id, include_archived_stages=True)
+
+    def nearby_projects(
+        self,
+        longitude: float,
+        latitude: float,
+        *,
+        radius_m: float = 1000,
+        exclude_project_id: str = "",
+        limit: int = 12,
+    ) -> list[dict[str, Any]]:
+        longitude = _optional_float(longitude, field="经度", minimum=-180, maximum=180)
+        latitude = _optional_float(latitude, field="纬度", minimum=-90, maximum=90)
+        radius = max(1.0, float(radius_m or 1000))
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT p.*,
+                       COUNT(DISTINCT s.stage_id) AS stage_count,
+                       COUNT(DISTINCT CASE WHEN a.status = 'success' THEN a.audit_id END)
+                           AS completed_stage_count
+                FROM projects p
+                LEFT JOIN project_stages s
+                    ON s.project_id = p.project_id AND s.status = 'active'
+                LEFT JOIN audit_records a ON a.stage_id = s.stage_id
+                WHERE p.status = 'active'
+                    AND p.longitude IS NOT NULL
+                    AND p.latitude IS NOT NULL
+                    AND (? = '' OR p.project_id <> ?)
+                GROUP BY p.project_id
+                """,
+                (exclude_project_id, exclude_project_id),
+            ).fetchall()
+        nearby: list[dict[str, Any]] = []
+        for row in rows:
+            project = self._project(row)
+            distance = _haversine_meters(
+                float(longitude),
+                float(latitude),
+                float(project["longitude"]),
+                float(project["latitude"]),
+            )
+            if distance > radius:
+                continue
+            latest = self.latest_successful_audit_for_project(project["project_id"])
+            nearby.append({
+                **project,
+                "distance_m": round(distance, 1),
+                "latest_audit": {
+                    "audit_id": latest.get("audit_id"),
+                    "stage_id": latest.get("stage_id"),
+                    "stage_name": latest.get("stage_name"),
+                    "audit_date": latest.get("audit_date") or latest.get("completed_at"),
+                    "result": latest.get("result"),
+                    "risk_level": latest.get("risk_level"),
+                    "summary": latest.get("summary"),
+                } if latest else {},
+            })
+        nearby.sort(key=lambda item: item["distance_m"])
+        return nearby[:max(1, int(limit or 12))]
 
     def resolve_project_stage(self, project_name: str, stage_name: str) -> dict[str, Any]:
         """Atomically reuse or create an active project and stage by their names."""

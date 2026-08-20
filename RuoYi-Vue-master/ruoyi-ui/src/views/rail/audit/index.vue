@@ -223,6 +223,80 @@
                   <el-col :xs="24" :md="8"><el-form-item label="相对关系"><el-select v-model="form.relative_relationship" placeholder="识别不到请人工选择"><el-option v-for="v in relations" :key="v" :label="v" :value="v" /></el-select></el-form-item></el-col>
                 </el-row>
                 <el-form-item label="涉及其他"><el-checkbox-group v-model="form.other_involvements"><el-checkbox v-for="v in otherTypes" :key="v" :label="v" /></el-checkbox-group></el-form-item>
+                <div class="location-section">
+                  <div class="location-section-head">
+                    <div>
+                      <strong>项目位置</strong>
+                      <span>默认南京范围，点击地图或填写经纬度后自动检索 1 公里内项目</span>
+                    </div>
+                    <el-button size="mini" icon="el-icon-refresh" :loading="nearbyLoading" @click="refreshNearbyProjects">刷新附近项目</el-button>
+                  </div>
+                  <div class="location-input-grid">
+                    <el-form-item label="位置描述">
+                      <el-autocomplete
+                        v-model.trim="form.location"
+                        class="location-search-input"
+                        value-key="value"
+                        clearable
+                        :fetch-suggestions="queryLocationSuggestions"
+                        :trigger-on-focus="false"
+                        placeholder="例如：南京市建邺区江心洲"
+                        @select="locationSuggestionSelected"
+                        @change="locationChanged"
+                      >
+                        <template slot-scope="{ item }">
+                          <div class="location-suggestion">
+                            <strong>{{ item.name }}</strong>
+                            <span>{{ item.address }}</span>
+                          </div>
+                        </template>
+                      </el-autocomplete>
+                    </el-form-item>
+                    <el-form-item label="经度">
+                      <el-input v-model.trim="form.longitude" type="number" placeholder="点击地图自动填入" @change="projectCoordinateChanged" />
+                    </el-form-item>
+                    <el-form-item label="纬度">
+                      <el-input v-model.trim="form.latitude" type="number" placeholder="点击地图自动填入" @change="projectCoordinateChanged" />
+                    </el-form-item>
+                  </div>
+                  <div v-if="amapKey" ref="amapContainer" class="amap-container" />
+                  <div v-else class="amap-fallback">
+                    未配置高德地图 Key，可先手动填写经纬度；配置 VUE_APP_AMAP_KEY 后会显示南京地图。
+                  </div>
+                  <div class="nearby-project-box">
+                    <div class="nearby-project-head">
+                      <strong>附近相关项目</strong>
+                      <span>默认 {{ nearbyRadius / 1000 }} 公里，勾选后纳入叠加审核</span>
+                    </div>
+                    <el-table
+                      ref="nearbyProjectTable"
+                      v-loading="nearbyLoading"
+                      :data="nearbyProjects"
+                      size="mini"
+                      row-key="project_id"
+                      max-height="210"
+                      empty-text="暂无附近项目，或尚未设置坐标"
+                      @selection-change="selectedNearbyProjectIds = $event.map(item => item.project_id)"
+                    >
+                      <el-table-column type="selection" width="42" reserve-selection />
+                      <el-table-column label="项目名称" prop="name" min-width="190" />
+                      <el-table-column label="距离" width="86">
+                        <template slot-scope="{ row }">{{ formatDistance(row.distance_m) }}</template>
+                      </el-table-column>
+                      <el-table-column label="最近阶段" width="120">
+                        <template slot-scope="{ row }">{{ (row.latest_audit && row.latest_audit.stage_name) || '-' }}</template>
+                      </el-table-column>
+                      <el-table-column label="风险" width="70">
+                        <template slot-scope="{ row }">
+                          <el-tag v-if="row.latest_audit && row.latest_audit.risk_level" size="mini" :type="severityType(row.latest_audit.risk_level)">
+                            {{ row.latest_audit.risk_level }}
+                          </el-tag>
+                          <span v-else>-</span>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </div>
+                </div>
               </el-form>
             </el-tab-pane>
             <el-tab-pane label="地铁结构" name="metro">
@@ -542,7 +616,7 @@ import {
 } from '@/api/rail/audit'
 import {
   listArchiveProjects, getArchiveProject,
-  getPreviousStageAudits
+  getPreviousStageAudits, listNearbyArchiveProjects
 } from '@/api/rail/archive'
 
 function defaultForm() {
@@ -553,7 +627,7 @@ function defaultForm() {
     pit_depth_m: null, pit_length_m: null, minimum_horizontal_clearance_m: null, minimum_vertical_clearance_m: null,
     dewatering_method: '', dewatering_method_other: '', terrain_zone: '', is_soft_soil: null, is_complex_geology_or_hydrology: null,
     support_components: [], protection_zone_location: '',
-    incoming_letter_excerpt: ''
+    incoming_letter_excerpt: '', location: '', longitude: null, latitude: null
   }
 }
 
@@ -589,6 +663,16 @@ export default {
       archiveProjects: [], archiveLoading: false, selectedArchiveProjectId: '', selectedArchiveStageId: '',
       selectedArchiveProject: null, historyPreview: { record_count: 0, records: [] }, archiveLookupSequence: 0,
       inheritedFormSource: null,
+      nearbyRadius: 1000,
+      nearbyProjects: [],
+      selectedNearbyProjectIds: [],
+      nearbyLoading: false,
+      amap: null,
+      amapMarker: null,
+      amapLoadingPromise: null,
+      amapGeocoder: null,
+      amapPlaceSearch: null,
+      autoLocating: false,
       projectNameLookupTimer: null,
       form: defaultForm(), stageSelection: '', customStageName: '', landUseSelection: '',
       stageChoices: [
@@ -621,8 +705,27 @@ export default {
       return {
         project_id: this.selectedArchiveProjectId,
         stage_id: this.selectedArchiveStageId || '',
-        stage_name: this.form.project_stage || ''
+        stage_name: this.form.project_stage || '',
+        selected_nearby_projects: this.selectedNearbyProjects
       }
+    },
+    amapKey() {
+      return String(process.env.VUE_APP_AMAP_KEY || process.env.VUE_APP_GAODE_MAP_KEY || '').trim()
+    },
+    amapSecurityCode() {
+      return String(process.env.VUE_APP_AMAP_SECURITY_CODE || process.env.VUE_APP_GAODE_MAP_SECURITY_CODE || '').trim()
+    },
+    selectedNearbyProjects() {
+      const ids = new Set(this.selectedNearbyProjectIds || [])
+      return (this.nearbyProjects || []).filter(item => ids.has(item.project_id)).map(item => ({
+        project_id: item.project_id,
+        name: item.name,
+        location: item.location,
+        longitude: item.longitude,
+        latitude: item.latitude,
+        distance_m: item.distance_m,
+        latest_audit: item.latest_audit || {}
+      }))
     },
     archiveInlineMessage() {
       if (this.archiveStageLocked) return '该项目阶段正在审核，请选择其他阶段。'
@@ -817,6 +920,13 @@ export default {
     stageSelection() { this.saveAuditDraft() },
     customStageName() { this.saveAuditDraft() },
     landUseSelection() { this.saveAuditDraft() },
+    selectedNearbyProjectIds() { this.saveAuditDraft() },
+    dataDialogVisible(value) {
+      if (value) this.$nextTick(() => this.initAmap())
+    },
+    activeTab(value) {
+      if (value === 'project' && this.dataDialogVisible) this.$nextTick(() => this.initAmap())
+    },
     'form.structure_condition'(value) { this.syncDiseaseSeverity(value) },
     'form.dewatering_method'(value) {
       if (value !== '其他' && this.form.dewatering_method_other) this.form.dewatering_method_other = ''
@@ -909,6 +1019,269 @@ export default {
       this.refreshConflictSelections()
       this.dataDialogMissing = this.collectMissingAuditFields()
       this.dataDialogVisible = true
+      this.$nextTick(async() => {
+        await this.initAmap()
+        await this.autoLocateProject(false)
+        this.refreshNearbyProjects()
+      })
+    },
+    loadAmapScript() {
+      if (!this.amapKey) return Promise.resolve(null)
+      if (window.AMap) return Promise.resolve(window.AMap)
+      if (this.amapLoadingPromise) return this.amapLoadingPromise
+      if (this.amapSecurityCode) {
+        window._AMapSecurityConfig = window._AMapSecurityConfig || {}
+        window._AMapSecurityConfig.securityJsCode = this.amapSecurityCode
+      }
+      this.amapLoadingPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(this.amapKey)}`
+        script.async = true
+        script.onload = () => resolve(window.AMap)
+        script.onerror = () => reject(new Error('高德地图加载失败'))
+        document.head.appendChild(script)
+      })
+      return this.amapLoadingPromise
+    },
+    async initAmap() {
+      if (!this.amapKey || !this.$refs.amapContainer) return
+      try {
+        const AMap = await this.loadAmapScript()
+        if (!AMap || !this.$refs.amapContainer) return
+        const current = this.currentLngLat()
+        if (!this.amap) {
+          const tileLayer = AMap.TileLayer ? new AMap.TileLayer() : undefined
+          this.amap = new AMap.Map(this.$refs.amapContainer, {
+            zoom: 12,
+            center: current || [118.7969, 32.0603],
+            viewMode: '2D',
+            resizeEnable: true,
+            mapStyle: 'amap://styles/normal',
+            features: ['bg', 'road', 'building', 'point'],
+            ...(tileLayer ? { layers: [tileLayer] } : {})
+          })
+          this.amap.on('click', event => {
+            const lnglat = event && event.lnglat
+            if (!lnglat) return
+            this.setProjectCoordinate(lnglat.getLng(), lnglat.getLat(), true)
+          })
+        }
+        this.syncAmapMarker()
+        if (current) {
+          this.amap.setFitView(null, false, [40, 40, 40, 40], 12)
+        } else {
+          this.amap.setZoomAndCenter(12, [118.7969, 32.0603])
+        }
+        setTimeout(() => {
+          if (!this.amap) return
+          this.amap.resize()
+          const current = this.currentLngLat()
+          if (current) {
+            this.amap.setCenter(current)
+          } else {
+            this.amap.setZoomAndCenter(12, [118.7969, 32.0603])
+          }
+        }, 160)
+      } catch (error) {
+        this.$message.warning('高德地图加载失败，可先手动填写经纬度')
+      }
+    },
+    getAmapGeocoder(AMap) {
+      if (this.amapGeocoder) return Promise.resolve(this.amapGeocoder)
+      return new Promise((resolve, reject) => {
+        AMap.plugin('AMap.Geocoder', () => {
+          if (!AMap.Geocoder) {
+            reject(new Error('高德地理编码插件加载失败'))
+            return
+          }
+          this.amapGeocoder = new AMap.Geocoder({ city: '南京' })
+          resolve(this.amapGeocoder)
+        })
+      })
+    },
+    getAmapPlaceSearch(AMap) {
+      if (this.amapPlaceSearch) return Promise.resolve(this.amapPlaceSearch)
+      return new Promise((resolve, reject) => {
+        AMap.plugin('AMap.PlaceSearch', () => {
+          if (!AMap.PlaceSearch) {
+            reject(new Error('高德地点搜索插件加载失败'))
+            return
+          }
+          this.amapPlaceSearch = new AMap.PlaceSearch({
+            city: '南京',
+            citylimit: false,
+            pageSize: 8,
+            extensions: 'base'
+          })
+          resolve(this.amapPlaceSearch)
+        })
+      })
+    },
+    searchLocationCandidates(keyword) {
+      const text = String(keyword || '').trim()
+      if (!text || !this.amapKey) return Promise.resolve([])
+      const query = /南京|江苏|鼓楼|玄武|秦淮|建邺|雨花台|栖霞|江宁|浦口|六合|溧水|高淳/.test(text)
+        ? text
+        : `南京 ${text}`
+      return this.loadAmapScript().then(AMap => {
+        if (!AMap) return []
+        return this.getAmapPlaceSearch(AMap).then(placeSearch => new Promise(resolve => {
+          placeSearch.search(query, (status, result) => {
+            const pois = result && result.poiList && Array.isArray(result.poiList.pois) ? result.poiList.pois : []
+            const rows = pois.map(poi => {
+              const location = poi.location || {}
+              const address = [poi.pname, poi.cityname, poi.adname, poi.address]
+                .filter(Boolean)
+                .join('')
+              return {
+                value: `${poi.name}${address ? `（${address}）` : ''}`,
+                name: poi.name || text,
+                address: address || '暂无详细地址',
+                longitude: Number(location.lng),
+                latitude: Number(location.lat)
+              }
+            }).filter(item => Number.isFinite(item.longitude) && Number.isFinite(item.latitude))
+            resolve(rows)
+          })
+        }))
+      }).catch(() => [])
+    },
+    queryLocationSuggestions(queryString, callback) {
+      this.searchLocationCandidates(queryString).then(rows => callback(rows))
+    },
+    locationSuggestionSelected(item) {
+      if (!item) return
+      this.form.location = item.value || item.name || this.form.location
+      this.setProjectCoordinate(item.longitude, item.latitude, true)
+      this.saveAuditDraft()
+    },
+    geocodeAddress(address) {
+      const text = String(address || '').trim()
+      if (!text || !this.amapKey) return Promise.resolve(null)
+      return this.loadAmapScript().then(AMap => {
+        if (!AMap) return null
+        return this.getAmapGeocoder(AMap).then(geocoder => new Promise(resolve => {
+          geocoder.getLocation(text, (status, result) => {
+            const geocode = result && result.geocodes && result.geocodes[0]
+            const location = geocode && geocode.location
+            if (status !== 'complete' || !location) {
+              resolve(null)
+              return
+            }
+            resolve({
+              longitude: location.lng,
+              latitude: location.lat,
+              formattedAddress: geocode.formattedAddress || text
+            })
+          })
+        }))
+      }).catch(() => null)
+    },
+    autoLocateProject(force = false) {
+      if (this.autoLocating) return Promise.resolve(null)
+      if (!force && this.currentLngLat()) return Promise.resolve(null)
+      const rawLocation = String(this.form.location || '').trim()
+      const rawProjectName = String(this.form.project_name || '').trim()
+      const keyword = rawLocation || rawProjectName
+      if (!keyword) return Promise.resolve(null)
+      const query = /南京|江苏|鼓楼|玄武|秦淮|建邺|雨花台|栖霞|江宁|浦口|六合|溧水|高淳/.test(keyword)
+        ? keyword
+        : `南京市${keyword}`
+      this.autoLocating = true
+      return this.geocodeAddress(query).then(result => {
+        if (!result) return null
+        if (!rawLocation && result.formattedAddress) this.form.location = result.formattedAddress
+        this.setProjectCoordinate(result.longitude, result.latitude, true)
+        return result
+      }).finally(() => {
+        this.autoLocating = false
+      })
+    },
+    currentLngLat() {
+      if (this.form.longitude === null || this.form.longitude === undefined || this.form.longitude === '') return null
+      if (this.form.latitude === null || this.form.latitude === undefined || this.form.latitude === '') return null
+      const lng = Number(this.form.longitude)
+      const lat = Number(this.form.latitude)
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null
+      if (lng === 0 && lat === 0) return null
+      return [lng, lat]
+    },
+    setProjectCoordinate(longitude, latitude, refresh = false) {
+      const lng = Number(longitude)
+      const lat = Number(latitude)
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
+      this.form.longitude = Number(lng.toFixed(6))
+      this.form.latitude = Number(lat.toFixed(6))
+      this.syncAmapMarker()
+      this.saveAuditDraft()
+      if (refresh) this.refreshNearbyProjects()
+    },
+    projectCoordinateChanged() {
+      this.syncAmapMarker()
+      this.refreshNearbyProjects()
+      this.saveAuditDraft()
+    },
+    locationChanged() {
+      this.form.longitude = null
+      this.form.latitude = null
+      this.searchLocationCandidates(this.form.location).then(rows => {
+        if (rows.length) {
+          this.locationSuggestionSelected(rows[0])
+          return
+        }
+        this.autoLocateProject(true)
+      })
+      this.saveAuditDraft()
+    },
+    syncAmapMarker() {
+      if (!this.amap || !window.AMap) return
+      const current = this.currentLngLat()
+      if (!current) {
+        if (this.amapMarker) {
+          this.amap.remove(this.amapMarker)
+          this.amapMarker = null
+        }
+        return
+      }
+      if (!this.amapMarker) {
+        this.amapMarker = new window.AMap.Marker({ position: current })
+        this.amap.add(this.amapMarker)
+      } else {
+        this.amapMarker.setPosition(current)
+      }
+      this.amap.setCenter(current)
+    },
+    async refreshNearbyProjects() {
+      const current = this.currentLngLat()
+      if (!current) {
+        this.nearbyProjects = []
+        this.selectedNearbyProjectIds = []
+        return
+      }
+      this.nearbyLoading = true
+      try {
+        const rows = await listNearbyArchiveProjects({
+          longitude: current[0],
+          latitude: current[1],
+          radius_m: this.nearbyRadius,
+          exclude_project_id: this.selectedArchiveProjectId || '',
+          limit: 12
+        })
+        const selected = new Set(this.selectedNearbyProjectIds || [])
+        this.nearbyProjects = Array.isArray(rows) ? rows : []
+        this.selectedNearbyProjectIds = this.nearbyProjects
+          .filter(item => selected.has(item.project_id))
+          .map(item => item.project_id)
+      } catch (error) {
+        this.$message.warning('附近项目暂时无法加载，本次审核仍可继续')
+      } finally {
+        this.nearbyLoading = false
+      }
+    },
+    formatDistance(value) {
+      const distance = Number(value)
+      if (!Number.isFinite(distance)) return '-'
+      return distance >= 1000 ? `${(distance / 1000).toFixed(2)} km` : `${Math.round(distance)} m`
     },
     shortFileName(name) {
       const text = String(name || '未命名文件')
@@ -1058,6 +1431,7 @@ export default {
         stageSelection: this.stageSelection,
         customStageName: this.customStageName,
         landUseSelection: this.landUseSelection,
+        selectedNearbyProjectIds: this.selectedNearbyProjectIds,
         documents
       })
     },
@@ -1089,6 +1463,8 @@ export default {
           landUseSelection: this.landUseSelection,
           selectedArchiveProjectId: this.selectedArchiveProjectId,
           selectedArchiveStageId: this.selectedArchiveStageId,
+          nearbyProjects: this.nearbyProjects,
+          selectedNearbyProjectIds: this.selectedNearbyProjectIds,
           auditResult: this.auditResult,
           replyResult: this.replyResult,
           auditSession: this.auditSession,
@@ -1117,6 +1493,8 @@ export default {
         this.landUseSelection = draft.landUseSelection || ''
         this.selectedArchiveProjectId = draft.selectedArchiveProjectId || ''
         this.selectedArchiveStageId = draft.selectedArchiveStageId || ''
+        this.nearbyProjects = draft.nearbyProjects || []
+        this.selectedNearbyProjectIds = draft.selectedNearbyProjectIds || []
         this.auditResult = draft.auditResult || null
         this.replyResult = draft.replyResult || null
         this.auditSession = draft.auditSession || null
@@ -1216,6 +1594,7 @@ export default {
     projectNameInputBlur() {
       if (this.projectNameLookupTimer) clearTimeout(this.projectNameLookupTimer)
       this.projectNameChanged(this.form.project_name)
+      this.autoLocateProject(false)
     },
     async projectNameChanged(projectName) {
       const sequence = ++this.archiveLookupSequence
@@ -1227,6 +1606,9 @@ export default {
       if (!summary) {
         this.selectedArchiveProjectId = ''
         this.selectedArchiveProject = null
+        this.nearbyProjects = []
+        this.selectedNearbyProjectIds = []
+        this.autoLocateProject(false)
         return
       }
       this.archiveLoading = true
@@ -1235,6 +1617,15 @@ export default {
         if (sequence !== this.archiveLookupSequence) return
         this.selectedArchiveProjectId = project.project_id
         this.selectedArchiveProject = project
+        if (project.location && !this.form.location) this.form.location = project.location
+        if (project.longitude !== null && project.longitude !== undefined && !this.form.longitude) this.form.longitude = project.longitude
+        if (project.latitude !== null && project.latitude !== undefined && !this.form.latitude) this.form.latitude = project.latitude
+        this.syncAmapMarker()
+        if (!this.currentLngLat()) {
+          await this.autoLocateProject(false)
+        } else {
+          this.refreshNearbyProjects()
+        }
         await this.stageNameChanged(this.form.project_stage)
       } finally {
         if (sequence === this.archiveLookupSequence) this.archiveLoading = false
@@ -1380,7 +1771,9 @@ export default {
         'pit_depth_m',
         'pit_length_m',
         'minimum_horizontal_clearance_m',
-        'minimum_vertical_clearance_m'
+        'minimum_vertical_clearance_m',
+        'longitude',
+        'latitude'
       ]
       numericFields.forEach(key => {
         const value = payload[key]
@@ -1714,6 +2107,8 @@ export default {
               opinion: this.displayReviewOpinion(item)
             })) : [],
             latest_overall_opinion: this.currentOverallOpinion || {},
+            selected_nearby_projects: this.selectedNearbyProjects,
+            nearby_projects: this.selectedNearbyProjects,
             rerun_context: this.rerunAuditContext(originalCommandText)
           }
           body.append('options', JSON.stringify({
@@ -1739,6 +2134,8 @@ export default {
               opinion: this.displayReviewOpinion(item)
             })) : [],
             latest_overall_opinion: this.currentOverallOpinion || {},
+            selected_nearby_projects: this.selectedNearbyProjects,
+            nearby_projects: this.selectedNearbyProjects,
             rerun_context: this.rerunAuditContext(originalCommandText),
             ...(hasArchiveBinding ? { archive_binding: archiveBinding } : {}),
             manual_archive_only: true
@@ -2222,6 +2619,7 @@ export default {
         project_name: String(this.form.project_name || '').trim(),
         stage_name: String(this.form.project_stage || '').trim(),
         form_data: this.normalizedFormPayload(),
+        selected_nearby_projects: this.selectedNearbyProjects,
         overwrite
       }
     },
@@ -2373,6 +2771,22 @@ export default {
 .parameter-form { padding-top: 6px; }.parameter-form ::v-deep .el-select,.parameter-form ::v-deep .el-input-number { width: 100%; }
 .project-name-input { width: 100%; }
 .custom-stage-input { margin-top: 8px; }
+.location-section { margin-top: 12px; border: 1px solid #e2e9e6; border-radius: 8px; padding: 14px; background: #fbfdfc; }
+.location-section-head,.nearby-project-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.location-section-head strong,.nearby-project-head strong { display: block; color: #1f2f2b; font-size: 15px; }
+.location-section-head span,.nearby-project-head span { color: #77837e; font-size: 12px; }
+.location-input-grid { display: grid; grid-template-columns: minmax(0,1fr) 150px 150px; gap: 10px; }
+.location-input-grid ::v-deep .el-form-item { margin-bottom: 10px; }
+.location-input-grid ::v-deep .el-form-item__label { float: none; display: block; width: auto !important; padding: 0 0 4px; line-height: 20px; text-align: left; }
+.location-input-grid ::v-deep .el-form-item__content { margin-left: 0 !important; }
+.location-search-input { width: 100%; }
+.location-suggestion { display: flex; min-width: 0; flex-direction: column; gap: 2px; line-height: 1.35; padding: 4px 0; }
+.location-suggestion strong { overflow: hidden; color: #1f2f2b; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.location-suggestion span { overflow: hidden; color: #7a8581; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.amap-container { width: 100%; height: 260px; overflow: hidden; border: 1px solid #dce5e1; border-radius: 8px; background: #eef4f1; }
+.amap-fallback { display: flex; min-height: 92px; align-items: center; justify-content: center; border: 1px dashed #bfd1cb; border-radius: 8px; background: #f6fbf9; color: #65746f; line-height: 1.7; text-align: center; }
+.nearby-project-box { margin-top: 12px; }
+.nearby-project-box ::v-deep .el-table { border: 1px solid #e4e9ed; border-radius: 8px; overflow: hidden; }
 .command-bar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 22px; padding-top: 18px; border-top: 1px solid #edf0f2; }
 .command-bar > span { color: #88919a; font-size: 12px; }.command-bar > div { display: flex; gap: 10px; }
 .result-head { display: flex; min-height: 0; align-items: flex-start; justify-content: flex-end; gap: 16px; margin-bottom: 0; }
@@ -2460,7 +2874,7 @@ export default {
 .opinion-block,.match-block { margin-top: 18px; padding: 17px; border-left: 3px solid #4d7485; background: #f4f7f9; }.opinion-block h4 { margin: 0 0 12px; }.opinion-block p,.match-block p { display: grid; grid-template-columns: 26px 1fr; gap: 8px; line-height: 1.7; }
 .opinion-block p span,.match-block p span { color: #2f7d69; font-weight: 600; }.match-block > div { display: flex; flex-direction: column; gap: 5px; }.match-block > .el-tag { float: right; margin-top: -34px; }
 @media (max-width: 1100px) { .decision-grid { grid-template-columns: repeat(2,1fr); } }
-@media (max-width: 760px) { .document-row { grid-template-columns: 22px minmax(0,1fr) 118px 24px; }.document-row > .el-tag { display: none; }.role-select { width: 118px; } }
+@media (max-width: 760px) { .document-row { grid-template-columns: 22px minmax(0,1fr) 118px 24px; }.document-row > .el-tag { display: none; }.role-select { width: 118px; }.location-input-grid { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .review-brief { align-items: stretch; flex-direction: column; }.brief-actions { display: grid; grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .command-bar,.result-actions { align-items: stretch; flex-direction: column; }.command-bar > div,.result-actions > div { display: grid; grid-template-columns: 1fr; }.decision-grid { grid-template-columns: 1fr; }.chat-composer { border-radius: 22px; padding: 12px; }.review-item-head { grid-template-columns: 30px minmax(0,1fr); }.review-actions { grid-column: 2; } }
 </style>

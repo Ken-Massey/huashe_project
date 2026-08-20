@@ -146,13 +146,34 @@ def _current_session_context_text(case_data: dict[str, Any]) -> str:
             lines.append(
                 f"- {doc.get('name') or '未命名文件'}；角色：{doc.get('role') or '未标注'}；摘要：{excerpt or '无'}"
             )
+    nearby_projects = context.get("selected_nearby_projects") or context.get("nearby_projects") or []
+    if isinstance(nearby_projects, list) and nearby_projects:
+        lines.append("用户已确认纳入本轮空间叠加审核的附近项目：")
+        for project in nearby_projects[:8]:
+            if not isinstance(project, dict):
+                continue
+            latest = project.get("latest_audit") or {}
+            latest = latest if isinstance(latest, dict) else {}
+            distance = project.get("distance_m")
+            distance_text = f"{round(float(distance))}米" if isinstance(distance, (int, float)) else "距离未填写"
+            lines.append(
+                "附近项目：{name}；距离：{distance}；阶段：{stage}；最近风险等级：{risk}；最近结论：{result}；摘要：{summary}".format(
+                    name=project.get("name") or project.get("project_name") or "未命名项目",
+                    distance=distance_text,
+                    stage=latest.get("stage_name") or project.get("stage_name") or "未填写",
+                    risk=latest.get("risk_level") or project.get("risk_level") or "未填写",
+                    result=latest.get("result") or project.get("result") or "未填写",
+                    summary=str(latest.get("summary") or project.get("summary") or "")[:800] or "无",
+                )
+            )
     return "\n".join(lines)[:18000]
 
 
 def _history_context_text(case_data: dict[str, Any]) -> str:
     context = _history_context(case_data)
     stages = context.get("previous_stages") or []
-    if not stages:
+    nearby_projects = context.get("selected_nearby_projects") or []
+    if not stages and not nearby_projects:
         return ""
     lines = [
         "以下是同一项目前序阶段已经形成的审核记录，仅用于检查风险延续、资料补充和整改闭环："
@@ -183,6 +204,25 @@ def _history_context_text(case_data: dict[str, Any]) -> str:
                 lines.append(
                     f"- 待补资料：{supplement.get('field') or '未命名资料'}；原因：{supplement.get('reason') or '无'}"
                 )
+    if isinstance(nearby_projects, list) and nearby_projects:
+        lines.append("\n以下是用户勾选纳入审核的附近项目，应检查基坑降水、沉降、施工时序、保护区控制指标和监测预警是否存在叠加影响：")
+        for project in nearby_projects[:8]:
+            if not isinstance(project, dict):
+                continue
+            latest = project.get("latest_audit") or {}
+            latest = latest if isinstance(latest, dict) else {}
+            distance = project.get("distance_m")
+            distance_text = f"{round(float(distance))}米" if isinstance(distance, (int, float)) else "距离未填写"
+            lines.append(
+                "- 附近项目：{name}；距离：{distance}；阶段：{stage}；风险等级：{risk}；审核结论：{result}；摘要：{summary}".format(
+                    name=project.get("name") or project.get("project_name") or "未命名项目",
+                    distance=distance_text,
+                    stage=latest.get("stage_name") or project.get("stage_name") or "未填写",
+                    risk=latest.get("risk_level") or project.get("risk_level") or "未填写",
+                    result=latest.get("result") or project.get("result") or "未填写",
+                    summary=str(latest.get("summary") or project.get("summary") or "")[:800] or "无",
+                )
+            )
     return "\n".join(lines)[:16000]
 
 
