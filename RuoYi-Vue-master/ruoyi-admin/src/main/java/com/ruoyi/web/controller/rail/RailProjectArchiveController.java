@@ -51,6 +51,23 @@ public class RailProjectArchiveController
     }
 
     @PreAuthorize("@ss.hasAnyPermi('rail:archive:list,rail:audit:run')")
+    @GetMapping("/projects/nearby")
+    public Object nearbyProjects(@RequestParam(name = "longitude") Double longitude,
+            @RequestParam(name = "latitude") Double latitude,
+            @RequestParam(name = "radius_m", defaultValue = "1000") Integer radiusM,
+            @RequestParam(name = "exclude_project_id", defaultValue = "") String excludeProjectId,
+            @RequestParam(name = "limit", defaultValue = "12") Integer limit)
+    {
+        Map<String, Object> query = new LinkedHashMap<>();
+        query.put("longitude", longitude);
+        query.put("latitude", latitude);
+        query.put("radius_m", radiusM);
+        query.put("exclude_project_id", excludeProjectId);
+        query.put("limit", limit);
+        return python.get("/api/v1/project-archives/projects/nearby", query);
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('rail:archive:list,rail:audit:run')")
     @GetMapping("/projects/{projectId}")
     public Object project(@PathVariable("projectId") String projectId,
             @RequestParam(name = "includeArchivedStages", defaultValue = "false") Boolean includeArchivedStages)

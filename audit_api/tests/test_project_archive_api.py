@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from audit_api import main
+from audit_api.audit_session import AuditSessionRepository
 from audit_api.project_archive import ProjectArchiveRepository
 
 
@@ -15,10 +16,16 @@ class ProjectArchiveApiTests(unittest.TestCase):
         self.repository = ProjectArchiveRepository(
             Path(self.temp.name) / "project_archive.sqlite3"
         )
+        self.sessions = AuditSessionRepository(
+            Path(self.temp.name) / "audit_sessions.sqlite3"
+        )
         self.repository_patch = patch.object(main, "project_archives", self.repository)
+        self.sessions_patch = patch.object(main, "audit_sessions", self.sessions)
         self.repository_patch.start()
+        self.sessions_patch.start()
 
     def tearDown(self):
+        self.sessions_patch.stop()
         self.repository_patch.stop()
         self.temp.cleanup()
 
@@ -89,6 +96,28 @@ class ProjectArchiveApiTests(unittest.TestCase):
         response = main.get_previous_stage_audits(current["stage_id"])
         self.assertEqual(response["record_count"], 1)
         self.assertEqual(response["records"][0]["stage_name"], "初步论证")
+
+    def test_stage_audit_endpoint_tolerates_empty_legacy_review_items(self):
+        project = self.repository.create_project({"name": "旧版空结果项目"})
+        stage = self.repository.create_stage(project["project_id"], {"name": "设计阶段"})
+        audit = self.repository.begin_audit(stage["stage_id"], "legacy-empty")
+        self.repository.complete_audit(audit["audit_id"], {
+            "result": "通过",
+            "risk_level": "低",
+            "summary": "旧版记录未保存结构化审核条目",
+            "result_data": {
+                "latest_result": {"items": []},
+                "review_items": [],
+                "summary": "旧版记录未保存结构化审核条目",
+            },
+        })
+
+        response = main.get_archive_stage_audit(stage["stage_id"])
+
+        self.assertIsNotNone(response)
+        self.assertEqual(response["status"], "success")
+        self.assertTrue(response["audit_session_id"].startswith("ses_"))
+        self.assertEqual(response["result_data"]["review_items"], [])
 
     def test_archive_binding_resolves_structured_history(self):
         project = self.repository.create_project({"name": "绑定项目"})

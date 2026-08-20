@@ -14,17 +14,35 @@ function Get-PortListeners {
     )
 }
 
+function Stop-PortListener {
+    param([int]$ProcessId)
+
+    if (-not $ProcessId) {
+        return
+    }
+
+    Write-Host "Stopping old process PID $ProcessId..."
+    Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+
+    if (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) {
+        Write-Host "PID $ProcessId is still running, using taskkill..."
+        & taskkill.exe /PID $ProcessId /F /T | Out-Null
+    }
+}
+
 Write-Host "Restarting Python audit service on port $port..."
 
 foreach ($listener in Get-PortListeners) {
-    Write-Host "Stopping old process PID $($listener.OwningProcess)..."
-    Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
+    Stop-PortListener -ProcessId $listener.OwningProcess
 }
 
 for ($attempt = 0; $attempt -lt 15; $attempt++) {
     if ((Get-PortListeners).Count -eq 0) {
+        Write-Host "Port $port released."
         break
     }
+    Write-Host "Waiting for port $port to release... ($($attempt + 1)/15)"
     Start-Sleep -Milliseconds 500
 }
 
@@ -57,6 +75,8 @@ $process = Start-Process `
     -WindowStyle Hidden `
     -PassThru
 
+Write-Host "Started new process PID $($process.Id), waiting for API readiness..."
+
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
     if ((Get-PortListeners).Count -gt 0) {
         try {
@@ -76,6 +96,9 @@ for ($attempt = 0; $attempt -lt 60; $attempt++) {
 
     if ($process.HasExited) {
         break
+    }
+    if (($attempt + 1) % 5 -eq 0) {
+        Write-Host "Still waiting... ($($attempt + 1)/60)"
     }
     Start-Sleep -Seconds 1
 }

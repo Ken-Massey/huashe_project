@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import mimetypes
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,6 +32,8 @@ from .services import advice_worker, recognize_letter, stage1_worker, stage2_aud
 from .task_manager import TaskManager
 from stage1_reply_system.review_generation import render_reply_draft_docx
 
+
+LOGGER = logging.getLogger(__name__)
 
 app = FastAPI(
     title="杞ㄩ亾浜ら€氫繚鎶ゅ尯鏅鸿兘瀹℃牳Python鏈嶅姟",
@@ -113,6 +116,8 @@ class ArchiveProjectCreatePayload(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     code: str = Field(default="", max_length=80)
     location: str = Field(default="", max_length=200)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
     description: str = Field(default="", max_length=2000)
 
 
@@ -120,6 +125,8 @@ class ArchiveProjectUpdatePayload(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     code: str | None = Field(default=None, max_length=80)
     location: str | None = Field(default=None, max_length=200)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
     description: str | None = Field(default=None, max_length=2000)
 
 
@@ -280,6 +287,8 @@ def _resolve_archive_context(binding: Any) -> dict[str, Any] | None:
     project_id = str(binding.get("project_id") or "").strip()
     stage_id = str(binding.get("stage_id") or "").strip()
     stage_name = str(binding.get("stage_name") or "").strip()
+    selected_nearby = binding.get("selected_nearby_projects") or []
+    selected_nearby = selected_nearby if isinstance(selected_nearby, list) else []
     if not project_id:
         return None
     try:
@@ -314,6 +323,7 @@ def _resolve_archive_context(binding: Any) -> dict[str, Any] | None:
                 "omitted_stage_count": 0,
                 "previous_stages": previous_stages,
                 "latest_previous_audit": latest_record or {},
+                "selected_nearby_projects": selected_nearby,
             }
         stage = project_archives.get_stage(stage_id)
         if stage["project_id"] != project_id:
@@ -322,7 +332,9 @@ def _resolve_archive_context(binding: Any) -> dict[str, Any] | None:
             raise HTTPException(status_code=409, detail="已归档的项目或阶段不能发起审核。")
         if stage.get("audit_status") in {"pending", "running"}:
             raise HTTPException(status_code=409, detail="该阶段已有审核任务正在进行。")
-        return project_archives.history_context_for_stage(stage_id)
+        context = project_archives.history_context_for_stage(stage_id)
+        context["selected_nearby_projects"] = selected_nearby
+        return context
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="项目或阶段不存在。") from exc
     except ValueError as exc:
@@ -1888,6 +1900,18 @@ def _write_audit_session_to_archive(
     else:
         resolved = project_archives.resolve_project_stage(payload.project_name, payload.stage_name)
         stage_id = resolved["stage"]["stage_id"]
+    form_data = payload.form_data or {}
+    location_patch = {
+        key: form_data.get(key)
+        for key in ("location", "longitude", "latitude")
+        if form_data.get(key) not in (None, "")
+    }
+    if location_patch:
+        try:
+            project_archives.update_project(resolved["project"]["project_id"], location_patch)
+            resolved["project"] = project_archives.get_project(resolved["project"]["project_id"])
+        except ValueError:
+            pass
     history_context = project_archives.history_context_for_stage(stage_id)
     existing = project_archives.get_stage_audit(stage_id)
     if existing and existing.get("status") == "success" and not payload.overwrite:
@@ -1924,7 +1948,14 @@ def _ensure_archive_record_session(record: dict[str, Any]) -> dict[str, Any]:
 
     latest = result_data.get("latest_result") if isinstance(result_data.get("latest_result"), dict) else {}
     raw_items = result_data.get("review_items") or result_data.get("items") or latest.get("items") or latest.get("review_items") or []
-    items = _sanitize_review_items({"items": raw_items}, [])
+    try:
+        items = _sanitize_review_items({"items": raw_items}, [])
+    except ValueError:
+        LOGGER.warning(
+            "Archive audit %s has no valid review items; restoring it as an empty editable session.",
+            record.get("audit_id"),
+        )
+        items = []
     if not items:
         items = _audit_result_to_review_items(result_data)
     overall = _sanitize_overall_opinion(
@@ -2061,6 +2092,30 @@ def list_archive_projects(
         search=keyword,
         status=None if include_archived else "active",
     )
+
+
+@app.get(
+    "/api/v1/project-archives/projects/nearby",
+    dependencies=[Depends(verify_service_token)],
+    tags=["project-archives"],
+)
+def list_nearby_archive_projects(
+    longitude: Annotated[float, Query(ge=-180, le=180)],
+    latitude: Annotated[float, Query(ge=-90, le=90)],
+    radius_m: Annotated[int, Query(ge=1, le=10000)] = 1000,
+    exclude_project_id: str = "",
+    limit: Annotated[int, Query(ge=1, le=50)] = 12,
+) -> list[dict[str, Any]]:
+    try:
+        return project_archives.nearby_projects(
+            longitude,
+            latitude,
+            radius_m=radius_m,
+            exclude_project_id=exclude_project_id,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post(

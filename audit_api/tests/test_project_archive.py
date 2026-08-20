@@ -53,6 +53,45 @@ def test_project_search_only_matches_project_name():
         assert archive.list_projects(search="鼓楼区") == []
 
 
+def test_nearby_projects_use_coordinates_and_include_latest_audit_summary():
+    with TemporaryDirectory() as temp:
+        archive = repository(Path(temp))
+        current = archive.create_project({
+            "name": "当前基坑项目",
+            "longitude": 118.7969,
+            "latitude": 32.0603,
+        })
+        nearby = archive.create_project({
+            "name": "附近叠加项目",
+            "longitude": 118.7980,
+            "latitude": 32.0610,
+        })
+        faraway = archive.create_project({
+            "name": "远距离项目",
+            "longitude": 118.9000,
+            "latitude": 32.1600,
+        })
+        stage = archive.create_stage(nearby["project_id"], {"name": "设计"})
+        audit = archive.begin_audit(stage["stage_id"], "nearby-task")
+        archive.complete_audit(audit["audit_id"], {
+            "result": "修改后通过",
+            "risk_level": "中",
+            "summary": "需关注降水与沉降叠加影响。",
+        })
+
+        projects = archive.nearby_projects(
+            current["longitude"],
+            current["latitude"],
+            radius_m=1000,
+            exclude_project_id=current["project_id"],
+        )
+
+        assert [item["name"] for item in projects] == ["附近叠加项目"]
+        assert projects[0]["latest_audit"]["risk_level"] == "中"
+        assert "降水" in projects[0]["latest_audit"]["summary"]
+        assert all(item["project_id"] != faraway["project_id"] for item in projects)
+
+
 def test_each_stage_has_only_one_successful_audit_and_failed_audit_can_retry():
     with TemporaryDirectory() as temp:
         archive = repository(Path(temp))

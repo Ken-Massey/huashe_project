@@ -4,6 +4,10 @@ export function listArchiveProjects(params) {
   return request({ url: '/rail/archives/projects', method: 'get', params })
 }
 
+export function listNearbyArchiveProjects(params) {
+  return request({ url: '/rail/archives/projects/nearby', method: 'get', params })
+}
+
 export function createArchiveProject(data) {
   return request({ url: '/rail/archives/projects', method: 'post', data })
 }
