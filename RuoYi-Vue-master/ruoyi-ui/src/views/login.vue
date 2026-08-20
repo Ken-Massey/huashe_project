@@ -1,92 +1,104 @@
 <template>
   <div class="login">
-    <div class="login-content">
-      <h2 class="brand-title">{{ title }}</h2>
-      <p class="brand-desc">华设轨道智审系统</p>
-      <div class="login-card">
-        <h2 class="card-title">登录</h2>
-        <p class="card-subtitle">请输入用户名与密码以继续。</p>
+    <!-- 背景装饰层：地铁线路网暗纹 -->
+    <div class="bg-metro"></div>
+    <!-- 背景装饰层：审核对勾 / 文档图标点缀 -->
+    <div class="bg-icons"></div>
+    <!-- 背景装饰层：城市建筑轮廓剪影 -->
+    <div class="bg-buildings"></div>
 
-        <el-form ref="loginForm" :model="loginForm" :rules="loginRules" class="login-form">
-          <!-- 用户名 -->
-          <div class="field-label">
-            <span class="label-left">用户名</span>
-          </div>
-          <el-form-item prop="username">
-            <el-input
-              v-model="loginForm.username"
-              type="text"
-              auto-complete="off"
-              placeholder="请输入用户名"
-            />
-          </el-form-item>
-
-          <!-- 密码 -->
-          <div class="field-label">
-            <span class="label-left">密码</span>
-          </div>
-          <el-form-item prop="password">
-            <el-input
-              v-model="loginForm.password"
-              type="password"
-              auto-complete="off"
-              placeholder="请输入密码"
-              show-password
-              @keyup.enter.native="handleLogin"
-            />
-          </el-form-item>
-
-          <!-- 验证码 -->
-          <div v-if="captchaEnabled">
-            <div class="field-label">
-              <span class="label-left">验证码</span>
-              <span class="label-right">点击图片刷新</span>
-            </div>
-            <el-form-item prop="code">
-              <el-row :gutter="16">
-                <el-col :span="14">
-                  <el-input
-                    v-model="loginForm.code"
-                    auto-complete="off"
-                    placeholder="请输入验证码"
-                    @keyup.enter.native="handleLogin"
-                  />
-                </el-col>
-                <el-col :span="10">
-                  <img :src="codeUrl" @click="getCode" class="login-code-img" />
-                </el-col>
-              </el-row>
-            </el-form-item>
-          </div>
-
-          <!-- 记住我 / 忘记密码 -->
-          <div class="login-options">
-            <el-checkbox v-model="loginForm.rememberMe">记住我</el-checkbox>
-            <router-link class="forgot-link" to="/forgot-password">忘记密码?</router-link>
-          </div>
-
-          <!-- 登录按钮 -->
-          <el-form-item>
-            <el-button
-              :loading="loading"
-              type="primary"
-              class="login-btn"
-              @click.native.prevent="handleLogin"
-            >
-              <span v-if="!loading">登录</span>
-              <span v-else>登录中...</span>
-            </el-button>
-          </el-form-item>
-        </el-form>
-
-        <!-- 底部注册提示 -->
-        <div class="card-footer">
-          没有账号？
-          <router-link class="register-link" to="/register">注册</router-link>
-        </div>
+    <div class="login-card">
+      <!-- 系统 Logo 占位 -->
+      <div class="login-logo">
+        <svg viewBox="0 0 48 48" width="52" height="52" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="loginLogoGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#4da3ff" />
+              <stop offset="100%" stop-color="#2563d9" />
+            </linearGradient>
+          </defs>
+          <rect x="2" y="2" width="44" height="44" rx="11" fill="url(#loginLogoGrad)" />
+          <path d="M15 11h12l7 7v19a2.5 2.5 0 0 1-2.5 2.5h-16.5A2.5 2.5 0 0 1 12.5 37V13.5A2.5 2.5 0 0 1 15 11z" fill="#ffffff" />
+          <path d="M27 11v7h7z" fill="#d6e8ff" />
+          <path d="M17 21h12M17 26h12M17 31h7" stroke="#7ba7e8" stroke-width="2" stroke-linecap="round" />
+          <circle cx="32" cy="34" r="6.5" fill="#ffffff" />
+          <path d="M28.8 34l2.4 2.4 4.4-5" stroke="#2f7de1" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
       </div>
+
+      <h3 class="login-title">{{ title }}</h3>
+      <p class="login-subtitle">轨道交通政务审核平台</p>
+
+      <el-form ref="loginForm" :model="loginForm" :rules="loginRules" class="login-form">
+        <!-- 账号 -->
+        <el-form-item prop="username">
+          <el-input
+            v-model="loginForm.username"
+            type="text"
+            auto-complete="off"
+            placeholder="请输入账号"
+          >
+            <svg-icon slot="prefix" icon-class="user" class="el-input__icon input-icon" />
+          </el-input>
+        </el-form-item>
+
+        <!-- 密码 -->
+        <el-form-item prop="password">
+          <el-input
+            v-model="loginForm.password"
+            type="password"
+            auto-complete="off"
+            placeholder="请输入密码"
+            show-password
+            @keyup.enter.native="handleLogin"
+          >
+            <svg-icon slot="prefix" icon-class="password" class="el-input__icon input-icon" />
+          </el-input>
+        </el-form-item>
+
+        <!-- 验证码 -->
+        <el-form-item v-if="captchaEnabled" prop="code">
+          <div class="captcha-row">
+            <el-input
+              v-model="loginForm.code"
+              auto-complete="off"
+              placeholder="请输入验证码"
+              @keyup.enter.native="handleLogin"
+            >
+              <svg-icon slot="prefix" icon-class="validCode" class="el-input__icon input-icon" />
+            </el-input>
+            <img
+              :src="codeUrl"
+              class="login-code-img"
+              alt="验证码"
+              title="点击图片刷新"
+              @click="getCode"
+            />
+          </div>
+        </el-form-item>
+
+        <!-- 记住我 / 忘记密码 -->
+        <div class="login-options">
+          <el-checkbox v-model="loginForm.rememberMe">记住我</el-checkbox>
+          <router-link class="forgot-link" to="/forgot-password">忘记密码？</router-link>
+        </div>
+
+        <!-- 登录按钮 -->
+        <el-form-item class="btn-item">
+          <el-button
+            :loading="loading"
+            type="primary"
+            class="login-btn"
+            @click.native.prevent="handleLogin"
+          >
+            <span v-if="!loading">登 录</span>
+            <span v-else>登 录 中...</span>
+          </el-button>
+        </el-form-item>
+      </el-form>
     </div>
 
+    <!-- 底部版权 -->
     <div class="el-login-footer">
       <span>{{ footerContent }}</span>
     </div>
@@ -189,239 +201,196 @@ export default {
 </script>
 
 <style rel="stylesheet/scss" lang="scss" scoped>
-$primary: #6b92c0;
-$primary-dark: #4e76a8;
-$primary-light: #9dbdd8;
-$text-dark: #2c4a6a;
-$text-body: #4a6a8a;
-$text-muted: #7a96b2;
-$border: #b8cce0;
-$card-bg: linear-gradient(145deg, rgba(180, 205, 228, 0.9) 0%, rgba(200, 222, 242, 0.93) 50%, rgba(170, 198, 225, 0.9) 100%);
+// Element Plus 风格蓝色系主色调
+$primary: #409eff;
+$primary-hover: #79bbff;
+$primary-active: #337ecc;
+$text-main: #303133;
+$text-regular: #606266;
+$text-muted: #909399;
+$border-color: #dcdfe6;
 
 .login {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  background: linear-gradient(135deg, #c8d8ea 0%, #dce8f4 25%, #e8f0f8 50%, #d0e0f0 75%, #c0d4e8 100%);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.4) 30.5%, rgba(255,255,255,0.4) 31%, transparent 31.5%),
-      linear-gradient(125deg, transparent 60%, rgba(200,218,238,0.5) 60.5%, rgba(200,218,238,0.5) 61%, transparent 61.5%),
-      linear-gradient(125deg, transparent 80%, rgba(255,255,255,0.3) 80.5%, rgba(255,255,255,0.3) 81%, transparent 81.5%);
-    pointer-events: none;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
-    pointer-events: none;
-  }
+  // 藏蓝 → 浅天蓝 自上而下线性渐变
+  background: linear-gradient(180deg, #13294b 0%, #1b3a67 32%, #2d5d95 58%, #6f9fc9 82%, #c3ddf2 100%);
 }
 
-.login-content {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 580px;
-  padding: 0 24px;
-  margin-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/* ---------- 背景装饰层 ---------- */
+.bg-metro,
+.bg-icons,
+.bg-buildings {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-.brand-title {
-  font-size: 32px;
-  font-weight: 700;
-  margin: 0 0 8px 0;
-  letter-spacing: 4px;
-  color: $text-dark;
-  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
+// 地铁线路网几何暗纹（线路 + 站点）
+.bg-metro {
+  z-index: 0;
+  opacity: 0.13;
+  background: url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1.5'%3E%3Cpath d='M-40 60H140L230 150H440'/%3E%3Cpath d='M-40 340H120L210 250H300L340 210H440'/%3E%3Cpath d='M80 -40V100L160 180V440'/%3E%3Cpath d='M320 -40V80L400 160V440'/%3E%3Cpath d='M200 -40V60'/%3E%3Cpath d='M-40 200H60'/%3E%3Cpath d='M240 440V360'/%3E%3C/g%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='80' cy='60' r='3.5'/%3E%3Ccircle cx='140' cy='60' r='3.5'/%3E%3Ccircle cx='230' cy='150' r='3.5'/%3E%3Ccircle cx='80' cy='100' r='3.5'/%3E%3Ccircle cx='160' cy='180' r='3.5'/%3E%3Ccircle cx='120' cy='340' r='3.5'/%3E%3Ccircle cx='210' cy='250' r='3.5'/%3E%3Ccircle cx='300' cy='250' r='3.5'/%3E%3Ccircle cx='340' cy='210' r='3.5'/%3E%3Ccircle cx='320' cy='80' r='3.5'/%3E%3Ccircle cx='400' cy='160' r='3.5'/%3E%3Ccircle cx='200' cy='60' r='3.5'/%3E%3Ccircle cx='60' cy='200' r='3.5'/%3E%3Ccircle cx='240' cy='360' r='3.5'/%3E%3C/g%3E%3C/svg%3E") repeat;
+  background-size: 400px 400px;
 }
 
-.brand-desc {
-  font-size: 16px;
-  margin: 0 0 40px 0;
-  color: $text-muted;
-  opacity: 0.9;
-  letter-spacing: 4px;
+// 若隐若现的审核对勾 / 文档图标点缀
+.bg-icons {
+  z-index: 0;
+  opacity: 0.09;
+  background-repeat: no-repeat;
+  background-image:
+    url("data:image/svg+xml,%3Csvg width='44' height='44' viewBox='0 0 44 44' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='22' cy='22' r='18.5' fill='none' stroke='%23ffffff' stroke-width='2.4'/%3E%3Cpath d='M14 22.5l5.5 5.5L30.5 16' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='44' height='44' viewBox='0 0 44 44' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='22' cy='22' r='18.5' fill='none' stroke='%23ffffff' stroke-width='2.4'/%3E%3Cpath d='M14 22.5l5.5 5.5L30.5 16' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='44' height='44' viewBox='0 0 44 44' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='22' cy='22' r='18.5' fill='none' stroke='%23ffffff' stroke-width='2.4'/%3E%3Cpath d='M14 22.5l5.5 5.5L30.5 16' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='36' height='40' viewBox='0 0 36 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 2h15l8 8v25a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3z' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M23 2v8h8' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M10 16h13M10 22h13M10 28h8' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='36' height='40' viewBox='0 0 36 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 2h15l8 8v25a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3z' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M23 2v8h8' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M10 16h13M10 22h13M10 28h8' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg width='36' height='40' viewBox='0 0 36 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 2h15l8 8v25a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3z' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M23 2v8h8' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M10 16h13M10 22h13M10 28h8' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-position: 4% 18%, 91% 11%, 72% 20%, 83% 42%, 16% 7%, 9% 52%;
+  background-size: 46px 46px, 38px 38px, 30px 30px, 36px 40px, 27px 30px, 32px 36px;
 }
 
+// 城市建筑轮廓剪影（含轨道高架元素）
+.bg-buildings {
+  z-index: 0;
+  opacity: 0.12;
+  background: url("data:image/svg+xml,%3Csvg width='600' height='180' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2313294b'%3E%3Crect x='0' y='92' width='46' height='88'/%3E%3Crect x='52' y='58' width='34' height='122'/%3E%3Crect x='92' y='112' width='28' height='68'/%3E%3Crect x='126' y='40' width='42' height='140'/%3E%3Crect x='144' y='22' width='3' height='18'/%3E%3Crect x='174' y='96' width='36' height='84'/%3E%3Crect x='216' y='68' width='28' height='112'/%3E%3Crect x='250' y='118' width='44' height='62'/%3E%3Crect x='300' y='52' width='38' height='128'/%3E%3Crect x='316' y='30' width='3' height='22'/%3E%3Crect x='344' y='102' width='32' height='78'/%3E%3Crect x='382' y='34' width='46' height='146'/%3E%3Crect x='434' y='88' width='30' height='92'/%3E%3Crect x='470' y='116' width='40' height='64'/%3E%3Crect x='516' y='62' width='34' height='118'/%3E%3Crect x='530' y='42' width='3' height='20'/%3E%3Crect x='556' y='96' width='44' height='84'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom center;
+  background-size: 600px 180px;
+}
+
+/* ---------- 登录卡片 ---------- */
 .login-card {
-  width: 100%;
-  padding: 40px 56px;
-  background: $card-bg;
-  border-radius: 24px;
-  box-shadow:
-    0 8px 32px rgba(122, 158, 200, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.6);
   position: relative;
-  overflow: hidden;
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(
-      ellipse at 30% 20%,
-      rgba(255, 255, 255, 0.25) 0%,
-      transparent 50%
-    );
-    pointer-events: none;
-  }
-
-  &:hover {
-    box-shadow:
-      0 12px 40px rgba(122, 158, 200, 0.25),
-      inset 0 1px 0 rgba(255, 255, 255, 0.8),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.4);
-    transform: translateY(-2px);
-  }
+  z-index: 2;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  padding: 40px 42px 36px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow:
+    0 12px 36px rgba(35, 82, 148, 0.16),
+    0 3px 10px rgba(35, 82, 148, 0.08);
 }
 
-.card-title {
-  margin: 0 0 6px 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: $text-dark;
-  text-align: left;
-}
-
-.card-subtitle {
-  margin: 0 0 28px 0;
-  font-size: 14px;
-  color: $text-muted;
-  text-align: left;
-}
-
-.field-label {
+.login-logo {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
+  justify-content: center;
+  margin-bottom: 14px;
 
-.label-left {
-  font-size: 14px;
-  font-weight: 600;
-  color: $text-body;
-}
-
-.label-right {
-  font-size: 13px;
-  color: $text-muted;
-  cursor: pointer;
-
-  &:hover {
-    color: $primary;
+  svg {
+    filter: drop-shadow(0 4px 10px rgba(37, 99, 217, 0.28));
   }
 }
 
+.login-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1f2d3d;
+  text-align: center;
+  letter-spacing: 2px;
+}
+
+.login-subtitle {
+  margin: 0 0 30px;
+  font-size: 13px;
+  color: #8c9bab;
+  text-align: center;
+  letter-spacing: 4px;
+}
+
+/* ---------- 表单（Element Plus 风格） ---------- */
 .login-form {
-  .el-form-item {
-    margin-bottom: 18px;
+  ::v-deep .el-form-item {
+    margin-bottom: 20px;
   }
 
   ::v-deep .el-form-item__error {
-    top: 48px !important;
-    color: #b8605a;
+    padding-top: 2px;
   }
 
-  ::v-deep .el-row {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+  ::v-deep .el-input__inner {
+    height: 40px;
+    line-height: 40px;
+    border-radius: 4px;
+    border: 1px solid $border-color;
+    color: $text-main;
+    transition: border-color 0.2s ease;
 
-    .el-col {
-      padding-left: 0 !important;
-      padding-right: 0 !important;
+    &::placeholder {
+      color: #a8abb2;
     }
 
-    .el-col:first-child {
-      padding-right: 8px !important;
+    &:hover {
+      border-color: #c0c4cc;
     }
 
-    .el-col:last-child {
-      padding-left: 8px !important;
-    }
-
-    .el-col:first-child {
-      .el-input {
-        height: 48px;
-        line-height: 48px;
-
-        .el-input__inner {
-          height: 48px;
-          line-height: 48px;
-        }
-      }
+    &:focus {
+      border-color: $primary;
     }
   }
 
-  ::v-deep .el-input {
-    height: 48px;
-    line-height: 48px;
+  // 前缀图标（账号 / 密码 / 验证码）
+  ::v-deep .el-input__prefix {
+    left: 11px;
+    display: flex;
+    align-items: center;
+    color: $text-muted;
+  }
 
-    .el-input__inner {
-      height: 48px;
-      line-height: 48px;
-      border-radius: 12px;
-      font-size: 15px;
-      border: 1.5px solid $border;
-      background: rgba(255, 255, 255, 0.5);
-      padding: 0 18px;
-      color: $text-body;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-      &::placeholder {
-        color: $text-muted;
-        font-size: 14px;
-      }
-
-      &:hover {
-        border-color: $primary;
-        background: rgba(255, 255, 255, 0.7);
-      }
-
-      &:focus {
-        border: 2px solid $primary;
-        background: rgba(255, 255, 255, 0.8);
-        box-shadow: 0 0 0 3px rgba(123, 158, 200, 0.15);
-        outline: none;
-      }
-    }
+  ::v-deep .el-input--prefix .el-input__inner {
+    padding-left: 36px;
   }
 }
 
+.input-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+}
+
+/* ---------- 验证码行 ---------- */
+.captcha-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+
+  ::v-deep .el-input {
+    flex: 1;
+  }
+}
+
+.login-code-img {
+  width: 118px;
+  height: 40px;
+  margin-left: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background: #f5f7fa;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+
+  &:hover {
+    border-color: $primary;
+  }
+}
+
+/* ---------- 记住我 / 忘记密码 ---------- */
 .login-options {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  margin-top: -8px;
+  margin-bottom: 22px;
 
   ::v-deep .el-checkbox {
     .el-checkbox__label {
-      font-size: 14px;
-      color: $primary-dark;
-      font-weight: 500;
+      font-size: 13px;
+      color: $text-regular;
     }
 
     .el-checkbox__input.is-checked .el-checkbox__inner {
@@ -429,102 +398,68 @@ $card-bg: linear-gradient(145deg, rgba(180, 205, 228, 0.9) 0%, rgba(200, 222, 24
       border-color: $primary;
     }
 
-    .el-checkbox__input.is-checked + .el-checkbox__label {
-      color: $primary-dark;
-    }
-
-    &:hover {
-      .el-checkbox__inner {
-        border-color: $primary;
-      }
+    &:hover .el-checkbox__inner {
+      border-color: $primary;
     }
   }
 }
 
 .forgot-link {
-  font-size: 14px;
-  color: $primary-dark;
+  font-size: 13px;
+  color: $text-muted;
   text-decoration: none;
-  font-weight: 500;
+  transition: color 0.2s ease;
 
   &:hover {
     color: $primary;
-    text-decoration: underline;
   }
+}
+
+/* ---------- 登录按钮 ---------- */
+.login-form ::v-deep .btn-item {
+  margin-bottom: 0;
 }
 
 .login-btn {
   width: 100%;
-  height: 48px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 6px;
-  background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
-  border: none;
-  color: #fff;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    background: linear-gradient(135deg, $primary-light 0%, $primary 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(123, 158, 200, 0.35);
-  }
-
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(123, 158, 200, 0.25);
-  }
-}
-
-.login-code-img {
-  width: 100%;
-  height: 48px;
-  border-radius: 12px;
-  cursor: pointer;
-  object-fit: cover;
-  border: 1.5px solid $border;
-  background: rgba(255, 255, 255, 0.5);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    border-color: $primary;
-    box-shadow: 0 0 8px rgba(123, 158, 200, 0.15);
-  }
-
-  &:active {
-    border: 2px solid $primary;
-    box-shadow: 0 0 0 3px rgba(123, 158, 200, 0.15);
-  }
-}
-
-.card-footer {
-  margin-top: 28px;
-  text-align: center;
-  font-size: 14px;
-  color: $text-muted;
-}
-
-.register-link {
-  color: $primary-dark;
+  height: 44px;
+  font-size: 15px;
   font-weight: 500;
-  text-decoration: none;
+  letter-spacing: 2px;
+  border: 1px solid $primary;
+  border-radius: 4px;
+  background: $primary;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 
-  &:hover {
-    text-decoration: underline;
+  &:hover,
+  &:focus {
+    background: $primary-hover;
+    border-color: $primary-hover;
+  }
+
+  &:active {
+    background: $primary-active;
+    border-color: $primary-active;
   }
 }
 
+/* ---------- 底部版权 ---------- */
 .el-login-footer {
-  height: 40px;
-  line-height: 40px;
   position: fixed;
-  bottom: 0;
+  bottom: 16px;
   width: 100%;
   text-align: center;
-  color: $text-muted;
   font-size: 12px;
   letter-spacing: 1px;
-  z-index: 10;
+  color: rgba(35, 67, 105, 0.65);
+  z-index: 2;
+}
+
+/* ---------- 小屏适配 ---------- */
+@media (max-width: 480px) {
+  .login-card {
+    width: 100%;
+    padding: 32px 26px 28px;
+  }
 }
 </style>
