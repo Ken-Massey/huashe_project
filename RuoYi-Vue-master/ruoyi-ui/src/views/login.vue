@@ -77,10 +77,9 @@
           </div>
         </el-form-item>
 
-        <!-- 记住我 / 忘记密码 -->
+        <!-- 记住我 -->
         <div class="login-options">
           <el-checkbox v-model="loginForm.rememberMe">记住我</el-checkbox>
-          <router-link class="forgot-link" to="/forgot-password">忘记密码？</router-link>
         </div>
 
         <!-- 登录按钮 -->
@@ -380,10 +379,9 @@ $border-color: #dcdfe6;
   }
 }
 
-/* ---------- 记住我 / 忘记密码 ---------- */
+/* ---------- 记住我 ---------- */
 .login-options {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   margin-bottom: 22px;
 
@@ -401,17 +399,6 @@ $border-color: #dcdfe6;
     &:hover .el-checkbox__inner {
       border-color: $primary;
     }
-  }
-}
-
-.forgot-link {
-  font-size: 13px;
-  color: $text-muted;
-  text-decoration: none;
-  transition: color 0.2s ease;
-
-  &:hover {
-    color: $primary;
   }
 }
 

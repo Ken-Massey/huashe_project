@@ -121,7 +121,7 @@ export default {
     },
     taskLabel(value) { return ({ stage1: '复函生成', stage2_audit: '案例审核', stage2_advice: '审核意见生成', knowledge_case_import: '知识库入库' })[value] || value },
     statusIcon(value) { return value === 'success' ? 'el-icon-success success' : value === 'failed' ? 'el-icon-error failed' : 'el-icon-loading running' },
-    logout() { this.$confirm('确定退出当前账号吗？', '退出登录', { type: 'warning' }).then(() => this.$store.dispatch('LogOut').then(() => { location.href = '/index' })).catch(() => {}) }
+    logout() { this.$confirm('确定退出当前账号吗？', '退出登录', { type: 'warning' }).then(() => this.$store.dispatch('LogOut').then(() => { location.href = '/' })).catch(() => {}) }
   }
 }
 </script>

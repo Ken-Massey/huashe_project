@@ -47,16 +47,6 @@ export const constantRoutes = [
     hidden: true
   },
   {
-    path: '/register',
-    component: () => import('@/views/register'),
-    hidden: true
-  },
-  {
-    path: '/forgot-password',
-    component: () => import('@/views/forgot-password'),
-    hidden: true
-  },
-  {
     path: '/404',
     component: () => import('@/views/error/404'),
     hidden: true
@@ -77,6 +67,19 @@ export const constantRoutes = [
     component: () => import('@/views/lock'),
     hidden: true,
     meta: { title: '锁定屏幕' }
+  },
+  {
+    path: '/rail/audit',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/rail/audit/index'),
+        name: 'RailAudit',
+        meta: { title: '案例审核', noCache: true }
+      }
+    ]
   },
   {
     path: '/user',

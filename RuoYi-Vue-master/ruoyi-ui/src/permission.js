@@ -9,7 +9,7 @@ import { isRelogin } from '@/utils/request'
 
 NProgress.configure({ showSpinner: false })
 
-const whiteList = ['/login', '/register', '/forgot-password']
+const whiteList = ['/login']
 
 const isWhiteList = (path) => {
   return whiteList.some(pattern => isPathMatch(pattern, path))
@@ -41,7 +41,15 @@ router.beforeEach((to, from, next) => {
           store.dispatch('GenerateRoutes').then(accessRoutes => {
             // 根据roles权限生成可访问的路由表
             router.addRoutes(accessRoutes) // 动态添加可访问路由表
-            next({ ...to, replace: true }) // hack方法 确保addRoutes已完成
+            // 兜底：目标路由不存在（如历史遗留的 /index 重定向参数）时回退首页，避免登录后 404
+            const resolved = router.resolve(to.fullPath)
+            const fellToNotFound = resolved.route.matched.length === 0 ||
+              resolved.route.matched[resolved.route.matched.length - 1].path === '*'
+            if (fellToNotFound && to.path !== '/404') {
+              next({ path: '/', replace: true })
+            } else {
+              next({ ...to, replace: true }) // hack方法 确保addRoutes已完成
+            }
           })
         }).catch(err => {
           store.dispatch('LogOut').then(() => {
