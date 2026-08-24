@@ -1,0 +1,11 @@
+.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx; }
+.head-name { font-size: 36rpx; font-weight: 600; margin-right: 16rpx; }
+.logout { margin: 0; color: #7c8783; }
+
+.task-card:active { opacity: 0.85; }
+.task-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12rpx; }
+.task-no { font-family: Consolas, monospace; font-size: 30rpx; font-weight: 600; color: #246f5d; }
+.task-name { font-size: 30rpx; font-weight: 600; color: #202725; margin-bottom: 8rpx; }
+.task-line { font-size: 26rpx; color: #4a5450; margin-bottom: 12rpx; }
+.task-meta { display: flex; justify-content: space-between; color: #9aa5a1; font-size: 24rpx; }
+.open-hazard { color: #f56c6c; }

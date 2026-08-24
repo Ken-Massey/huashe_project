@@ -1,0 +1,39 @@
+<view class="page">
+  <view class="card">
+    <view class="form-item">
+      <text class="field-label"><text class="required">*</text>隐患描述</text>
+      <textarea class="textarea" data-field="description" value="{{ description }}" bindinput="onInput" placeholder="违规施工、超范围施工等现场情况" maxlength="2000" />
+    </view>
+    <view class="form-item">
+      <text class="field-label">隐患类型</text>
+      <picker mode="selector" range="{{ hazardTypeLabels }}" value="{{ hazardTypeIndex }}" bindchange="onTypeChange">
+        <view class="picker-value {{ hazardTypeIndex < 0 ? 'placeholder' : '' }}">{{ hazardTypeIndex >= 0 ? hazardTypeLabels[hazardTypeIndex] : '请选择类型' }}</view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="field-label">风险等级</text>
+      <picker mode="selector" range="{{ riskLabels }}" value="{{ riskIndex }}" bindchange="onRiskChange">
+        <view class="picker-value {{ riskIndex < 0 ? 'placeholder' : '' }}">{{ riskIndex >= 0 ? riskLabels[riskIndex] : '请选择等级' }}</view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="field-label">整改责任人</text>
+      <input class="input" data-field="rectifyOwner" value="{{ rectifyOwner }}" bindinput="onInput" placeholder="施工方名称（选填）" />
+    </view>
+    <view class="form-item">
+      <text class="field-label">整改要求</text>
+      <textarea class="textarea" data-field="rectifyRequirement" value="{{ rectifyRequirement }}" bindinput="onInput" placeholder="整改要求（选填）" maxlength="2000" />
+    </view>
+    <view class="form-item">
+      <text class="field-label">隐患截图（圈注，选填）</text>
+      <view class="shot-grid">
+        <view wx:for="{{ shots }}" wx:key="index" class="shot-cell">
+          <image class="shot-img" src="{{ item.path }}" mode="aspectFill" />
+          <view class="shot-del" data-index="{{ index }}" catchtap="removeShot">×</view>
+        </view>
+        <view class="shot-cell shot-add" bindtap="chooseShots"><text class="add-plus">＋</text></view>
+      </view>
+    </view>
+  </view>
+  <button class="btn-primary submit-btn" disabled="{{ submitting }}" bindtap="submit">{{ submitting ? '保存中…' : (editing ? '保存修改' : '记录隐患') }}</button>
+</view>

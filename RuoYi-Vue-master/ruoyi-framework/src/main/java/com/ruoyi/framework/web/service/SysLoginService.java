@@ -66,14 +66,51 @@ public class SysLoginService
         validateCaptcha(username, code, uuid);
         // 登录前置校验
         loginPreCheck(username, password);
-        // 用户验证
-        Authentication authentication = null;
+        LoginUser loginUser = authenticate(username, password);
+        // 平台登录权限校验
+        if (!"1".equals(loginUser.getUser().getCanPlatform()))
+        {
+            AsyncManager.me().execute(AsyncFactory.recordLogininfor(username, Constants.LOGIN_FAIL, "该账号无平台登录权限"));
+            throw new ServiceException("该账号无平台登录权限");
+        }
+        AsyncManager.me().execute(AsyncFactory.recordLogininfor(username, Constants.LOGIN_SUCCESS, MessageUtils.message("user.login.success")));
+        recordLoginInfo(loginUser.getUserId());
+        // 生成token
+        return tokenService.createToken(loginUser);
+    }
+
+    /**
+     * 小程序登录（账号密码，免验证码，校验小程序登录权限）
+     *
+     * @param username 用户名
+     * @param password 密码
+     * @return 结果
+     */
+    public String loginForMiniapp(String username, String password)
+    {
+        // 登录前置校验
+        loginPreCheck(username, password);
+        LoginUser loginUser = authenticate(username, password);
+        // 小程序登录权限校验
+        if (!"1".equals(loginUser.getUser().getCanMini()))
+        {
+            AsyncManager.me().execute(AsyncFactory.recordLogininfor(username, Constants.LOGIN_FAIL, "该账号无小程序登录权限"));
+            throw new ServiceException("该账号无小程序登录权限");
+        }
+        AsyncManager.me().execute(AsyncFactory.recordLogininfor(username, Constants.LOGIN_SUCCESS, MessageUtils.message("user.login.success")));
+        recordLoginInfo(loginUser.getUserId());
+        return tokenService.createToken(loginUser);
+    }
+
+    private LoginUser authenticate(String username, String password)
+    {
         try
         {
             UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(username, password);
             AuthenticationContextHolder.setContext(authenticationToken);
             // 该方法会去调用UserDetailsServiceImpl.loadUserByUsername
-            authentication = authenticationManager.authenticate(authenticationToken);
+            Authentication authentication = authenticationManager.authenticate(authenticationToken);
+            return (LoginUser) authentication.getPrincipal();
         }
         catch (Exception e)
         {
@@ -92,11 +129,6 @@ public class SysLoginService
         {
             AuthenticationContextHolder.clearContext();
         }
-        AsyncManager.me().execute(AsyncFactory.recordLogininfor(username, Constants.LOGIN_SUCCESS, MessageUtils.message("user.login.success")));
-        LoginUser loginUser = (LoginUser) authentication.getPrincipal();
-        recordLoginInfo(loginUser.getUserId());
-        // 生成token
-        return tokenService.createToken(loginUser);
     }
 
     /**

@@ -1,0 +1,25 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/index/index",
+    "pages/task/task",
+    "pages/upload/upload",
+    "pages/hazard/hazard"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#2f806b",
+    "navigationBarTitleText": "现场符合性巡查",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f7f8",
+    "backgroundTextStyle": "light"
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于记录巡查现场的准确位置，保证现场照片可追溯"
+    }
+  },
+  "requiredPrivateInfos": ["getLocation"],
+  "lazyCodeLoading": "requiredComponents",
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

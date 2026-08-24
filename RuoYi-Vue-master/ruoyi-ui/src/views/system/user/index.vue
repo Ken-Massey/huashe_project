@@ -42,7 +42,7 @@
 
         <el-table v-loading="loading" :data="userList" stripe @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="50" align="center" :selectable="canSelect" />
-          <el-table-column label="用户编号" align="center" key="userId" prop="userId" v-if="columns.userId.visible" width="80" />
+          <el-table-column label="用户编号" align="center" type="index" :index="indexMethod" v-if="columns.userId.visible" width="80" />
           <el-table-column label="登录账号" align="center" key="userName" v-if="columns.userName.visible" :show-overflow-tooltip="true">
             <template slot-scope="scope">
               <a class="link-type" style="cursor:pointer" @click="handleViewData(scope.row)">{{ scope.row.userName }}</a>
@@ -132,6 +132,14 @@
               <el-radio-group v-model="form.status">
                 <el-radio v-for="dict in dict.type.sys_normal_disable" :key="dict.value" :label="dict.value">{{ dict.label }}</el-radio>
               </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :span="24">
+            <el-form-item label="限权管理">
+              <el-checkbox v-model="form.canPlatform" true-label="1" false-label="0">平台</el-checkbox>
+              <el-checkbox v-model="form.canMini" true-label="1" false-label="0" @change="onMiniScopeChange">小程序</el-checkbox>
             </el-form-item>
           </el-col>
         </el-row>
@@ -334,9 +342,24 @@ export default {
         status: "0",
         remark: undefined,
         postIds: [],
-        roleIds: []
+        roleIds: [],
+        canPlatform: "1",
+        canMini: "0"
       }
       this.resetForm("form")
+    },
+    // 勾选「小程序」时自动勾选「巡查员」角色（否则无 patrol 接口权限）
+    onMiniScopeChange(val) {
+      const patrol = (this.roleOptions || []).find(r => r.roleKey === 'patrol')
+      if (!patrol) return
+      const ids = this.form.roleIds ? [...this.form.roleIds] : []
+      const index = ids.indexOf(patrol.roleId)
+      if (val === '1' && index < 0) {
+        ids.push(patrol.roleId)
+      } else if (val === '0' && index >= 0) {
+        ids.splice(index, 1)
+      }
+      this.$set(this.form, 'roleIds', ids)
     },
     /** 搜索按钮操作 */
     handleQuery() {
@@ -356,6 +379,10 @@ export default {
       this.ids = selection.map(item => item.userId)
       this.single = selection.length != 1
       this.multiple = !selection.length
+    },
+    // 用户编号连续序号（跨页）
+    indexMethod(index) {
+      return (this.queryParams.pageNum - 1) * this.queryParams.pageSize + index + 1
     },
     /** 新增按钮操作 */
     handleAdd() {
