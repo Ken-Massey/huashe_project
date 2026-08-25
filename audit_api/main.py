@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import hmac
@@ -26,6 +26,7 @@ from .ima_rag import purge_rag_document
 from .knowledge_base import KnowledgeBase
 from .library_assets import LibraryAssetRepository
 from .project_archive import ProjectArchiveRepository
+from .patrol import router as patrol_router
 from .regulation_rules import RegulationRepository, RuleEngine
 from .reply_writer import STAGE_STYLE_RULES, generate_formal_reply_content
 from .services import advice_worker, recognize_letter, stage1_worker, stage2_audit_worker, stage2_full_worker
@@ -40,6 +41,7 @@ app = FastAPI(
     version="1.0.0",
     description="为 RuoYi-Vue 提供智能审核、知识库、项目档案和回函管理接口。",
 )
+app.include_router(patrol_router)
 tasks = TaskManager(TASK_ROOT, max_workers=MAX_WORKERS)
 knowledge = KnowledgeBase()
 agent = AgentService()

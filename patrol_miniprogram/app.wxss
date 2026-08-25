@@ -1,0 +1,68 @@
+/* 全局样式 */
+page {
+  background: #f5f7f8;
+  color: #202725;
+  font-size: 28rpx;
+  line-height: 1.5;
+}
+
+.page {
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 10rpx rgba(32, 39, 37, 0.04);
+}
+
+.btn-primary {
+  background: #2f806b;
+  color: #fff;
+  border-radius: 8rpx;
+}
+.btn-primary[disabled] {
+  background: #9fc7bb;
+  color: #fff;
+}
+
+.muted {
+  color: #9aa5a1;
+  font-size: 24rpx;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 12rpx;
+  color: #4a5450;
+  font-size: 26rpx;
+}
+.field-label .required {
+  color: #f56c6c;
+  margin-right: 4rpx;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2rpx 14rpx;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+.tag-pending { background: #fdf6ec; color: #e6a23c; }
+.tag-compliant { background: #f0f9eb; color: #67c23a; }
+.tag-noncompliant { background: #fef0f0; color: #f56c6c; }
+.tag-archived { background: #f4f4f5; color: #909399; }
+.tag-info { background: #f4f4f5; color: #909399; }
+
+.empty {
+  padding: 100rpx 0;
+  text-align: center;
+  color: #9aa5a1;
+}
+.empty .icon {
+  font-size: 72rpx;
+}

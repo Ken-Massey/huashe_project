@@ -70,6 +70,12 @@ public class SysUser extends BaseEntity
     /** 删除标志（0代表存在 2代表删除） */
     private String delFlag;
 
+    /** 平台登录权限（0否 1是） */
+    private String canPlatform;
+
+    /** 小程序登录权限（0否 1是） */
+    private String canMini;
+
     /** 最后登录IP */
     @Excel(name = "最后登录IP", type = Type.EXPORT)
     private String loginIp;
@@ -237,6 +243,26 @@ public class SysUser extends BaseEntity
     public void setDelFlag(String delFlag)
     {
         this.delFlag = delFlag;
+    }
+
+    public String getCanPlatform()
+    {
+        return canPlatform;
+    }
+
+    public void setCanPlatform(String canPlatform)
+    {
+        this.canPlatform = canPlatform;
+    }
+
+    public String getCanMini()
+    {
+        return canMini;
+    }
+
+    public void setCanMini(String canMini)
+    {
+        this.canMini = canMini;
     }
 
     public String getLoginIp()

@@ -1,0 +1,72 @@
+<view class="page">
+  <!-- 现场照片 -->
+  <view class="card">
+    <view class="card-head">
+      <text class="field-label"><text class="required">*</text>现场照片（{{ photos.length }}/9）</text>
+      <text class="muted">拍照或从相册选择</text>
+    </view>
+    <view class="photo-grid">
+      <view wx:for="{{ photos }}" wx:key="index" class="photo-cell">
+        <image class="photo-img" src="{{ item.path }}" mode="aspectFill" data-index="{{ index }}" bindtap="previewPhoto" />
+        <view class="photo-del" data-index="{{ index }}" catchtap="removePhoto">×</view>
+      </view>
+      <view wx:if="{{ photos.length < 9 }}" class="photo-cell photo-add" bindtap="choosePhotos">
+        <text class="add-plus">＋</text>
+        <text class="add-text">拍摄/选择</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 现场定位 -->
+  <view class="card">
+    <view class="card-head">
+      <text class="field-label"><text class="required">*</text>现场定位</text>
+      <button class="loc-btn" size="mini" bindtap="getLocation">{{ location ? '重新定位' : '获取定位' }}</button>
+    </view>
+    <view wx:if="{{ location }}" class="loc-result">
+      <text>经度 {{ location.longitude }}，纬度 {{ location.latitude }}</text>
+      <text class="muted">精度 ±{{ location.accuracy }}m</text>
+    </view>
+    <view wx:else class="muted">尚未定位，请点击「获取定位」记录现场坐标</view>
+  </view>
+
+  <!-- 基本信息 -->
+  <view class="card">
+    <view class="form-item">
+      <text class="field-label"><text class="required">*</text>线路</text>
+      <picker mode="selector" range="{{ lineLabels }}" value="{{ lineIndex }}" bindchange="onLineChange">
+        <view class="picker-value {{ lineIndex < 0 ? 'placeholder' : '' }}">{{ lineIndex >= 0 ? lineLabels[lineIndex] : '请选择线路' }}</view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="field-label">施工类型</text>
+      <picker mode="selector" range="{{ typeLabels }}" value="{{ typeIndex }}" bindchange="onTypeChange">
+        <view class="picker-value {{ typeIndex < 0 ? 'placeholder' : '' }}">{{ typeIndex >= 0 ? typeLabels[typeIndex] : '请选择施工类型' }}</view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="field-label">位置描述</text>
+      <input class="input" data-field="locationDesc" value="{{ locationDesc }}" bindinput="onInput" placeholder="如：新街口站东侧基坑，距出入口约20m" />
+    </view>
+    <view class="form-item">
+      <text class="field-label">施工单位</text>
+      <input class="input" data-field="constructor" value="{{ constructor }}" bindinput="onInput" placeholder="选填" />
+    </view>
+    <view class="form-item">
+      <text class="field-label"><text class="required">*</text>上报人姓名</text>
+      <input class="input" data-field="reporterName" value="{{ reporterName }}" bindinput="onInput" placeholder="请填写巡查员姓名" />
+    </view>
+    <view class="form-item">
+      <text class="field-label">上报单位</text>
+      <input class="input" data-field="reporterUnit" value="{{ reporterUnit }}" bindinput="onInput" placeholder="选填" />
+    </view>
+    <view class="form-item">
+      <text class="field-label">备注</text>
+      <textarea class="textarea" data-field="remark" value="{{ remark }}" bindinput="onInput" placeholder="现场情况补充说明（选填）" maxlength="1000" />
+    </view>
+  </view>
+
+  <button class="btn-primary submit-btn" disabled="{{ submitting }}" bindtap="submit">
+    {{ submitting ? '上报中…' : '提交上报' }}
+  </button>
+</view>

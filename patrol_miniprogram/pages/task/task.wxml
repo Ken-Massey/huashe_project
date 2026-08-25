@@ -1,0 +1,61 @@
+<view class="page" wx:if="{{ task }}">
+  <view class="card">
+    <view class="head-row">
+      <text class="task-no">{{ task.task_no }}</text>
+      <text class="tag {{ task.status === 'pending' ? 'tag-pending' : (task.status === 'completed' ? 'tag-compliant' : 'tag-archived') }}">{{ task.statusLabel }}</text>
+    </view>
+    <view class="task-name">{{ task.name }}</view>
+    <view class="info-row"><text class="info-label">线路</text><text>{{ task.line || '-' }}</text></view>
+    <view class="info-row"><text class="info-label">位置</text><text>{{ task.location_desc || '-' }}</text></view>
+    <view class="info-row" wx:if="{{ task.requirement }}"><text class="info-label">巡查内容</text><text>{{ task.requirement }}</text></view>
+    <view class="info-row"><text class="info-label">派发人</text><text>{{ task.dispatcher || '-' }}</text></view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">巡查时间线（{{ timeline.length }}）</view>
+    <view wx:if="{{ timeline.length }}">
+      <view wx:for="{{ timeline }}" wx:key="index" class="tl-item">
+        <!-- 时间 + 巡查员 -->
+        <view class="tl-head">
+          <text wx:if="{{ item.kind === 'record' }}" class="tag {{ item.data.type === 'rectify' ? 'tag-pending' : 'tag-compliant' }}">{{ item.data.type === 'rectify' ? '整改反馈' : '日常巡查' }}</text>
+          <text wx:else class="tag tag-noncompliant">风险隐患</text>
+          <text class="muted">{{ item.data.created_by_name || '-' }} · {{ item.data.created_at }}</text>
+          <text wx:if="{{ item.kind === 'record' && item.data.type === 'patrol' }}" class="link-btn" data-record="{{ item.data.record_id }}" bindtap="goAddHazard">＋添加隐患</text>
+        </view>
+        <view class="record-note" wx:if="{{ item.kind === 'record' && item.data.note }}">{{ item.data.note }}</view>
+        <!-- 巡查照片/视频 -->
+        <view class="media-grid" wx:if="{{ item.kind === 'record' && item.data.media.length }}">
+          <block wx:for="{{ item.data.media }}" wx:for-item="m" wx:key="media_id">
+            <image wx:if="{{ m.kind === 'photo' }}" class="media-img" src="{{ photoPaths[m.media_id] }}" mode="aspectFill" data-id="{{ m.media_id }}" bindtap="preview" />
+          </block>
+        </view>
+        <!-- 隐患：类型等级 → 隐患图片 → 隐患文字描述 -->
+        <block wx:for="{{ item.kind === 'record' ? item.data.hazards : [item.data] }}" wx:for-item="h" wx:key="hazard_id">
+          <view class="hazard-block">
+            <view class="hazard-meta">
+              <text class="tag tag-info" wx:if="{{ h.hazard_type }}">{{ h.hazard_type }}</text>
+              <text class="tag tag-pending" wx:if="{{ h.risk_level }}">{{ h.risk_level }}</text>
+              <text class="tag tag-pending">{{ h.statusLabel }}</text>
+            </view>
+            <view class="shot-grid" wx:if="{{ h.shots.length }}">
+              <image wx:for="{{ h.shots }}" wx:for-item="s" wx:key="shot_id" class="shot-img" src="{{ shotPaths[s.shot_id] }}" mode="aspectFill" data-id="{{ s.shot_id }}" bindtap="previewShot" />
+            </view>
+            <view class="hazard-desc">{{ h.description }}</view>
+            <view class="hazard-req" wx:if="{{ h.rectify_requirement }}">整改要求：{{ h.rectify_requirement }}</view>
+            <view class="hazard-req" wx:if="{{ h.review_comment }}">复核意见：{{ h.review_comment }}</view>
+            <view class="hazard-ops">
+              <button wx:if="{{ h.status === 'rectifying' }}" class="mini-btn" size="mini" data-id="{{ h.hazard_id }}" bindtap="submitReview">提交复核</button>
+              <text class="link-btn" data-id="{{ h.hazard_id }}" bindtap="editHazard">修改</text>
+              <text class="link-btn danger" data-id="{{ h.hazard_id }}" bindtap="deleteHazard">删除</text>
+            </view>
+          </view>
+        </block>
+      </view>
+    </view>
+    <view wx:else class="muted">暂无巡查记录</view>
+  </view>
+
+  <view class="actions">
+    <button class="btn-primary" bindtap="goUpload">上传照片/视频</button>
+  </view>
+</view>

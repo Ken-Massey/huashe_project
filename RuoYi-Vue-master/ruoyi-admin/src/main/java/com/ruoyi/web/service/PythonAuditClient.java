@@ -108,12 +108,40 @@ public class PythonAuditClient
         return get(uri.build().encode().toUriString());
     }
 
+    public Object get(String path, Map<String, ?> query, Map<String, String> headers)
+    {
+        UriComponentsBuilder uri = UriComponentsBuilder.fromPath(path);
+        if (query != null)
+        {
+            query.forEach((name, value) -> {
+                if (value != null)
+                {
+                    uri.queryParam(name, value);
+                }
+            });
+        }
+        return json(() -> {
+            org.springframework.web.client.RestClient.RequestHeadersSpec<?> request =
+                    client.get().uri(uri.build().encode().toUriString());
+            if (headers != null && !headers.isEmpty())
+            {
+                request.headers(httpHeaders -> headers.forEach(httpHeaders::add));
+            }
+            return request.retrieve().body(String.class);
+        });
+    }
+
     public Object post(String path)
     {
         return json(() -> client.post().uri(path).retrieve().body(String.class));
     }
 
     public Object post(String path, Object body)
+    {
+        return post(path, body, Collections.emptyMap());
+    }
+
+    public Object post(String path, Object body, Map<String, String> headers)
     {
         try
         {
@@ -125,6 +153,10 @@ public class PythonAuditClient
             if (StringUtils.isNotEmpty(token))
             {
                 request.header("X-Service-Token", token);
+            }
+            if (headers != null)
+            {
+                headers.forEach(request::header);
             }
             HttpResponse<String> response = uploadClient.send(
                     request.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -152,6 +184,18 @@ public class PythonAuditClient
     public Object delete(String path)
     {
         return json(() -> client.delete().uri(path).retrieve().body(String.class));
+    }
+
+    public Object delete(String path, Map<String, String> headers)
+    {
+        return json(() -> {
+            org.springframework.web.client.RestClient.RequestHeadersSpec<?> request = client.delete().uri(path);
+            if (headers != null && !headers.isEmpty())
+            {
+                request.headers(httpHeaders -> headers.forEach(httpHeaders::add));
+            }
+            return request.retrieve().body(String.class);
+        });
     }
 
     public ResponseEntity<byte[]> download(String path)

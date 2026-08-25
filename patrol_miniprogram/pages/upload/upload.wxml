@@ -1,0 +1,89 @@
+<view class="page">
+  <view class="card">
+    <view class="form-item">
+      <text class="field-label">上报类型</text>
+      <picker mode="selector" range="{{ types }}" value="{{ typeIndex }}" bindchange="onTypeChange">
+        <view class="picker-value">{{ types[typeIndex] }}</view>
+      </picker>
+    </view>
+
+    <view class="form-item" wx:if="{{ typeIndex === 1 }}">
+      <text class="field-label"><text class="required">*</text>关联隐患</text>
+      <picker mode="selector" range="{{ hazardLabels }}" value="{{ hazardIndex }}" bindchange="onHazardChange">
+        <view class="picker-value {{ hazardIndex < 0 ? 'placeholder' : '' }}">{{ hazardIndex >= 0 ? hazardLabels[hazardIndex] : '请选择待整改隐患' }}</view>
+      </picker>
+    </view>
+
+    <view class="form-item">
+      <view class="field-row">
+        <text class="field-label"><text class="required">*</text>现场定位</text>
+        <button class="loc-btn" size="mini" bindtap="getLocation">{{ location ? '重新定位' : '获取定位' }}</button>
+      </view>
+      <view wx:if="{{ location }}" class="muted">经度 {{ location.longitude }}，纬度 {{ location.latitude }}</view>
+    </view>
+
+    <view class="form-item">
+      <text class="field-label"><text class="required">*</text>照片/视频（{{ media.length }}）</text>
+      <view class="media-grid">
+        <view wx:for="{{ media }}" wx:key="index" class="media-cell">
+          <image wx:if="{{ item.kind === 'photo' }}" class="media-img" src="{{ item.path }}" mode="aspectFill" />
+          <video wx:else class="media-img" src="{{ item.path }}" />
+          <view class="media-del" data-index="{{ index }}" catchtap="removeMedia">×</view>
+          <view class="media-idx">第{{ index + 1 }}个</view>
+        </view>
+        <view class="media-cell media-add" bindtap="chooseMedia"><text class="add-plus">＋</text><text class="add-text">拍照/录视频</text></view>
+      </view>
+    </view>
+
+    <!-- 日常巡查：隐患声明 -->
+    <block wx:if="{{ typeIndex === 0 }}">
+      <view class="form-item">
+        <view class="field-row">
+          <text class="field-label">本次巡查是否有隐患</text>
+          <switch checked="{{ hasHazard }}" bindchange="onHasHazard" color="#2f806b" />
+        </view>
+      </view>
+
+      <block wx:if="{{ hasHazard }}">
+        <view class="form-item">
+          <text class="field-label"><text class="required">*</text>隐患描述</text>
+          <textarea class="textarea" data-field="hazardDesc" value="{{ hazardDesc }}" bindinput="onInput" placeholder="违规施工、超范围施工等现场情况" maxlength="2000" />
+        </view>
+        <view class="form-item">
+          <text class="field-label">隐患类型</text>
+          <picker mode="selector" range="{{ hazardTypeLabels }}" value="{{ hazardTypeIndex }}" bindchange="onHazardTypeChange">
+            <view class="picker-value {{ hazardTypeIndex < 0 ? 'placeholder' : '' }}">{{ hazardTypeIndex >= 0 ? hazardTypeLabels[hazardTypeIndex] : '请选择类型' }}</view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <text class="field-label">风险等级</text>
+          <picker mode="selector" range="{{ riskLabels }}" value="{{ riskIndex }}" bindchange="onRiskChange">
+            <view class="picker-value {{ riskIndex < 0 ? 'placeholder' : '' }}">{{ riskIndex >= 0 ? riskLabels[riskIndex] : '请选择等级' }}</view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <text class="field-label">隐患截图（圈注，选填）</text>
+          <view class="shot-grid">
+            <view wx:for="{{ shots }}" wx:key="index" class="shot-cell">
+              <image class="shot-img" src="{{ item }}" mode="aspectFill" />
+              <view class="media-del" data-index="{{ index }}" catchtap="removeShot">×</view>
+            </view>
+            <view class="shot-cell shot-add" bindtap="chooseShots"><text class="add-plus">＋</text></view>
+          </view>
+        </view>
+      </block>
+    </block>
+
+    <view class="form-item">
+      <text class="field-label">备注</text>
+      <textarea class="textarea" value="{{ note }}" bindinput="onNote" placeholder="现场情况说明（选填）" maxlength="1000" />
+    </view>
+
+    <view class="form-item" wx:if="{{ typeIndex === 1 }}">
+      <switch checked="{{ submitReview }}" bindchange="onSubmitReview" color="#2f806b" />
+      <text class="switch-label">整改完成，提交复核</text>
+    </view>
+  </view>
+
+  <button class="btn-primary submit-btn" disabled="{{ submitting }}" bindtap="submit">{{ submitting ? '上报中…' : '提交上报' }}</button>
+</view>

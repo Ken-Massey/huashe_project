@@ -1,0 +1,34 @@
+.head-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12rpx; }
+.task-no { font-family: Consolas, monospace; font-size: 32rpx; font-weight: 600; color: #246f5d; }
+.task-name { font-size: 32rpx; font-weight: 600; margin-bottom: 12rpx; }
+.info-row { display: flex; margin-bottom: 12rpx; font-size: 28rpx; color: #4a5450; }
+.info-label { flex: 0 0 140rpx; color: #9aa5a1; }
+.section-title { font-size: 30rpx; font-weight: 600; margin-bottom: 16rpx; }
+
+.hazard-item { border: 1rpx solid #e3e7e6; border-radius: 8rpx; padding: 16rpx; margin-bottom: 14rpx; }
+.hazard-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12rpx; }
+.hazard-desc { font-weight: 600; color: #202725; }
+.hazard-meta { color: #7c8783; font-size: 24rpx; margin: 8rpx 0; }
+.hazard-req { color: #4a5450; font-size: 26rpx; margin-top: 6rpx; }
+.mini-btn { margin: 12rpx 0 0; background: #e8f2ee; color: #2f806b; }
+
+.tl-item { border-left: 4rpx solid #cfe3db; padding-left: 16rpx; margin-bottom: 22rpx; }
+.tl-head { display: flex; align-items: center; gap: 10rpx; flex-wrap: wrap; margin-bottom: 8rpx; }
+.hazard-block { margin-top: 12rpx; padding: 12rpx; background: #faf7f7; border: 1rpx solid #f3e0e0; border-radius: 8rpx; }
+.hazard-meta { display: flex; align-items: center; gap: 8rpx; flex-wrap: wrap; margin-bottom: 8rpx; }
+.hazard-ops { display: flex; align-items: center; gap: 16rpx; margin-top: 8rpx; }
+.link-btn { color: #2f806b; font-size: 24rpx; }
+.link-btn.danger { color: #f56c6c; }
+.shot-grid { display: flex; gap: 12rpx; flex-wrap: wrap; margin: 8rpx 0; }
+.shot-img { width: 140rpx; height: 140rpx; border-radius: 8rpx; background: #eef2f0; }
+.record-item { border-left: 4rpx solid #cfe3db; padding-left: 16rpx; margin-bottom: 20rpx; }
+.record-head { display: flex; align-items: center; gap: 12rpx; }
+.record-note { color: #4a5450; margin: 8rpx 0; }
+.media-grid { display: flex; gap: 12rpx; flex-wrap: wrap; margin-top: 8rpx; }
+.media-img { width: 160rpx; height: 160rpx; border-radius: 8rpx; background: #eef2f0; }
+.media-cell-wrap { position: relative; }
+.hazard-badge { position: absolute; top: 6rpx; right: 6rpx; padding: 2rpx 10rpx; border-radius: 20rpx; background: #f56c6c; color: #fff; font-size: 20rpx; }
+
+.actions { display: flex; gap: 20rpx; margin-top: 20rpx; }
+.actions button { flex: 1; }
+.btn-outline { background: #fff; color: #2f806b; border: 1rpx solid #2f806b; }

@@ -34,6 +34,10 @@ PROJECT_ARCHIVE_ROOT = RUNTIME_ROOT / "project_archive"
 PROJECT_ARCHIVE_DB = PROJECT_ARCHIVE_ROOT / "project_archive.sqlite3"
 AUDIT_SESSION_ROOT = RUNTIME_ROOT / "audit_sessions"
 AUDIT_SESSION_DB = AUDIT_SESSION_ROOT / "audit_sessions.sqlite3"
+PATROL_ROOT = RUNTIME_ROOT / "patrol"
+PATROL_DB = PATROL_ROOT / "patrol.sqlite3"
+PATROL_UPLOAD_ROOT = PATROL_ROOT / "uploads"
+PATROL_DEV_TOKEN = os.getenv("PATROL_DEV_TOKEN", "huashe-patrol-dev-2026")
 CASE_ADVICE_DATABASE = Path(
     os.getenv("CASE_ADVICE_DATABASE", WORKSPACE_ROOT / "deepke_case_extract" / "data" / "case_advice_database.json")
 ).resolve()
@@ -56,6 +60,7 @@ MINERU_ALLOW_LEGACY_OCR = os.getenv("MINERU_ALLOW_LEGACY_OCR", "false").strip().
 for folder in (
     RUNTIME_ROOT, UPLOAD_ROOT, RESULT_ROOT, TASK_ROOT, KNOWLEDGE_ROOT,
     KNOWLEDGE_FILE_ROOT, REGULATION_FILE_ROOT, PROJECT_ARCHIVE_ROOT, AUDIT_SESSION_ROOT,
+    PATROL_ROOT, PATROL_UPLOAD_ROOT,
     MINERU_CACHE_ROOT,
 ):
     folder.mkdir(parents=True, exist_ok=True)

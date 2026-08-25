@@ -1,0 +1,16 @@
+.form-item { margin-bottom: 28rpx; }
+.form-item:last-child { margin-bottom: 0; }
+.field-label { display: block; margin-bottom: 12rpx; color: #4a5450; font-size: 26rpx; }
+.required { color: #f56c6c; margin-right: 4rpx; }
+.textarea, .input { width: 100%; box-sizing: border-box; padding: 18rpx 20rpx; border: 1rpx solid #e3e7e6; border-radius: 8rpx; background: #fbfcfc; font-size: 28rpx; }
+.textarea { min-height: 140rpx; }
+.picker-value { padding: 18rpx 20rpx; border: 1rpx solid #e3e7e6; border-radius: 8rpx; background: #fbfcfc; font-size: 28rpx; }
+.picker-value.placeholder { color: #9aa5a1; }
+
+.shot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14rpx; }
+.shot-cell { position: relative; height: 160rpx; border-radius: 8rpx; overflow: hidden; }
+.shot-img { width: 100%; height: 100%; }
+.shot-del { position: absolute; top: 0; right: 0; width: 44rpx; height: 44rpx; line-height: 40rpx; text-align: center; background: rgba(0,0,0,.55); color: #fff; font-size: 32rpx; border-bottom-left-radius: 8rpx; }
+.shot-add { display: flex; align-items: center; justify-content: center; background: #f0f4f2; border: 1rpx dashed #b9c6c1; color: #7c8783; }
+.add-plus { font-size: 52rpx; line-height: 1; }
+.submit-btn { margin-top: 30rpx; }
