@@ -233,24 +233,34 @@
                   </div>
                   <div class="location-input-grid">
                     <el-form-item label="位置描述">
-                      <el-autocomplete
-                        v-model.trim="form.location"
-                        class="location-search-input"
-                        value-key="value"
-                        clearable
-                        :fetch-suggestions="queryLocationSuggestions"
-                        :trigger-on-focus="false"
-                        placeholder="例如：南京市建邺区江心洲"
-                        @select="locationSuggestionSelected"
-                        @change="locationChanged"
-                      >
-                        <template slot-scope="{ item }">
-                          <div class="location-suggestion">
+                      <div class="location-search-wrap">
+                        <el-input
+                          v-model.trim="form.location"
+                          class="location-search-input"
+                          clearable
+                          placeholder="例如：南京市建邺区江心洲"
+                          @input="locationInputChanged"
+                          @focus="showLocationSuggestions"
+                          @change="locationChanged"
+                          @clear="clearProjectLocation"
+                        />
+                        <div
+                          v-if="locationSuggestionsVisible"
+                          v-loading="locationSuggestionLoading"
+                          class="location-suggestion-panel"
+                        >
+                          <div
+                            v-for="item in locationCandidates"
+                            :key="`${item.name}-${item.address}-${item.longitude}-${item.latitude}`"
+                            class="location-suggestion"
+                            @mousedown.prevent="locationSuggestionSelected(item)"
+                          >
                             <strong>{{ item.name }}</strong>
                             <span>{{ item.address }}</span>
                           </div>
-                        </template>
-                      </el-autocomplete>
+                          <div v-if="!locationSuggestionLoading && !locationCandidates.length" class="location-suggestion-empty">未找到匹配位置，请补充区县或道路名称</div>
+                        </div>
+                      </div>
                     </el-form-item>
                     <el-form-item label="经度">
                       <el-input v-model.trim="form.longitude" type="number" placeholder="点击地图自动填入" @change="projectCoordinateChanged" />
@@ -668,11 +678,19 @@ export default {
       selectedNearbyProjectIds: [],
       nearbyLoading: false,
       amap: null,
+      amapContainerEl: null,
       amapMarker: null,
       amapLoadingPromise: null,
       amapGeocoder: null,
       amapPlaceSearch: null,
       autoLocating: false,
+      locationManuallyCleared: false,
+      locationSelecting: false,
+      locationSearchSequence: 0,
+      locationCandidates: [],
+      locationSuggestionsVisible: false,
+      locationSuggestionLoading: false,
+      locationInputTimer: null,
       projectNameLookupTimer: null,
       form: defaultForm(), stageSelection: '', customStageName: '', landUseSelection: '',
       stageChoices: [
@@ -942,7 +960,9 @@ export default {
   },
   beforeDestroy() {
     if (this.projectNameLookupTimer) clearTimeout(this.projectNameLookupTimer)
+    if (this.locationInputTimer) clearTimeout(this.locationInputTimer)
     this.stopAuditPolling()
+    if (this.amap && this.amap.destroy) this.amap.destroy()
     this.saveAuditDraft()
   },
   methods: {
@@ -1049,8 +1069,14 @@ export default {
         const AMap = await this.loadAmapScript()
         if (!AMap || !this.$refs.amapContainer) return
         const current = this.currentLngLat()
+        if (this.amap && this.amapContainerEl !== this.$refs.amapContainer) {
+          if (this.amap.destroy) this.amap.destroy()
+          this.amap = null
+          this.amapMarker = null
+        }
         if (!this.amap) {
           const tileLayer = AMap.TileLayer ? new AMap.TileLayer() : undefined
+          this.amapContainerEl = this.$refs.amapContainer
           this.amap = new AMap.Map(this.$refs.amapContainer, {
             zoom: 12,
             center: current || [118.7969, 32.0603],
@@ -1072,19 +1098,24 @@ export default {
         } else {
           this.amap.setZoomAndCenter(12, [118.7969, 32.0603])
         }
+        this.refreshAmapLayout()
+      } catch (error) {
+        this.$message.warning('高德地图加载失败，可先手动填写经纬度')
+      }
+    },
+    refreshAmapLayout() {
+      ;[80, 240, 600].forEach(delay => {
         setTimeout(() => {
           if (!this.amap) return
           this.amap.resize()
           const current = this.currentLngLat()
           if (current) {
-            this.amap.setCenter(current)
+            this.amap.setZoomAndCenter(this.amap.getZoom ? this.amap.getZoom() : 12, current)
           } else {
             this.amap.setZoomAndCenter(12, [118.7969, 32.0603])
           }
-        }, 160)
-      } catch (error) {
-        this.$message.warning('高德地图加载失败，可先手动填写经纬度')
-      }
+        }, delay)
+      })
     },
     getAmapGeocoder(AMap) {
       if (this.amapGeocoder) return Promise.resolve(this.amapGeocoder)
@@ -1149,11 +1180,47 @@ export default {
     queryLocationSuggestions(queryString, callback) {
       this.searchLocationCandidates(queryString).then(rows => callback(rows))
     },
+    showLocationSuggestions() {
+      if (this.locationCandidates.length) this.locationSuggestionsVisible = true
+    },
+    locationInputChanged(value) {
+      if (this.locationInputTimer) clearTimeout(this.locationInputTimer)
+      const text = String(value || '').trim()
+      if (!text) {
+        this.clearProjectLocation()
+        return
+      }
+      this.locationManuallyCleared = false
+      this.locationSelecting = false
+      this.locationSuggestionsVisible = true
+      this.locationSuggestionLoading = true
+      const searchSequence = ++this.locationSearchSequence
+      this.locationInputTimer = setTimeout(() => {
+        this.searchLocationCandidates(text).then(rows => {
+          if (searchSequence !== this.locationSearchSequence || this.locationSelecting) return
+          this.locationCandidates = rows
+          this.locationSuggestionsVisible = true
+        }).finally(() => {
+          if (searchSequence === this.locationSearchSequence) this.locationSuggestionLoading = false
+        })
+      }, 260)
+    },
     locationSuggestionSelected(item) {
       if (!item) return
+      this.locationSearchSequence += 1
+      this.locationSelecting = true
+      this.locationManuallyCleared = false
+      this.locationCandidates = []
+      this.locationSuggestionsVisible = false
+      this.locationSuggestionLoading = false
       this.form.location = item.value || item.name || this.form.location
       this.setProjectCoordinate(item.longitude, item.latitude, true)
       this.saveAuditDraft()
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.locationSelecting = false
+        }, 200)
+      })
     },
     geocodeAddress(address) {
       const text = String(address || '').trim()
@@ -1181,6 +1248,7 @@ export default {
       if (this.autoLocating) return Promise.resolve(null)
       if (!force && this.currentLngLat()) return Promise.resolve(null)
       const rawLocation = String(this.form.location || '').trim()
+      if (!force && this.locationManuallyCleared && !rawLocation) return Promise.resolve(null)
       const rawProjectName = String(this.form.project_name || '').trim()
       const keyword = rawLocation || rawProjectName
       if (!keyword) return Promise.resolve(null)
@@ -1210,6 +1278,7 @@ export default {
       const lng = Number(longitude)
       const lat = Number(latitude)
       if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
+      this.locationManuallyCleared = false
       this.form.longitude = Number(lng.toFixed(6))
       this.form.latitude = Number(lat.toFixed(6))
       this.syncAmapMarker()
@@ -1217,14 +1286,44 @@ export default {
       if (refresh) this.refreshNearbyProjects()
     },
     projectCoordinateChanged() {
+      if (this.currentLngLat()) this.locationManuallyCleared = false
       this.syncAmapMarker()
       this.refreshNearbyProjects()
       this.saveAuditDraft()
     },
-    locationChanged() {
+    clearProjectLocation() {
+      this.locationSearchSequence += 1
+      this.locationSelecting = false
+      this.locationCandidates = []
+      this.locationSuggestionsVisible = false
+      this.locationSuggestionLoading = false
+      if (this.locationInputTimer) clearTimeout(this.locationInputTimer)
+      this.locationManuallyCleared = true
+      this.form.location = ''
       this.form.longitude = null
       this.form.latitude = null
-      this.searchLocationCandidates(this.form.location).then(rows => {
+      this.nearbyProjects = []
+      this.selectedNearbyProjectIds = []
+      this.syncAmapMarker()
+      this.saveAuditDraft()
+    },
+    locationChanged() {
+      if (this.locationSelecting) return
+      const locationText = String(this.form.location || '').trim()
+      if (!locationText) {
+        this.clearProjectLocation()
+        return
+      }
+      setTimeout(() => {
+        this.locationSuggestionsVisible = false
+      }, 180)
+      if (this.locationCandidates.length) return
+      const searchSequence = ++this.locationSearchSequence
+      this.locationManuallyCleared = false
+      this.form.longitude = null
+      this.form.latitude = null
+      this.searchLocationCandidates(locationText).then(rows => {
+        if (searchSequence !== this.locationSearchSequence || this.locationSelecting) return
         if (rows.length) {
           this.locationSuggestionSelected(rows[0])
           return
@@ -1617,9 +1716,9 @@ export default {
         if (sequence !== this.archiveLookupSequence) return
         this.selectedArchiveProjectId = project.project_id
         this.selectedArchiveProject = project
-        if (project.location && !this.form.location) this.form.location = project.location
-        if (project.longitude !== null && project.longitude !== undefined && !this.form.longitude) this.form.longitude = project.longitude
-        if (project.latitude !== null && project.latitude !== undefined && !this.form.latitude) this.form.latitude = project.latitude
+        if (!this.locationManuallyCleared && project.location && !this.form.location) this.form.location = project.location
+        if (!this.locationManuallyCleared && project.longitude !== null && project.longitude !== undefined && !this.form.longitude) this.form.longitude = project.longitude
+        if (!this.locationManuallyCleared && project.latitude !== null && project.latitude !== undefined && !this.form.latitude) this.form.latitude = project.latitude
         this.syncAmapMarker()
         if (!this.currentLngLat()) {
           await this.autoLocateProject(false)
@@ -2779,10 +2878,15 @@ export default {
 .location-input-grid ::v-deep .el-form-item { margin-bottom: 10px; }
 .location-input-grid ::v-deep .el-form-item__label { float: none; display: block; width: auto !important; padding: 0 0 4px; line-height: 20px; text-align: left; }
 .location-input-grid ::v-deep .el-form-item__content { margin-left: 0 !important; }
+.location-search-wrap { position: relative; width: 100%; }
 .location-search-input { width: 100%; }
-.location-suggestion { display: flex; min-width: 0; flex-direction: column; gap: 2px; line-height: 1.35; padding: 4px 0; }
+.location-search-popper { z-index: 4000 !important; }
+.location-suggestion-panel { position: absolute; top: calc(100% + 4px); right: 0; left: 0; z-index: 4200; max-height: 236px; overflow-y: auto; border: 1px solid #dce5e1; border-radius: 6px; background: #fff; box-shadow: 0 10px 28px rgba(30, 55, 48, .16); }
+.location-suggestion { display: flex; min-width: 0; flex-direction: column; gap: 2px; line-height: 1.35; padding: 8px 12px; cursor: pointer; }
+.location-suggestion:hover { background: #f3f8f6; }
 .location-suggestion strong { overflow: hidden; color: #1f2f2b; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .location-suggestion span { overflow: hidden; color: #7a8581; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.location-suggestion-empty { padding: 12px; color: #8a9490; font-size: 13px; }
 .amap-container { width: 100%; height: 260px; overflow: hidden; border: 1px solid #dce5e1; border-radius: 8px; background: #eef4f1; }
 .amap-fallback { display: flex; min-height: 92px; align-items: center; justify-content: center; border: 1px dashed #bfd1cb; border-radius: 8px; background: #f6fbf9; color: #65746f; line-height: 1.7; text-align: center; }
 .nearby-project-box { margin-top: 12px; }
