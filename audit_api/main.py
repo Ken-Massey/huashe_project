@@ -6,7 +6,7 @@ import json
 import logging
 import mimetypes
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
 from pathlib import Path
 from typing import Any, Literal
 
@@ -346,7 +346,11 @@ def _resolve_archive_context(binding: Any) -> dict[str, Any] | None:
 async def _save_upload(upload: UploadFile, task_type: str, allowed: set[str]) -> Path:
     suffix = Path(upload.filename or "").suffix.lower()
     if suffix not in allowed:
-        raise HTTPException(status_code=415, detail=f"{task_type}涓嶆敮鎸佹枃浠剁被鍨嬶細{suffix or '鏃犳墿灞曞悕'}")
+        allowed_text = "、".join(sorted(allowed))
+        raise HTTPException(
+            status_code=415,
+            detail=f"{task_type}不支持文件类型：{suffix or '无扩展名'}；请上传 {allowed_text}",
+        )
     upload_id = hashlib.sha256(f"{task_type}:{upload.filename}:{id(upload)}".encode()).hexdigest()[:20]
     folder = UPLOAD_ROOT / upload_id
     folder.mkdir(parents=True, exist_ok=False)
@@ -616,6 +620,120 @@ def _extract_manual_context(result: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _flatten_text_for_profile(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, default=str)
+    except TypeError:
+        return str(value)
+
+
+def _infer_review_profile_from_text(value: Any) -> str:
+    text = _flatten_text_for_profile(value)
+    if not text:
+        return ""
+    normalized = re.sub(r"\s+", "", text)
+    if re.search(r"(施工组织设计|专项施工方案|施工方案|桩基和支护施工方案|基坑支护施工)", normalized):
+        return "construction_scheme"
+    if re.search(r"(安全评估报告|安全影响评估|安全性影响评估|安全专项评估|专项评估报告|预评估报告|评估咨询项目)", normalized):
+        return "safety_assessment_report"
+    if re.search(r"(设计方案|方案设计|设计文件|设计资料)", normalized):
+        return "design_scheme"
+    return ""
+
+
+def _infer_review_profile_from_result(result: dict[str, Any]) -> str:
+    context = _extract_manual_context(result)
+    priority_parts: list[Any] = [
+        context.get("uploaded_documents") if isinstance(context, dict) else None,
+        context.get("incoming_letter_name") if isinstance(context, dict) else None,
+        context.get("rerun_context") if isinstance(context, dict) else None,
+        result.get("source_files"),
+        result.get("file_name"),
+        result.get("filename"),
+    ]
+    for part in priority_parts:
+        profile = _infer_review_profile_from_text(part)
+        if profile:
+            return profile
+    fallback = {
+        key: result.get(key)
+        for key in (
+            "project_name",
+            "project_stage",
+            "stage",
+            "task_type",
+            "archive_binding",
+            "audit_summary",
+            "advice_summary",
+        )
+    }
+    return _infer_review_profile_from_text(fallback)
+
+
+def _review_profile_style_instruction(profile: str) -> str:
+    if profile == "safety_assessment_report":
+        return (
+            "本次资料识别为安全评估报告或安全影响评估类文件。分条意见应模仿专家评审意见口吻，"
+            "常用动词必须以“核实、建议、完善、确定、提出合理设计及施工要求”为主，"
+            "不要用“补充”作为标题或正文的主导动词；涉及资料不足时，应改写为“核实……合理性”“完善……要求”“建议明确……”。"
+            "意见重点围绕地铁现状调查、变形控制指标限值、钻孔灌注桩穿越软弱土层工况、止水帷幕和降水井可控性、基坑稳定性计算等。"
+            "句式可采用“针对……，核实……合理性”“基于……条件，核实……可控性，建议……”“完善……计算要求，建议……”。"
+        )
+    if profile == "design_scheme":
+        return (
+            "本次资料识别为设计方案类文件。分条意见应体现方案设计审查口吻，"
+            "常用动词以“完善、优化、核实、明确、细化、做好”为主。"
+            "意见重点围绕围护结构设计、止水帷幕工艺及技术参数、坑底或裙边加固、施工时序设计、栈桥和出土口布设、全工况对地铁安全影响分析、基坑与地铁保护监测信息共享等。"
+            "句式可采用“完善……设计措施，细化……技术参数”“优化……布设位置，明确……设计要求”“核实……安全影响分析，必要时……”。"
+        )
+    if profile == "construction_scheme":
+        return (
+            "本次资料识别为施工方案类文件。分条意见应落到明确施工部位、施工工序、施工参数、现场组织和协同管理，"
+            "常用动词以“补充、优化、建议、协同、协调、明确、采取、严禁、确保”为主。"
+            "意见重点围绕现状调查、施工平面布置、隔离桩或围护桩、止水帷幕、坑底加固、钻孔桩施工时序、护筒设置和拔除、降水与止水有效性检验、监测内容控制标准和报警值等。"
+            "句式可采用“补充……现状调查”“优化……施工平面布置，严禁……”“协调设计、安评单位明确……”“采取……措施，确保……”。"
+        )
+    return ""
+
+
+def _session_review_profile(session: dict[str, Any]) -> str:
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    profile = str(metadata.get("review_profile") or "")
+    if profile:
+        return profile
+    return _infer_review_profile_from_text({
+        "metadata": metadata,
+        "items": session.get("items") or [],
+        "latest_result": session.get("latest_result") or {},
+    })
+
+
+def _apply_review_profile_wording(items: list[dict[str, Any]], profile: str) -> list[dict[str, Any]]:
+    if profile != "safety_assessment_report":
+        return items
+    replacements = (
+        ("补充完善", "完善"),
+        ("需补充", "需核实并完善"),
+        ("应补充", "应核实并完善"),
+        ("请补充", "请核实并完善"),
+        ("补充", "完善"),
+    )
+    normalized: list[dict[str, Any]] = []
+    for item in items:
+        copied = dict(item)
+        for key in ("title", "conclusion", "recommendation"):
+            text = str(copied.get(key) or "")
+            for old, new in replacements:
+                text = text.replace(old, new)
+            copied[key] = text
+        normalized.append(copied)
+    return normalized
+
+
 def _same_upload_data_consistency_item(context: dict[str, Any]) -> dict[str, Any] | None:
     documents = context.get("uploaded_documents") if isinstance(context, dict) else []
     if not isinstance(documents, list) or len(documents) < 2:
@@ -842,6 +960,7 @@ def _extract_action_opinion(value: dict[str, Any]) -> tuple[str, str]:
 
 REVIEW_ITEM_TARGET_COUNT = 5
 REVIEW_ITEM_MAX_COUNT = 6
+REVIEW_ITEM_AI_POLISH_TIMEOUT_SECONDS = 45
 
 
 def _review_item_risk_score(value: Any) -> int:
@@ -1072,11 +1191,14 @@ def _ai_expand_review_items(result: dict[str, Any], items: list[dict[str, Any]])
     """Use the LLM to turn selected findings into formal, regulation-based review opinions."""
     if not items:
         return items
+    review_profile = _infer_review_profile_from_result(result)
+    profile_style = _review_profile_style_instruction(review_profile)
     context = {
         "project_name": ((result.get("archive_binding") or {}).get("project_name") or result.get("project_name") or ""),
         "stage_name": ((result.get("archive_binding") or {}).get("stage_name") or result.get("project_stage") or ""),
         "audit_summary": result.get("audit_summary") or result.get("summary") or "",
         "risk_level": result.get("risk_level") or "",
+        "review_profile": review_profile,
         "items": [_public_review_item(item) for item in items],
     }
     system = (
@@ -1086,6 +1208,7 @@ def _ai_expand_review_items(result: dict[str, Any], items: list[dict[str, Any]])
         "不要写“符合要求、满足要求、风险可控、已落实、低于限值、严于规范”等评价性结论。"
         "每条意见应按技术规程审核逻辑展开，约100至200个汉字，避免一句话过短；应说明缺少/需明确的资料、对应安全控制或复核要求。"
         "只保留5至6条最主要意见，优先保留高风险、资料缺失、净距/保护区、地下水/地质、变形控制、监测和报审要求。"
+        f"{profile_style}"
         "只输出JSON，不要输出Markdown。"
     )
     prompt = (
@@ -1094,13 +1217,22 @@ def _ai_expand_review_items(result: dict[str, Any], items: list[dict[str, Any]])
         "要求：items必须是完整最新版审核意见列表，数量5至6条；如果候选不足5条，可在不编造数值的前提下，根据资料缺失、规范复核、监测控制、报审要求等方向补足。"
     )
     try:
-        value = agent.complete_json(system, prompt, max_tokens=5200)
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="review-polish")
+        future = executor.submit(agent.complete_json, system, prompt, max_tokens=5200)
+        try:
+            value = future.result(timeout=REVIEW_ITEM_AI_POLISH_TIMEOUT_SECONDS)
+        except FutureTimeoutError:
+            future.cancel()
+            raise TimeoutError("AI审核意见润色超时，已使用基础审核意见兜底。")
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
         expanded = _sanitize_review_items(value, items)
+        expanded = _apply_review_profile_wording(expanded, review_profile)
         if len(expanded) >= min(len(items), REVIEW_ITEM_TARGET_COUNT):
             return _select_key_review_items(expanded, REVIEW_ITEM_MAX_COUNT)
     except Exception as exc:
         LOGGER.warning("AI failed to expand review items: %s", exc)
-    return _select_key_review_items(items, REVIEW_ITEM_MAX_COUNT)
+    return _select_key_review_items(_apply_review_profile_wording(items, review_profile), REVIEW_ITEM_MAX_COUNT)
 
 
 def _attach_audit_session(
@@ -1119,6 +1251,14 @@ def _attach_audit_session(
         items = _select_key_review_items(consistency_items + items, REVIEW_ITEM_MAX_COUNT)
     items = _ai_expand_review_items(result, items)
     overall_opinion = _build_overall_review_item(result, items)
+    review_profile = _infer_review_profile_from_result(result)
+    manual_context = _extract_manual_context(result)
+    uploaded_documents = manual_context.get("uploaded_documents") if isinstance(manual_context, dict) else []
+    if not isinstance(uploaded_documents, list):
+        uploaded_documents = []
+    source_files = result.get("source_files")
+    if not isinstance(source_files, list):
+        source_files = []
     session = audit_sessions.create_session({
         "source_task_id": task_id,
         "project_id": project.get("project_id") or "",
@@ -1130,6 +1270,9 @@ def _attach_audit_session(
             "stage_name": stage.get("stage_name") or "",
             "archive_binding": result.get("archive_binding") or {},
             "overall_opinion": overall_opinion,
+            "review_profile": review_profile,
+            "uploaded_documents": uploaded_documents,
+            "source_files": source_files,
         },
         "items": items,
         "initial_message": "已完成第一版审核结果，可以继续增删改每一条审核意见。",
@@ -1573,6 +1716,8 @@ def _ai_rewrite_review_items(
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
     current_items = [_public_review_item(item) for item in session.get("items") or []]
     current_overall = (session.get("metadata") or {}).get("overall_opinion") or {}
+    review_profile = _session_review_profile(session)
+    profile_style = _review_profile_style_instruction(review_profile)
     system = (
         "你是轨道交通保护区审核结果编辑助手。你的任务是根据用户指令，对上一版审核结果逐条进行增删改。"
         "必须严格基于现有审核条目和用户明确指令，不得编造工程数值、距离、地质条件、规范名称或事实。"
@@ -1587,11 +1732,13 @@ def _ai_rewrite_review_items(
         "风险、缺陷、资料缺失、超限、需修改等负面内容统一放入分条意见，不得堆在综合评价中。"
         "不要把综合评价或综合意见作为items中的一条审核意见；items只保留逐条具体意见。"
         "公式和变量必须写成中文工程表达，例如“渗透系数K值”“抗突涌安全系数Fs不小于1.05”，不得输出$、\\geq、下标或LaTeX格式。"
+        f"{profile_style}"
         "只输出JSON，不要输出Markdown。"
     )
     ctx = json.dumps({
         "version_no": session.get("current_version"),
         "overall_opinion": current_overall,
+        "review_profile": review_profile,
         "items": current_items,
     }, ensure_ascii=False)
     prompt = (
@@ -1604,6 +1751,7 @@ def _ai_rewrite_review_items(
     items = _sanitize_review_items(value, current_items)
     items = _merge_partial_review_items(instruction, current_items, items)
     items = _ensure_detail_instruction_applied(instruction, current_items, items)
+    items = _apply_review_profile_wording(items, review_profile)
     overall = _sanitize_overall_opinion(value, current_overall, items)
     reply = "已根据你的指令更新审核结果。"
     if isinstance(value, dict) and value.get("reply"):
@@ -1965,6 +2113,13 @@ def _ensure_archive_record_session(record: dict[str, Any]) -> dict[str, Any]:
         {},
         items,
     )
+    manual_context = _extract_manual_context(result_data)
+    uploaded_documents = manual_context.get("uploaded_documents") if isinstance(manual_context, dict) else []
+    if not isinstance(uploaded_documents, list):
+        uploaded_documents = []
+    source_files = result_data.get("source_files") or record.get("source_files") or []
+    if not isinstance(source_files, list):
+        source_files = []
     project_id = str(record.get("project_id") or "")
     stage_id = str(record.get("stage_id") or "")
     stage: dict[str, Any] = {}
@@ -1985,6 +2140,9 @@ def _ensure_archive_record_session(record: dict[str, Any]) -> dict[str, Any]:
             "stage_name": stage.get("name") or "",
             "overall_opinion": overall,
             "restored_from_archive_audit_id": record.get("audit_id"),
+            "review_profile": _infer_review_profile_from_result(result_data),
+            "uploaded_documents": uploaded_documents,
+            "source_files": source_files,
         },
         "items": items,
         "initial_message": "已从项目档案恢复上一版审核结果，可以继续提问或修改。",
@@ -3186,8 +3344,8 @@ async def create_advice_task(
 
 @app.post("/api/v1/stage2/full/tasks", status_code=202, dependencies=[Depends(verify_service_token)], tags=["stage2"])
 async def create_stage2_full_task(
-    file: Annotated[UploadFile, File(description="鍏堝鏍搞€佸啀鍖归厤寤鸿鐨勬柊鏂规")],
-    options: Annotated[str | None, Form(description="瀹℃牳鍜屽尮閰嶉€夐」JSON")] = None,
+    file: Annotated[UploadFile, File(description="先审核、再匹配建议的新方案")],
+    options: Annotated[str | None, Form(description="审核和匹配选项JSON")] = None,
     attachmentFiles: Annotated[list[UploadFile] | None, File(description="会话中追加的补充附件")] = None,
 ) -> dict[str, Any]:
     option_values = _parse_json(options, "options")
@@ -3195,7 +3353,7 @@ async def create_stage2_full_task(
     archive_context = _resolve_archive_context(option_values.pop("archive_binding", None))
     if archive_context:
         option_values["project_archive_context"] = archive_context
-    source = await _save_upload(file, "绗簩闃舵瀹屾暣澶勭悊", STAGE2_SUFFIXES)
+    source = await _save_upload(file, "完整审核", STAGE2_SUFFIXES)
     attachments = {
         f"attachment_{index}": await _save_upload(attachment, "补充附件", STAGE2_SUFFIXES | ATTACHMENT_SUFFIXES)
         for index, attachment in enumerate(attachmentFiles or [], start=1)

@@ -66,7 +66,14 @@
           </el-tab-pane>
         </el-tabs>
         <div v-if="documents.length" class="document-list">
-          <div v-for="record in documents" :key="record.id" class="document-row">
+          <div
+            v-for="record in documents"
+            :key="record.id"
+            class="document-row"
+            :class="{ 'previewable-document': canPreviewDocument(record) }"
+            :title="documentPreviewTitle(record)"
+            @click="openDocumentPreview(record)"
+          >
             <i :class="record.status === 'failed' ? 'el-icon-warning-outline' : (record.status === 'done' ? 'el-icon-document-checked' : 'el-icon-loading')" />
             <div class="document-name">
               <strong :title="record.file.name">{{ record.file.name }}</strong>
@@ -74,7 +81,7 @@
             </div>
             <el-tag v-if="record.file === letterFile" size="mini" type="success">主函件</el-tag>
             <el-tag v-if="record.file === caseFile" size="mini">主案例</el-tag>
-            <el-select v-model="record.role" size="mini" class="role-select" @change="documentRoleChanged(record)">
+            <el-select v-model="record.role" size="mini" class="role-select" @click.native.stop @change="documentRoleChanged(record)">
               <el-option label="函件" value="letter" />
               <el-option label="案例/方案" value="case" />
               <el-option label="补充附件" value="attachment" />
@@ -84,7 +91,7 @@
               type="text"
               icon="el-icon-close"
               title="移除文件"
-              @click="removeDocument(record)"
+              @click.stop="removeDocument(record)"
             />
           </div>
         </div>
@@ -538,7 +545,9 @@
                   v-for="record in documents"
                   :key="`composer_${record.id}`"
                   class="composer-file-card"
-                  :title="record.file && record.file.name"
+                  :class="{ 'previewable-document': canPreviewDocument(record) }"
+                  :title="documentPreviewTitle(record)"
+                  @click="openDocumentPreview(record)"
                 >
                   <span class="composer-file-icon">{{ fileTypeBadge(record.file && record.file.name) }}</span>
                   <span class="composer-file-meta">
@@ -558,7 +567,7 @@
                     icon="el-icon-close"
                     title="移除文件"
                     :disabled="recognizing || auditSubmitting"
-                    @click="removeDocument(record)"
+                    @click.stop="removeDocument(record)"
                   />
                 </div>
               </div>
@@ -569,7 +578,7 @@
                 :rows="2"
                 maxlength="1000"
                 :disabled="chatSubmitting || auditSubmitting"
-                placeholder="输入“开始审核”发起审核；也可以输入修改意见，或点击右侧上传资料"
+                placeholder="上传文件后可直接回车或点击发送开始审核；如需修改再输入意见"
                 @keydown.native="handleComposerKeydown"
               />
             </div>
@@ -1400,6 +1409,37 @@ export default {
       if (ext === 'txt') return 'TXT'
       return '文件'
     },
+    isPdfFileName(name) {
+      return String(name || '').split('.').pop().toLowerCase() === 'pdf'
+    },
+    canPreviewDocument(record) {
+      return Boolean(record && record.file && !record.restored && this.isPdfFileName(record.file.name))
+    },
+    documentPreviewTitle(record) {
+      if (this.canPreviewDocument(record)) return '点击在新标签页预览 PDF'
+      if (record && record.restored) return '这是历史文件记录，需重新选择原文件后才能预览'
+      return '当前文件类型暂不支持网页预览'
+    },
+    openDocumentPreview(record) {
+      if (!record || !record.file) return
+      if (record.restored) {
+        this.$message.info('这是项目档案中的历史文件记录，需重新选择原文件后才能预览')
+        return
+      }
+      if (!this.isPdfFileName(record.file.name)) {
+        this.$message.info('当前仅支持 PDF 文件在新标签页预览')
+        return
+      }
+      const previewUrl = URL.createObjectURL(record.file)
+      const previewWindow = window.open(previewUrl, '_blank')
+      if (!previewWindow) {
+        URL.revokeObjectURL(previewUrl)
+        this.$message.warning('浏览器拦截了新标签页，请允许弹窗后再试')
+        return
+      }
+      previewWindow.opener = null
+      setTimeout(() => URL.revokeObjectURL(previewUrl), 60 * 1000)
+    },
     formatFileSize(size) {
       const value = Number(size || 0)
       if (!value) return '未知大小'
@@ -1506,6 +1546,55 @@ export default {
     isUploadableDocument(item) {
       return Boolean(item && item.file && !item.restored)
     },
+    restoredDocumentRecord(item, index, prefix = 'route_restored') {
+      if (!item || typeof item !== 'object') return null
+      const name = item.name || item.file_name || item.filename || item.originalName || item.document_name || item.document_title
+      if (!name) return null
+      const rawRole = item.role || (item.is_primary ? 'case' : 'attachment')
+      const role = rawRole === 'primary' ? 'case' : (['letter', 'case', 'attachment'].includes(rawRole) ? rawRole : 'attachment')
+      const safeName = String(name)
+      const safeId = safeName.replace(/[^\w\u4e00-\u9fa5]+/g, '_')
+      return {
+        id: item.id || item.file_id || `${prefix}_${index}_${safeId}`,
+        file: {
+          name: safeName,
+          size: Number(item.size || item.file_size || 0),
+          type: item.type || this.mimeTypeByName(safeName),
+          lastModified: 0
+        },
+        restored: true,
+        role,
+        status: item.status || 'done',
+        message: item.message || '项目档案中的历史文件记录；如需重新审核请重新选择文件',
+        confidence: item.confidence || null,
+        fields: item.fields || {},
+        textPreview: item.text_excerpt || item.textPreview || ''
+      }
+    },
+    restoredDocumentsFromSession(session = {}) {
+      const metadata = session.metadata || {}
+      const latest = session.latest_result || {}
+      const projectData = latest.project_data || {}
+      const contexts = [
+        metadata,
+        latest.manual_context_for_consistency,
+        latest.manual_context,
+        projectData.form_data,
+        latest
+      ].filter(item => item && typeof item === 'object')
+      const candidates = []
+      contexts.forEach(context => {
+        if (Array.isArray(context.uploaded_documents)) candidates.push(...context.uploaded_documents)
+        if (Array.isArray(context.source_files)) candidates.push(...context.source_files)
+      })
+      return candidates
+        .map((item, index) => this.restoredDocumentRecord(item, index))
+        .filter(Boolean)
+        .filter((record, index, records) => {
+          const key = `${record.role}|${record.file.name}|${record.file.size || 0}`
+          return records.findIndex(item => `${item.role}|${item.file.name}|${item.file.size || 0}` === key) === index
+        })
+    },
     scrollToResultPanel() {
       this.$nextTick(() => {
         const panel = this.$el && this.$el.querySelector('.result-panel')
@@ -1599,9 +1688,9 @@ export default {
         this.auditSession = draft.auditSession || null
         this.reviewItems = draft.reviewItems || []
         this.conflictSelections = draft.conflictSelections || {}
-          this.chatMessages = this.auditSession
-            ? this.ensureSnapshotMessages({ ...this.auditSession, items: this.reviewItems, messages: draft.chatMessages || [] }, this.auditResult || {}, draft.chatMessages || [])
-            : (draft.chatMessages || [])
+        this.chatMessages = this.auditSession
+          ? this.ensureSnapshotMessages({ ...this.auditSession, items: this.reviewItems, messages: draft.chatMessages || [] }, this.auditResult || {}, draft.chatMessages || [])
+          : (draft.chatMessages || [])
         this.baselineAuditSignature = draft.baselineAuditSignature || ''
         this.documents = (draft.documentSummaries || []).map((item, index) => ({
           id: item.id || `restored_${index}`,
@@ -1662,6 +1751,8 @@ export default {
           latest_result: session.latest_result || {}
         }
         this.chatMessages = this.ensureSnapshotMessages(session, this.auditResult, session.messages || [])
+        this.documents = this.restoredDocumentsFromSession(session)
+        this.documentSequence = this.documents.length
         this.baselineAuditSignature = this.currentAuditSignature
         this.saveAuditDraft()
         this.$nextTick(() => this.scrollToResultPanel())
@@ -1906,11 +1997,29 @@ export default {
     fallbackRole(file) {
       return /函|请示|报审|申请备案|征求意见/.test(file.name) ? 'letter' : 'case'
     },
+    auditFileSuffix(file) {
+      const name = file && file.name ? String(file.name) : ''
+      const index = name.lastIndexOf('.')
+      return index >= 0 ? name.slice(index).toLowerCase() : ''
+    },
+    isSupportedAuditFile(file) {
+      return ['.pdf', '.docx', '.txt'].includes(this.auditFileSuffix(file))
+    },
     async handleDocumentFiles(files) {
       const selected = Array.isArray(files) ? files : (files ? [files] : [])
       if (!selected.length) return
+      const supported = selected.filter(file => this.isSupportedAuditFile(file))
+      const unsupported = selected.filter(file => !this.isSupportedAuditFile(file))
+      if (unsupported.length) {
+        const names = unsupported.map(file => file.name).join('、')
+        this.$message.warning(`${names} 暂不支持直接审核，请先另存为 PDF、DOCX 或 TXT 后再上传`)
+        unsupported.forEach(file => {
+          if (this.$refs.documentsPicker) this.$refs.documentsPicker.removeRaw(file)
+        })
+      }
+      if (!supported.length) return
       const existingIds = new Set(this.documents.map(item => item.id))
-      const additions = selected.filter(file => !existingIds.has(this.fileIdentity(file))).map(file => ({
+      const additions = supported.filter(file => !existingIds.has(this.fileIdentity(file))).map(file => ({
         id: this.fileIdentity(file),
         file,
         role: this.fallbackRole(file),
@@ -2678,14 +2787,15 @@ export default {
     async sendChatInstruction() {
       if (this.chatSubmitting || this.auditSubmitting) return
       if (!this.canSendComposer) return
-      if (!this.chatInstruction && this.hasAnyFile) {
-        return this.startAudit({ fromChat: true, commandText: this.auditSession ? '重新审核' : '开始审核' })
+      const instruction = String(this.chatInstruction || '').trim()
+      const defaultAuditCommand = this.auditSession ? '重新审核' : '开始审核'
+      if (!instruction && this.hasAnyFile) {
+        return this.startAudit({ fromChat: true, commandText: defaultAuditCommand })
       }
-      if (this.isStartAuditCommand(this.chatInstruction)) {
-        return this.startAudit({ fromChat: true, commandText: this.chatInstruction })
+      if (this.isStartAuditCommand(instruction)) {
+        return this.startAudit({ fromChat: true, commandText: defaultAuditCommand })
       }
       if (!this.auditSession) return this.$message.warning('请先上传资料并输入“开始审核”')
-      const instruction = this.chatInstruction
       const userMessage = this.appendUserChatMessage(instruction)
       this.chatInstruction = ''
       this.saveAuditDraft()
@@ -2864,6 +2974,8 @@ export default {
 .conflict-source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .document-list { margin-top: 12px; border: 1px solid #e5eaed; }
 .document-row { display: grid; grid-template-columns: 24px minmax(0,1fr) auto auto 132px 28px; align-items: center; gap: 10px; min-height: 58px; padding: 8px 12px; border-bottom: 1px solid #edf0f2; }
+.document-row.previewable-document { cursor: pointer; }
+.document-row.previewable-document:hover .document-name strong { color: #1677ff; }
 .document-row:last-child { border-bottom: 0; }.document-row > i { color: #2f7d69; font-size: 18px; }
 .document-row > .el-icon-warning-outline { color: #d99b32; }.document-name { min-width: 0; }.document-name strong,.document-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .document-name small { margin-top: 5px; color: #879199; }.role-select { width: 132px; }.document-remove { color: #8a949c; }
@@ -2951,6 +3063,8 @@ export default {
 .chat-composer-input ::v-deep .el-textarea__inner::placeholder { color: #b9c0c5; }
 .composer-file-cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
 .composer-file-card { display: grid; grid-template-columns: 30px minmax(0,1fr) auto 22px; align-items: center; gap: 8px; max-width: 340px; min-width: 230px; padding: 8px 8px 8px 10px; border: 1px solid #e2e8ed; border-radius: 10px; background: #fff; color: #1f2c28; }
+.composer-file-card.previewable-document { cursor: pointer; }
+.composer-file-card.previewable-document:hover { border-color: #9fc8ff; background: #f8fbff; }
 .composer-file-icon { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 8px; background: #e9f2ff; color: #1677ff; font-size: 12px; font-weight: 800; letter-spacing: 0; }
 .composer-file-meta { min-width: 0; }
 .composer-file-meta strong,.composer-file-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

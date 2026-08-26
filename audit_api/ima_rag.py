@@ -6,7 +6,7 @@ import math
 import re
 import sqlite3
 import time
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, TimeoutError as FutureTimeoutError, wait
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable
@@ -25,6 +25,7 @@ AUDIT_PACKET_BATCH_SIZE = 5
 AUDIT_EVIDENCE_CHAR_LIMIT = 650
 AUDIT_BATCH_TIMEOUT_SECONDS = 75
 AUDIT_DIMENSION_TOTAL_TIMEOUT_SECONDS = 110
+AUDIT_SYNTHESIS_TIMEOUT_SECONDS = 45
 AUDIT_CORE_TOPIC_LIMIT = 4
 AUDIT_CASE_HIT_LIMIT = 3
 AUDIT_REGULATION_HIT_LIMIT = 2
@@ -741,6 +742,22 @@ def _synthesize_report(agent: AgentService, findings: list[dict[str, Any]], case
     return value if isinstance(value, dict) else {}
 
 
+def _synthesize_report_with_timeout(
+    agent: AgentService,
+    findings: list[dict[str, Any]],
+    case_scout: str,
+) -> dict[str, Any]:
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="audit-synthesis")
+    future = executor.submit(_synthesize_report, agent, findings, case_scout)
+    try:
+        return future.result(timeout=AUDIT_SYNTHESIS_TIMEOUT_SECONDS)
+    except FutureTimeoutError as exc:
+        future.cancel()
+        raise TimeoutError("总体审核结论生成超时，已改用分项审核结果兜底。") from exc
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
 def _raw_case_hits(
     chunks: list[dict[str, Any]], document_id: str, title: str
 ) -> list[dict[str, Any]]:
@@ -941,7 +958,7 @@ def run_ima_rag_audit(
     notify("正在汇总总体风险等级和专业审核结论")
     stage_started = time.perf_counter()
     try:
-        value = _synthesize_report(agent, findings, case_scout)
+        value = _synthesize_report_with_timeout(agent, findings, case_scout)
     except (TimeoutError, OSError, RuntimeError):
         risk_order = ["重大", "高", "中", "低", "提示"]
         present = {str(item.get("risk_level") or "提示") for item in findings}

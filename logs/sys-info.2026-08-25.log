@@ -1,0 +1,162 @@
+09:09:34.798 [background-preinit] INFO  o.h.v.i.util.Version - [<clinit>,18] - HV000001: Hibernate Validator 9.0.1.Final
+09:09:34.862 [restartedMain] INFO  c.r.RuoYiApplication - [logStarting,54] - Starting RuoYiApplication using Java 24.0.1 with PID 14024 (D:\GitHub\huashe_project\RuoYi-Vue-master\ruoyi-admin\target\classes started by 28030 in D:\GitHub\huashe_project)
+09:09:34.865 [restartedMain] INFO  c.r.RuoYiApplication - [logStartupProfileInfo,658] - The following 1 profile is active: "druid"
+09:09:41.009 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Initializing ProtocolHandler ["http-nio-8080"]
+09:09:41.012 [restartedMain] INFO  o.a.c.c.StandardService - [log,168] - Starting service [Tomcat]
+09:09:41.013 [restartedMain] INFO  o.a.c.c.StandardEngine - [log,168] - Starting Servlet engine: [Apache Tomcat/11.0.21]
+09:09:42.330 [restartedMain] INFO  c.a.d.p.DruidDataSource - [init,865] - {dataSource-1} inited
+09:09:45.413 [restartedMain] INFO  o.q.c.SchedulerSignalerImpl - [<init>,62] - Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
+09:09:45.414 [restartedMain] INFO  o.q.c.QuartzScheduler - [<init>,224] - Quartz Scheduler v2.5.2 created.
+09:09:45.415 [restartedMain] INFO  o.q.s.RAMJobStore - [initialize,152] - RAMJobStore initialized.
+09:09:45.416 [restartedMain] INFO  o.q.c.QuartzScheduler - [initialize,289] - Scheduler meta-data: Quartz Scheduler (v2.5.2) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
+  Scheduler class: 'org.quartz.core.QuartzScheduler' - running locally.
+  NOT STARTED.
+  Currently in standby mode.
+  Number of jobs executed: 0
+  Using thread pool 'org.quartz.simpl.SimpleThreadPool' - with 10 threads.
+  Using job-store 'org.quartz.simpl.RAMJobStore' - which does not support persistence. and is not clustered.
+
+09:09:45.417 [restartedMain] INFO  o.q.c.QuartzScheduler - [setJobFactory,2250] - JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@1e430c91
+09:09:46.570 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Starting ProtocolHandler ["http-nio-8080"]
+09:09:46.594 [restartedMain] INFO  o.q.c.QuartzScheduler - [start,541] - Scheduler quartzScheduler_$_NON_CLUSTERED started.
+09:09:46.605 [restartedMain] INFO  c.r.RuoYiApplication - [logStarted,60] - Started RuoYiApplication in 12.258 seconds (process running for 13.559)
+09:14:11.070 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[.[.[/] - [log,168] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+09:14:17.318 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+09:14:17.389 [schedule-pool-1] INFO  n.b.p.u.u.YauaaVersion - [logVersion,104] - Yauaa 8.1.1 (v8.1.1 @ 2026-03-20T07:34:20Z)
+09:14:17.560 [schedule-pool-1] INFO  n.b.p.u.c.ConfigLoader - [loadResources,309] - - Loaded 122 files in  161 ms using expression: classpath*:UserAgents/**/*.yaml
+09:14:18.721 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [finalizeLoadingRules,282] - Building all needed matchers for the requested 11 fields.
+09:14:18.783 [http-nio-8080-exec-2] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,336] - Initializing Analyzer data structures
+09:14:19.977 [http-nio-8080-exec-2] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,347] - Built in 1191 msec : Hashmap 199731, Ranges map:3004
+10:55:20.695 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+14:52:58.548 [Thread-1] INFO  o.q.c.QuartzScheduler - [standby,576] - Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+14:52:58.581 [tomcat-shutdown] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Pausing ProtocolHandler ["http-nio-8080"]
+14:52:58.597 [Thread-1] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Stopping ProtocolHandler ["http-nio-8080"]
+14:52:58.739 [Thread-1] INFO  o.q.c.QuartzScheduler - [shutdown,656] - Scheduler quartzScheduler_$_NON_CLUSTERED shutting down.
+14:52:58.741 [Thread-1] INFO  o.q.c.QuartzScheduler - [standby,576] - Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+14:52:58.742 [Thread-1] INFO  o.q.c.QuartzScheduler - [shutdown,728] - Scheduler quartzScheduler_$_NON_CLUSTERED shutdown complete.
+14:52:58.744 [Thread-1] INFO  sys-user - [shutdownAsyncManager,31] - ====关闭后台任务任务线程池====
+14:52:58.756 [Thread-1] INFO  c.a.d.p.DruidDataSource - [close,2083] - {dataSource-1} closing ...
+14:52:58.764 [Thread-1] INFO  c.a.d.p.DruidDataSource - [close,2156] - {dataSource-1} closed
+14:53:00.027 [restartedMain] INFO  c.r.RuoYiApplication - [logStarting,54] - Starting RuoYiApplication using Java 24.0.1 with PID 14024 (D:\GitHub\huashe_project\RuoYi-Vue-master\ruoyi-admin\target\classes started by 28030 in D:\GitHub\huashe_project)
+14:53:00.029 [restartedMain] INFO  c.r.RuoYiApplication - [logStartupProfileInfo,658] - The following 1 profile is active: "druid"
+14:53:05.367 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Initializing ProtocolHandler ["http-nio-8080"]
+14:53:05.368 [restartedMain] INFO  o.a.c.c.StandardService - [log,168] - Starting service [Tomcat]
+14:53:05.368 [restartedMain] INFO  o.a.c.c.StandardEngine - [log,168] - Starting Servlet engine: [Apache Tomcat/11.0.21]
+14:53:05.872 [restartedMain] INFO  c.a.d.p.DruidDataSource - [init,865] - {dataSource-2} inited
+14:53:07.831 [restartedMain] INFO  o.q.c.SchedulerSignalerImpl - [<init>,62] - Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
+14:53:07.832 [restartedMain] INFO  o.q.c.QuartzScheduler - [<init>,224] - Quartz Scheduler v2.5.2 created.
+14:53:07.832 [restartedMain] INFO  o.q.s.RAMJobStore - [initialize,152] - RAMJobStore initialized.
+14:53:07.832 [restartedMain] INFO  o.q.c.QuartzScheduler - [initialize,289] - Scheduler meta-data: Quartz Scheduler (v2.5.2) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
+  Scheduler class: 'org.quartz.core.QuartzScheduler' - running locally.
+  NOT STARTED.
+  Currently in standby mode.
+  Number of jobs executed: 0
+  Using thread pool 'org.quartz.simpl.SimpleThreadPool' - with 10 threads.
+  Using job-store 'org.quartz.simpl.RAMJobStore' - which does not support persistence. and is not clustered.
+
+14:53:07.832 [restartedMain] INFO  o.q.c.QuartzScheduler - [setJobFactory,2250] - JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@11ae6f57
+14:53:08.313 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Starting ProtocolHandler ["http-nio-8080"]
+14:53:08.320 [restartedMain] INFO  o.q.c.QuartzScheduler - [start,541] - Scheduler quartzScheduler_$_NON_CLUSTERED started.
+14:53:08.327 [restartedMain] INFO  c.r.RuoYiApplication - [logStarted,60] - Started RuoYiApplication in 8.948 seconds (process running for 20615.281)
+14:53:09.772 [Thread-5] INFO  o.q.c.QuartzScheduler - [standby,576] - Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+14:53:09.773 [tomcat-shutdown] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Pausing ProtocolHandler ["http-nio-8080"]
+14:53:09.777 [Thread-5] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Stopping ProtocolHandler ["http-nio-8080"]
+14:53:09.782 [Thread-5] INFO  o.q.c.QuartzScheduler - [shutdown,656] - Scheduler quartzScheduler_$_NON_CLUSTERED shutting down.
+14:53:09.782 [Thread-5] INFO  o.q.c.QuartzScheduler - [standby,576] - Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+14:53:09.784 [Thread-5] INFO  o.q.c.QuartzScheduler - [shutdown,728] - Scheduler quartzScheduler_$_NON_CLUSTERED shutdown complete.
+14:53:09.784 [Thread-5] INFO  sys-user - [shutdownAsyncManager,31] - ====关闭后台任务任务线程池====
+14:53:09.787 [Thread-5] INFO  c.a.d.p.DruidDataSource - [close,2083] - {dataSource-2} closing ...
+14:53:09.789 [Thread-5] INFO  c.a.d.p.DruidDataSource - [close,2156] - {dataSource-2} closed
+14:53:09.991 [restartedMain] INFO  c.r.RuoYiApplication - [logStarting,54] - Starting RuoYiApplication using Java 24.0.1 with PID 14024 (D:\GitHub\huashe_project\RuoYi-Vue-master\ruoyi-admin\target\classes started by 28030 in D:\GitHub\huashe_project)
+14:53:09.992 [restartedMain] INFO  c.r.RuoYiApplication - [logStartupProfileInfo,658] - The following 1 profile is active: "druid"
+14:53:10.683 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Initializing ProtocolHandler ["http-nio-8080"]
+14:53:10.684 [restartedMain] INFO  o.a.c.c.StandardService - [log,168] - Starting service [Tomcat]
+14:53:10.684 [restartedMain] INFO  o.a.c.c.StandardEngine - [log,168] - Starting Servlet engine: [Apache Tomcat/11.0.21]
+14:53:10.938 [restartedMain] INFO  c.a.d.p.DruidDataSource - [init,865] - {dataSource-3} inited
+14:53:11.897 [restartedMain] INFO  o.q.c.SchedulerSignalerImpl - [<init>,62] - Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
+14:53:11.898 [restartedMain] INFO  o.q.c.QuartzScheduler - [<init>,224] - Quartz Scheduler v2.5.2 created.
+14:53:11.898 [restartedMain] INFO  o.q.s.RAMJobStore - [initialize,152] - RAMJobStore initialized.
+14:53:11.898 [restartedMain] INFO  o.q.c.QuartzScheduler - [initialize,289] - Scheduler meta-data: Quartz Scheduler (v2.5.2) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
+  Scheduler class: 'org.quartz.core.QuartzScheduler' - running locally.
+  NOT STARTED.
+  Currently in standby mode.
+  Number of jobs executed: 0
+  Using thread pool 'org.quartz.simpl.SimpleThreadPool' - with 10 threads.
+  Using job-store 'org.quartz.simpl.RAMJobStore' - which does not support persistence. and is not clustered.
+
+14:53:11.899 [restartedMain] INFO  o.q.c.QuartzScheduler - [setJobFactory,2250] - JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@4251d3c9
+14:53:12.335 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Starting ProtocolHandler ["http-nio-8080"]
+14:53:12.343 [restartedMain] INFO  o.q.c.QuartzScheduler - [start,541] - Scheduler quartzScheduler_$_NON_CLUSTERED started.
+14:53:12.344 [restartedMain] INFO  c.r.RuoYiApplication - [logStarted,60] - Started RuoYiApplication in 2.388 seconds (process running for 20619.299)
+14:55:36.944 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[.[.[/] - [log,168] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+14:55:42.409 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Error][
+### Error querying database.  Cause: java.sql.SQLSyntaxErrorException: Unknown column 'u.can_platform' in 'field list'
+### The error may exist in file [D:\GitHub\huashe_project\RuoYi-Vue-master\ruoyi-system\target\classes\mapper\system\SysUserMapper.xml]
+### The error may involve com.ruoyi.system.mapper.SysUserMapper.selectUserByUserName-Inline
+### The error occurred while setting parameters
+### SQL: select u.user_id, u.dept_id, u.user_name, u.nick_name, u.email, u.avatar, u.phonenumber, u.password, u.sex, u.status, u.del_flag, u.can_platform, u.can_mini, u.login_ip, u.login_date, u.pwd_update_date, u.create_by, u.create_time, u.update_by, u.update_time, u.remark,          d.dept_id, d.parent_id, d.ancestors, d.dept_name, d.order_num, d.leader, d.status as dept_status,         r.role_id, r.role_name, r.role_key, r.role_sort, r.data_scope, r.status as role_status         from sys_user u       left join sys_dept d on u.dept_id = d.dept_id       left join sys_user_role ur on u.user_id = ur.user_id       left join sys_role r on r.role_id = ur.role_id         where u.user_name = ? and u.del_flag = '0'
+### Cause: java.sql.SQLSyntaxErrorException: Unknown column 'u.can_platform' in 'field list'
+; bad SQL grammar []]
+14:55:42.413 [schedule-pool-1] INFO  n.b.p.u.u.YauaaVersion - [logVersion,104] - Yauaa 8.1.1 (v8.1.1 @ 2026-03-20T07:34:20Z)
+14:55:42.508 [schedule-pool-1] INFO  n.b.p.u.c.ConfigLoader - [loadResources,309] - - Loaded 122 files in   93 ms using expression: classpath*:UserAgents/**/*.yaml
+14:55:43.254 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [finalizeLoadingRules,282] - Building all needed matchers for the requested 11 fields.
+14:55:43.272 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,336] - Initializing Analyzer data structures
+14:55:43.893 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,347] - Built in 621 msec : Hashmap 199731, Ranges map:3004
+14:55:59.636 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Error][
+### Error querying database.  Cause: java.sql.SQLSyntaxErrorException: Unknown column 'u.can_platform' in 'field list'
+### The error may exist in file [D:\GitHub\huashe_project\RuoYi-Vue-master\ruoyi-system\target\classes\mapper\system\SysUserMapper.xml]
+### The error may involve com.ruoyi.system.mapper.SysUserMapper.selectUserByUserName-Inline
+### The error occurred while setting parameters
+### SQL: select u.user_id, u.dept_id, u.user_name, u.nick_name, u.email, u.avatar, u.phonenumber, u.password, u.sex, u.status, u.del_flag, u.can_platform, u.can_mini, u.login_ip, u.login_date, u.pwd_update_date, u.create_by, u.create_time, u.update_by, u.update_time, u.remark,          d.dept_id, d.parent_id, d.ancestors, d.dept_name, d.order_num, d.leader, d.status as dept_status,         r.role_id, r.role_name, r.role_key, r.role_sort, r.data_scope, r.status as role_status         from sys_user u       left join sys_dept d on u.dept_id = d.dept_id       left join sys_user_role ur on u.user_id = ur.user_id       left join sys_role r on r.role_id = ur.role_id         where u.user_name = ? and u.del_flag = '0'
+### Cause: java.sql.SQLSyntaxErrorException: Unknown column 'u.can_platform' in 'field list'
+; bad SQL grammar []]
+14:56:25.305 [schedule-pool-2] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Error][验证码错误]
+14:56:30.932 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Error][
+### Error querying database.  Cause: java.sql.SQLSyntaxErrorException: Unknown column 'u.can_platform' in 'field list'
+### The error may exist in file [D:\GitHub\huashe_project\RuoYi-Vue-master\ruoyi-system\target\classes\mapper\system\SysUserMapper.xml]
+### The error may involve com.ruoyi.system.mapper.SysUserMapper.selectUserByUserName-Inline
+### The error occurred while setting parameters
+### SQL: select u.user_id, u.dept_id, u.user_name, u.nick_name, u.email, u.avatar, u.phonenumber, u.password, u.sex, u.status, u.del_flag, u.can_platform, u.can_mini, u.login_ip, u.login_date, u.pwd_update_date, u.create_by, u.create_time, u.update_by, u.update_time, u.remark,          d.dept_id, d.parent_id, d.ancestors, d.dept_name, d.order_num, d.leader, d.status as dept_status,         r.role_id, r.role_name, r.role_key, r.role_sort, r.data_scope, r.status as role_status         from sys_user u       left join sys_dept d on u.dept_id = d.dept_id       left join sys_user_role ur on u.user_id = ur.user_id       left join sys_role r on r.role_id = ur.role_id         where u.user_name = ? and u.del_flag = '0'
+### Cause: java.sql.SQLSyntaxErrorException: Unknown column 'u.can_platform' in 'field list'
+; bad SQL grammar []]
+15:21:06.668 [schedule-pool-3] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Error][验证码已失效]
+15:21:11.052 [schedule-pool-2] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+16:31:15.204 [schedule-pool-4] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+16:33:45.226 [Thread-9] INFO  o.q.c.QuartzScheduler - [standby,576] - Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+16:33:45.227 [tomcat-shutdown] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Pausing ProtocolHandler ["http-nio-8080"]
+16:33:45.234 [Thread-9] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Stopping ProtocolHandler ["http-nio-8080"]
+16:33:45.242 [Thread-9] INFO  o.q.c.QuartzScheduler - [shutdown,656] - Scheduler quartzScheduler_$_NON_CLUSTERED shutting down.
+16:33:45.243 [Thread-9] INFO  o.q.c.QuartzScheduler - [standby,576] - Scheduler quartzScheduler_$_NON_CLUSTERED paused.
+16:33:45.244 [Thread-9] INFO  o.q.c.QuartzScheduler - [shutdown,728] - Scheduler quartzScheduler_$_NON_CLUSTERED shutdown complete.
+16:33:45.245 [Thread-9] INFO  sys-user - [shutdownAsyncManager,31] - ====关闭后台任务任务线程池====
+16:33:45.250 [Thread-9] INFO  c.a.d.p.DruidDataSource - [close,2083] - {dataSource-3} closing ...
+16:33:45.252 [Thread-9] INFO  c.a.d.p.DruidDataSource - [close,2156] - {dataSource-3} closed
+16:33:45.566 [restartedMain] INFO  c.r.RuoYiApplication - [logStarting,54] - Starting RuoYiApplication using Java 24.0.1 with PID 14024 (D:\GitHub\huashe_project\RuoYi-Vue-master\ruoyi-admin\target\classes started by 28030 in D:\GitHub\huashe_project)
+16:33:45.567 [restartedMain] INFO  c.r.RuoYiApplication - [logStartupProfileInfo,658] - The following 1 profile is active: "druid"
+16:33:47.298 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Initializing ProtocolHandler ["http-nio-8080"]
+16:33:47.299 [restartedMain] INFO  o.a.c.c.StandardService - [log,168] - Starting service [Tomcat]
+16:33:47.299 [restartedMain] INFO  o.a.c.c.StandardEngine - [log,168] - Starting Servlet engine: [Apache Tomcat/11.0.21]
+16:33:47.819 [restartedMain] INFO  c.a.d.p.DruidDataSource - [init,865] - {dataSource-4} inited
+16:33:49.807 [restartedMain] INFO  o.q.c.SchedulerSignalerImpl - [<init>,62] - Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
+16:33:49.808 [restartedMain] INFO  o.q.c.QuartzScheduler - [<init>,224] - Quartz Scheduler v2.5.2 created.
+16:33:49.808 [restartedMain] INFO  o.q.s.RAMJobStore - [initialize,152] - RAMJobStore initialized.
+16:33:49.808 [restartedMain] INFO  o.q.c.QuartzScheduler - [initialize,289] - Scheduler meta-data: Quartz Scheduler (v2.5.2) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
+  Scheduler class: 'org.quartz.core.QuartzScheduler' - running locally.
+  NOT STARTED.
+  Currently in standby mode.
+  Number of jobs executed: 0
+  Using thread pool 'org.quartz.simpl.SimpleThreadPool' - with 10 threads.
+  Using job-store 'org.quartz.simpl.RAMJobStore' - which does not support persistence. and is not clustered.
+
+16:33:49.808 [restartedMain] INFO  o.q.c.QuartzScheduler - [setJobFactory,2250] - JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@31b397bc
+16:33:50.309 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Starting ProtocolHandler ["http-nio-8080"]
+16:33:50.333 [restartedMain] INFO  o.q.c.QuartzScheduler - [start,541] - Scheduler quartzScheduler_$_NON_CLUSTERED started.
+16:33:50.338 [restartedMain] INFO  c.r.RuoYiApplication - [logStarted,60] - Started RuoYiApplication in 4.862 seconds (process running for 26657.292)
+16:36:48.602 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[.[.[/] - [log,168] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+16:36:54.000 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Logout][退出成功]
+16:36:54.002 [schedule-pool-1] INFO  n.b.p.u.u.YauaaVersion - [logVersion,104] - Yauaa 8.1.1 (v8.1.1 @ 2026-03-20T07:34:20Z)
+16:36:54.080 [schedule-pool-1] INFO  n.b.p.u.c.ConfigLoader - [loadResources,309] - - Loaded 122 files in   77 ms using expression: classpath*:UserAgents/**/*.yaml
+16:36:55.464 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [finalizeLoadingRules,282] - Building all needed matchers for the requested 11 fields.
+16:36:55.487 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,336] - Initializing Analyzer data structures
+16:36:56.130 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,347] - Built in 642 msec : Hashmap 199731, Ranges map:3004
+16:36:58.972 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]

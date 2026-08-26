@@ -56,27 +56,6 @@
           </el-input>
         </el-form-item>
 
-        <!-- 验证码 -->
-        <el-form-item v-if="captchaEnabled" prop="code">
-          <div class="captcha-row">
-            <el-input
-              v-model="loginForm.code"
-              auto-complete="off"
-              placeholder="请输入验证码"
-              @keyup.enter.native="handleLogin"
-            >
-              <svg-icon slot="prefix" icon-class="validCode" class="el-input__icon input-icon" />
-            </el-input>
-            <img
-              :src="codeUrl"
-              class="login-code-img"
-              alt="验证码"
-              title="点击图片刷新"
-              @click="getCode"
-            />
-          </div>
-        </el-form-item>
-
         <!-- 记住我 -->
         <div class="login-options">
           <el-checkbox v-model="loginForm.rememberMe">记住我</el-checkbox>
@@ -105,7 +84,6 @@
 </template>
 
 <script>
-import { getCodeImg } from "@/api/login"
 import Cookies from "js-cookie"
 import { encrypt, decrypt } from '@/utils/jsencrypt'
 import defaultSettings from '@/settings'
@@ -116,13 +94,10 @@ export default {
     return {
       title: process.env.VUE_APP_TITLE,
       footerContent: defaultSettings.footerContent,
-      codeUrl: "",
       loginForm: {
         username: "admin",
         password: "admin123",
-        rememberMe: false,
-        code: "",
-        uuid: ""
+        rememberMe: false
       },
       loginRules: {
         username: [
@@ -130,11 +105,9 @@ export default {
         ],
         password: [
           { required: true, trigger: "blur", message: "请输入您的密码" }
-        ],
-        code: [{ required: true, trigger: "change", message: "请输入验证码" }]
+        ]
       },
       loading: false,
-      captchaEnabled: true,
       register: false,
       redirect: undefined
     }
@@ -148,19 +121,9 @@ export default {
     }
   },
   created() {
-    this.getCode()
     this.getCookie()
   },
   methods: {
-    getCode() {
-      getCodeImg().then(res => {
-        this.captchaEnabled = res.captchaEnabled === undefined ? true : res.captchaEnabled
-        if (this.captchaEnabled) {
-          this.codeUrl = "data:image/gif;base64," + res.img
-          this.loginForm.uuid = res.uuid
-        }
-      }).catch(() => {})
-    },
     getCookie() {
       const username = Cookies.get("username")
       const password = Cookies.get("password")
@@ -188,9 +151,6 @@ export default {
             this.$router.push({ path: this.redirect || "/" }).catch(()=>{})
           }).catch(() => {
             this.loading = false
-            if (this.captchaEnabled) {
-              this.getCode()
-            }
           })
         }
       })
@@ -334,7 +294,7 @@ $border-color: #dcdfe6;
     }
   }
 
-  // 前缀图标（账号 / 密码 / 验证码）
+  // 前缀图标（账号 / 密码）
   ::v-deep .el-input__prefix {
     left: 11px;
     display: flex;
@@ -351,32 +311,6 @@ $border-color: #dcdfe6;
   width: 16px;
   height: 16px;
   margin-left: 2px;
-}
-
-/* ---------- 验证码行 ---------- */
-.captcha-row {
-  display: flex;
-  align-items: center;
-  width: 100%;
-
-  ::v-deep .el-input {
-    flex: 1;
-  }
-}
-
-.login-code-img {
-  width: 118px;
-  height: 40px;
-  margin-left: 12px;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  background: #f5f7fa;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-
-  &:hover {
-    border-color: $primary;
-  }
 }
 
 /* ---------- 记住我 ---------- */

@@ -264,6 +264,102 @@ class AuditSessionApiTests(unittest.TestCase):
         self.assertEqual(response["review_items"][1]["title"], "施工监测要求")
         self.assertIn("已补充施工监测要求", response["message"]["content"])
 
+    def test_review_profile_infers_supported_document_types(self):
+        self.assertEqual(
+            main._infer_review_profile_from_text("滨湖社区项目安全性影响评估预评估报告.pdf"),
+            "safety_assessment_report",
+        )
+        self.assertEqual(
+            main._infer_review_profile_from_text("长泰路110kV上跨轨道交通区间安全专项评估.pdf"),
+            "safety_assessment_report",
+        )
+        self.assertEqual(
+            main._infer_review_profile_from_text("20241206 滨湖社区项目设计方案.pdf"),
+            "design_scheme",
+        )
+        self.assertEqual(
+            main._infer_review_profile_from_text("桩基和支护专项施工方案.pdf"),
+            "construction_scheme",
+        )
+        self.assertEqual(main._infer_review_profile_from_text("会议纪要及往来函.pdf"), "")
+
+    def test_expand_review_items_applies_document_type_style_only_when_matched(self):
+        class FakeAgent:
+            def complete_json(self, system, prompt, max_tokens):
+                self.system = system
+                self.prompt = prompt
+                return {
+                    "items": [
+                        {"title": "止水帷幕核实", "conclusion": "基于水文地质条件，应核实止水帷幕和降水井设计的可控性。"}
+                    ]
+                }
+
+        fake = FakeAgent()
+        result = {
+            "manual_context_for_consistency": {
+                "uploaded_documents": [{"name": "滨湖社区安全性影响评估预评估报告.pdf"}]
+            }
+        }
+        with patch.object(main, "agent", fake):
+            main._ai_expand_review_items(result, [{"title": "止水帷幕", "conclusion": "应复核止水帷幕。"}])
+        self.assertIn("常用动词必须以“核实、建议、完善、确定、提出合理设计及施工要求”为主", fake.system)
+        self.assertIn("safety_assessment_report", fake.prompt)
+
+        generic = FakeAgent()
+        with patch.object(main, "agent", generic):
+            main._ai_expand_review_items({}, [{"title": "普通资料", "conclusion": "应复核资料。"}])
+        self.assertNotIn("本次资料识别为", generic.system)
+
+    def test_safety_profile_rewrites_supplement_wording(self):
+        items = main._apply_review_profile_wording(
+            [
+                {
+                    "title": "补充止水帷幕资料",
+                    "conclusion": "需补充完善止水帷幕和降水井设计要求。",
+                    "recommendation": "应补充关键参数。",
+                }
+            ],
+            "safety_assessment_report",
+        )
+        self.assertNotIn("补充", items[0]["title"])
+        self.assertNotIn("补充", items[0]["conclusion"])
+        self.assertNotIn("补充", items[0]["recommendation"])
+        self.assertIn("完善", items[0]["conclusion"])
+
+    def test_construction_profile_keeps_supplement_wording(self):
+        items = main._apply_review_profile_wording(
+            [{"title": "补充施工监测", "conclusion": "应补充施工监测方案。"}],
+            "construction_scheme",
+        )
+        self.assertIn("补充", items[0]["title"])
+        self.assertIn("补充", items[0]["conclusion"])
+
+    def test_chat_rewrite_keeps_document_type_style_from_session_metadata(self):
+        class FakeAgent:
+            def complete_json(self, system, prompt, max_tokens):
+                self.system = system
+                self.prompt = prompt
+                return {
+                    "reply": "已按施工方案口吻细化。",
+                    "overall_opinion": {"title": "综合评价", "conclusion": "经审查，本次资料具备施工方案审查基础。"},
+                    "items": [
+                        {"title": "施工时序优化", "conclusion": "应优化围护桩、止水帷幕及坑底加固施工时序，明确关键工序衔接要求。", "risk_level": "中"}
+                    ],
+                }
+
+        fake = FakeAgent()
+        with patch.object(main, "agent", fake):
+            session = main.create_audit_session(main.AuditSessionCreatePayload(
+                metadata={"review_profile": "construction_scheme"},
+                items=[main.AuditReviewItemPayload(title="施工时序", conclusion="应明确施工时序。", risk_level="中")],
+            ))
+            main.revise_audit_session_by_chat(
+                session["session_id"],
+                main.AuditSessionChatPayload(instruction="将第一条意见写得详细一点"),
+            )
+        self.assertIn("常用动词以“补充、优化、建议、协同、协调、明确、采取、严禁、确保”为主", fake.system)
+        self.assertIn("construction_scheme", fake.prompt)
+
     def test_chat_instruction_detail_fallback_changes_target_item(self):
         class FakeAgent:
             def complete_json(self, system, prompt, max_tokens):
