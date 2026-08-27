@@ -500,8 +500,13 @@ class PatrolRepository:
         clauses = ["deleted = 0"]
         params: list[Any] = []
         if not actor.get("is_admin"):
-            clauses.append("assigned_user_id = ?")
-            params.append(str(actor.get("user_id") or ""))
+            user_id = str(actor.get("user_id") or "")
+            if not user_id:
+                # 未提供有效身份的请求不应看到任何任务（含历史空指派任务）
+                clauses.append("1 = 0")
+            else:
+                clauses.append("assigned_user_id = ?")
+                params.append(user_id)
         elif assigned_user_id.strip():
             clauses.append("assigned_user_id = ?")
             params.append(assigned_user_id.strip())
@@ -617,8 +622,12 @@ class PatrolRepository:
         clauses = ["deleted = 0"]
         params: list[Any] = []
         if not actor.get("is_admin"):
-            clauses.append("assigned_user_id = ?")
-            params.append(str(actor.get("user_id") or ""))
+            user_id = str(actor.get("user_id") or "")
+            if not user_id:
+                clauses.append("1 = 0")
+            else:
+                clauses.append("assigned_user_id = ?")
+                params.append(user_id)
         if line.strip():
             clauses.append("line = ?")
             params.append(line.strip())
@@ -1029,8 +1038,9 @@ def get_actor(
     return {
         "user_id": user_id,
         "name": x_actor_name or user_id,
-        # 未提供身份时视为平台/管理员（便于既有平台链路与直接测试）
-        "is_admin": x_actor_is_admin.lower() in {"1", "true", "yes"} or not user_id,
+        # 仅当 Java 代理明确注入 X-Actor-Is-Admin=true 时才视为平台管理员；
+        # 缺失身份头（user_id 为空）不再默认提权，避免越权风险。
+        "is_admin": x_actor_is_admin.lower() in {"1", "true", "yes"},
     }
 
 
@@ -1281,12 +1291,15 @@ async def add_media(
     file: UploadFile = File(...),
     kind: str = Form("photo"),
     taken_at: str = Form(""),
+    actor: dict = Depends(get_actor),
     repo: PatrolRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     if kind not in MEDIA_KINDS:
         raise HTTPException(status_code=422, detail="媒体类型无效。")
     try:
         record = repo.get_record(record_id)
+        # 行级隔离：校验记录所属任务对当前用户可见（巡查员只能给自己被指派的任务上传媒体）
+        task = repo.get_task(record["task_id"], actor)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     suffix = Path(file.filename or (".jpg" if kind == "photo" else ".mp4")).suffix.lower()
@@ -1302,7 +1315,6 @@ async def add_media(
     media_id = _id("pmed")
     destination = folder / f"{media_id}{suffix}"
     if kind == "photo":
-        task = repo.get_task(record["task_id"], {"user_id": "", "name": "", "is_admin": True})
         lines = [
             f"任务 {task['task_no']}",
             f"时间 {taken_at or _now()}",

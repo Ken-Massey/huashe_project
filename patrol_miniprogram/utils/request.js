@@ -62,9 +62,9 @@ function login(username, password) {
 function getUserInfo() { return get('/getInfo') }
 
 // 上传媒体文件到指定记录
-function uploadMedia(recordId, filePath, kind, takenAt) {
+function uploadMedia(recordId, filePath, kind, takenAt, onProgress) {
   return new Promise((resolve, reject) => {
-    wx.uploadFile({
+    const task = wx.uploadFile({
       url: baseURL + '/rail/patrol/records/' + recordId + '/media',
       filePath,
       name: 'file',
@@ -79,6 +79,9 @@ function uploadMedia(recordId, filePath, kind, takenAt) {
       },
       fail(err) { reject(new Error((err && err.errMsg) || '上传失败')) }
     })
+    if (onProgress && task && task.onProgressUpdate) {
+      task.onProgressUpdate(onProgress)
+    }
   })
 }
 
@@ -113,9 +116,9 @@ function downloadShot(shotId) {
 }
 
 // 上传隐患圈注截图
-function uploadShot(hazardId, filePath) {
+function uploadShot(hazardId, filePath, onProgress) {
   return new Promise((resolve, reject) => {
-    wx.uploadFile({
+    const task = wx.uploadFile({
       url: baseURL + '/rail/patrol/hazards/' + hazardId + '/shots',
       filePath,
       name: 'file',
@@ -129,6 +132,9 @@ function uploadShot(hazardId, filePath) {
       },
       fail(err) { reject(new Error((err && err.errMsg) || '截图上传失败')) }
     })
+    if (onProgress && task && task.onProgressUpdate) {
+      task.onProgressUpdate(onProgress)
+    }
   })
 }
 

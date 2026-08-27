@@ -1,30 +1,74 @@
-<view class="page">
-  <view class="head">
-    <view>
-      <text class="head-name">我的任务</text>
-      <text class="muted">{{ tasks.length }} 个</text>
+<view class="page page-pad">
+  <!-- 顶部欢迎区 -->
+  <view class="hero">
+    <view class="hero-inner">
+      <view class="hero-left">
+        <view class="hero-hello">你好，{{ username || '巡查员' }}</view>
+        <view class="hero-sub">今日请及时完成指派任务并上报现场情况</view>
+      </view>
+      <button class="logout-btn" size="mini" bindtap="logout">退出</button>
     </view>
-    <button class="logout" size="mini" bindtap="logout">退出</button>
+
+    <!-- 统计卡片 -->
+    <view class="stat-row">
+      <view class="stat-item">
+        <view class="stat-num">{{ stats.pending }}</view>
+        <view class="stat-label">待办任务</view>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-item">
+        <view class="stat-num">{{ stats.done }}</view>
+        <view class="stat-label">已完成</view>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-item {{ stats.hazard > 0 ? 'stat-warn' : '' }}">
+        <view class="stat-num">{{ stats.hazard }}</view>
+        <view class="stat-label">未闭环隐患</view>
+      </view>
+    </view>
   </view>
 
-  <view wx:if="{{ tasks.length }}" class="task-list">
-    <view wx:for="{{ tasks }}" wx:key="task_id" class="card task-card" data-id="{{ item.task_id }}" bindtap="openTask">
-      <view class="task-top">
-        <text class="task-no">{{ item.task_no }}</text>
-        <text class="tag {{ item.status === 'pending' ? 'tag-pending' : (item.status === 'completed' ? 'tag-compliant' : 'tag-archived') }}">{{ item.statusLabel }}</text>
-      </view>
-      <view class="task-name">{{ item.name }}</view>
-      <view class="task-line">{{ item.line || '未填线路' }}<text wx:if="{{ item.location_desc }}"> · {{ item.location_desc }}</text></view>
-      <view class="task-meta">
-        <text>共 {{ item.hazard_count || 0 }} 个隐患</text>
-        <text class="open-hazard" wx:if="{{ item.open_hazard_count > 0 }}">剩余 {{ item.open_hazard_count }} 个未闭环</text>
-        <text>{{ item.record_count || 0 }} 条记录</text>
+  <!-- 骨架屏（首次加载） -->
+  <view wx:if="{{ firstLoad && loading }}" class="task-list">
+    <view wx:for="{{ [1,2,3] }}" wx:key="*this" class="skeleton-card">
+      <view class="skeleton-bar w40 h40"></view>
+      <view class="skeleton-bar w80"></view>
+      <view class="skeleton-bar w60"></view>
+    </view>
+  </view>
+
+  <!-- 任务列表 -->
+  <view wx:elif="{{ tasks.length }}" class="task-list">
+    <view wx:for="{{ tasks }}" wx:key="task_id" class="task-card" data-id="{{ item.task_id }}" bindtap="openTask" hover-class="card-hover">
+      <view class="bar bar-{{ item.statusType }}"></view>
+      <view class="task-body">
+        <view class="task-top">
+          <text class="task-no">{{ item.task_no }}</text>
+          <view class="task-top-tags">
+            <text wx:if="{{ item.overdue }}" class="tag tag-overdue">待处理</text>
+            <text class="tag st-{{ item.statusType }}">{{ item.statusLabel }}</text>
+          </view>
+        </view>
+        <view class="task-name">{{ item.name }}</view>
+        <view class="task-line">📍 {{ item.line || '未填线路' }}<text wx:if="{{ item.location_desc }}"> · {{ item.location_desc }}</text></view>
+        <view class="task-meta">
+          <text class="meta-chip">共 {{ item.hazard_count || 0 }} 隐患</text>
+          <text class="meta-chip warn" wx:if="{{ item.open_hazard_count > 0 }}">剩 {{ item.open_hazard_count }} 未闭环</text>
+          <text class="meta-chip">{{ item.record_count || 0 }} 记录</text>
+          <text class="meta-time" wx:if="{{ item.dispatchTime }}">{{ item.dispatchTime }}</text>
+          <text class="arrow">›</text>
+        </view>
       </view>
     </view>
   </view>
 
+  <!-- 空状态 -->
   <view wx:elif="{{ !loading }}" class="empty">
-    <view class="icon">📋</view>
-    <view>暂无指派给我的任务</view>
+    <view class="empty-icon">📋</view>
+    <view class="empty-title">暂无指派任务</view>
+    <view class="empty-sub">有新任务时会显示在这里</view>
   </view>
+
+  <!-- 加载中（非首次） -->
+  <view wx:if="{{ loading && !firstLoad }}" class="loading-tip">加载中…</view>
 </view>

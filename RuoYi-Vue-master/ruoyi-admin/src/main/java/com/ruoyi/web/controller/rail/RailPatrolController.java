@@ -185,7 +185,8 @@ public class RailPatrolController
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("kind", kind);
         fields.put("taken_at", takenAt == null ? "" : takenAt);
-        return python.postFiles("/api/v1/patrol/records/" + recordId + "/media", Map.of("file", file), fields);
+        return python.postFiles("/api/v1/patrol/records/" + recordId + "/media", Map.of("file", file), fields,
+                Map.of(), actorHeaders());
     }
 
     @PreAuthorize("@ss.hasAnyPermi('" + VIEW_PERMS + "')")

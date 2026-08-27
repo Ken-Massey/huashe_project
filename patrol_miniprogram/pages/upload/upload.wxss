@@ -1,26 +1,60 @@
 .form-item { margin-bottom: 28rpx; }
 .form-item:last-child { margin-bottom: 0; }
 .field-row { display: flex; align-items: center; justify-content: space-between; }
-.field-label { display: block; margin-bottom: 12rpx; color: #4a5450; font-size: 26rpx; }
+.field-label { display: block; margin-bottom: 12rpx; color: #606266; font-size: 26rpx; }
 .required { color: #f56c6c; margin-right: 4rpx; }
-.picker-value { padding: 18rpx 20rpx; border: 1rpx solid #e3e7e6; border-radius: 8rpx; background: #fbfcfc; font-size: 28rpx; }
-.picker-value.placeholder { color: #9aa5a1; }
-.loc-btn { margin: 0; color: #2f806b; background: #e8f2ee; }
-.textarea { width: 100%; box-sizing: border-box; padding: 18rpx 20rpx; border: 1rpx solid #e3e7e6; border-radius: 8rpx; background: #fbfcfc; font-size: 28rpx; min-height: 120rpx; }
-.input { width: 100%; box-sizing: border-box; padding: 18rpx 20rpx; border: 1rpx solid #e3e7e6; border-radius: 8rpx; background: #fbfcfc; font-size: 28rpx; }
-.switch-label { margin-left: 12rpx; color: #4a5450; font-size: 26rpx; }
+.shot-label { color: #e6a23c; font-weight: 600; }
+.picker-value { padding: 18rpx 20rpx; border: 1rpx solid #dcdfe6; border-radius: 8rpx; background: #f7fafd; font-size: 28rpx; color: #303133; }
+.picker-value.placeholder { color: #a8abb2; }
+.loc-btn { margin: 0; color: #409eff; background: #ecf5ff; }
+.textarea { width: 100%; box-sizing: border-box; padding: 18rpx 20rpx; border: 1rpx solid #dcdfe6; border-radius: 8rpx; background: #f7fafd; font-size: 28rpx; min-height: 120rpx; color: #303133; }
+.input { width: 100%; box-sizing: border-box; padding: 18rpx 20rpx; border: 1rpx solid #dcdfe6; border-radius: 8rpx; background: #f7fafd; font-size: 28rpx; color: #303133; }
+.switch-label { margin-left: 12rpx; color: #606266; font-size: 26rpx; }
+
+/* 定位状态 */
+.loc-tip { display: flex; align-items: center; gap: 8rpx; margin-top: 12rpx; padding: 14rpx 18rpx; border-radius: 8rpx; font-size: 25rpx; }
+.loc-tip.locating { background: #f4f4f5; color: #909399; }
+.loc-tip.success { background: #f0f9eb; color: #67c23a; }
+.loc-tip.fail { background: #fef0f0; color: #f56c6c; }
+.loc-icon { font-size: 28rpx; }
 
 .media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14rpx; }
-.media-cell { position: relative; height: 200rpx; border-radius: 8rpx; overflow: hidden; }
+.media-cell { position: relative; height: 200rpx; border-radius: 8rpx; overflow: hidden; background: #ecf3fb; }
 .media-img { width: 100%; height: 100%; }
-.media-del { position: absolute; top: 0; right: 0; width: 44rpx; height: 44rpx; line-height: 40rpx; text-align: center; background: rgba(0,0,0,.55); color: #fff; font-size: 32rpx; border-bottom-left-radius: 8rpx; }
-.media-idx { position: absolute; left: 0; bottom: 0; padding: 2rpx 10rpx; background: rgba(0,0,0,.55); color: #fff; font-size: 20rpx; }
-.media-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4rpx; background: #f0f4f2; border: 1rpx dashed #b9c6c1; color: #7c8783; }
+.media-del { position: absolute; top: 0; right: 0; width: 44rpx; height: 44rpx; line-height: 40rpx; text-align: center; background: rgba(0,0,0,.55); color: #fff; font-size: 32rpx; border-bottom-left-radius: 8rpx; z-index: 3; }
+.media-idx { position: absolute; left: 0; bottom: 0; padding: 2rpx 10rpx; background: rgba(0,0,0,.55); color: #fff; font-size: 20rpx; z-index: 3; }
+.media-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4rpx; background: #f2f8ff; border: 1rpx dashed #b3d3f5; color: #6b8db8; }
 .add-plus { font-size: 52rpx; line-height: 1; }
 .add-text { font-size: 24rpx; }
 
+/* 视频缩略图遮罩 */
+.video-thumb { position: relative; width: 100%; height: 100%; }
+.video-thumb video { width: 100%; height: 100%; }
+.video-mask {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+.video-mask .video-play-btn {
+  width: 56rpx; height: 56rpx; line-height: 56rpx;
+  text-align: center;
+  background: rgba(0,0,0,0.5);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 24rpx;
+  border: 2rpx solid rgba(255,255,255,0.6);
+}
+
+/* 隐患截图：红色虚线边框区分 */
 .shot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14rpx; }
 .shot-cell { position: relative; height: 160rpx; border-radius: 8rpx; overflow: hidden; }
 .shot-img { width: 100%; height: 100%; }
-.shot-add { display: flex; align-items: center; justify-content: center; background: #f0f4f2; border: 1rpx dashed #b9c6c1; color: #7c8783; }
+.shot-grid-marked {
+  padding: 14rpx;
+  border: 2rpx dashed #f5b0b0;
+  border-radius: 10rpx;
+  background: #fef9f9;
+}
+.shot-add { display: flex; align-items: center; justify-content: center; background: #f2f8ff; border: 1rpx dashed #b3d3f5; color: #6b8db8; }
 .submit-btn { margin-top: 30rpx; }

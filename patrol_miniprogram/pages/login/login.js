@@ -1,7 +1,14 @@
 const { login } = require('../../utils/request')
 
 Page({
-  data: { username: '', password: '', loading: false },
+  data: {
+    username: '',
+    password: '',
+    loading: false,
+    focusField: '',
+    showPassword: false,
+    loginError: ''
+  },
   onLoad() {
     const app = getApp()
     // 已登录直接进入
@@ -11,14 +18,29 @@ Page({
   },
   onInput(e) {
     const field = e.currentTarget.dataset.field
-    this.setData({ [field]: e.detail.value })
+    this.setData({ [field]: e.detail.value, loginError: '' })
+  },
+  onFocus(e) {
+    this.setData({ focusField: e.currentTarget.dataset.field, loginError: '' })
+  },
+  onBlur() {
+    this.setData({ focusField: '' })
+  },
+  togglePassword() {
+    this.setData({ showPassword: !this.data.showPassword })
   },
   async submit() {
     const { username, password, loading } = this.data
     if (loading) return
-    if (!username.trim()) { wx.showToast({ title: '请输入账号', icon: 'none' }); return }
-    if (!password) { wx.showToast({ title: '请输入密码', icon: 'none' }); return }
-    this.setData({ loading: true })
+    if (!username.trim()) {
+      this.setData({ loginError: '请输入账号' })
+      return
+    }
+    if (!password) {
+      this.setData({ loginError: '请输入密码' })
+      return
+    }
+    this.setData({ loading: true, loginError: '' })
     try {
       const token = await login(username.trim(), password)
       wx.setStorageSync('patrol_token', token)
@@ -27,7 +49,7 @@ Page({
       getApp().globalData.userName = username.trim()
       wx.reLaunch({ url: '/pages/index/index' })
     } catch (e) {
-      wx.showModal({ title: '登录失败', content: e.message, showCancel: false })
+      this.setData({ loginError: e.message || '登录失败，请检查账号密码' })
     } finally {
       this.setData({ loading: false })
     }

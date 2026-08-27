@@ -2,9 +2,42 @@ const { get, post, del, downloadMedia, downloadShot } = require('../../utils/req
 
 const TASK_STATUS = { pending: '待执行', executing: '执行中', completed: '已完成', closed: '已关闭' }
 const HAZARD_STATUS = { pending_confirm: '待确认', pending_rectify: '待整改', rectifying: '整改中', pending_review: '待复核', closed: '已闭环' }
+const HAZARD_STEPS = ['pending_confirm', 'pending_rectify', 'rectifying', 'pending_review', 'closed']
+const HAZARD_STEP_LABELS = ['待确认', '待整改', '整改中', '待复核', '已闭环']
+
+function formatDateKey(iso) {
+  if (!iso) return ''
+  const d = new Date(String(iso).replace(' ', 'T'))
+  if (isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+}
+
+function formatDateLabel(iso) {
+  if (!iso) return ''
+  const d = new Date(String(iso).replace(' ', 'T'))
+  if (isNaN(d.getTime())) return ''
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const thatDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const diffDays = Math.round((today - thatDay) / 86400000)
+  if (diffDays === 0) return '今天'
+  if (diffDays === 1) return '昨天'
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日`
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+}
+
+function buildHazardSteps(status) {
+  const idx = HAZARD_STEPS.indexOf(status)
+  return HAZARD_STEPS.map((key, i) => ({
+    key,
+    label: HAZARD_STEP_LABELS[i],
+    done: i < idx || status === 'closed',
+    current: i === idx && status !== 'closed'
+  }))
+}
 
 Page({
-  data: { task: null, timeline: [], photoPaths: {}, shotPaths: {}, loading: false },
+  data: { task: null, groups: [], photoPaths: {}, shotPaths: {}, loading: false },
   onLoad(options) { this.taskId = options.id },
   onShow() { this.load() },
   async load() {
@@ -12,33 +45,68 @@ Page({
     try {
       const task = await get('/rail/patrol/tasks/' + this.taskId)
       task.statusLabel = TASK_STATUS[task.status] || task.status
-      ;(task.hazards || []).forEach(h => { h.statusLabel = HAZARD_STATUS[h.status] || h.status })
 
-      // 记录下挂隐患 + 独立隐患，最新在上
-      const timeline = []
-      const attached = {}
-      ;(task.hazards || []).forEach(h => { attached[h.hazard_id] = false })
-      ;(task.records || []).forEach(r => {
-        const hazards = (task.hazards || []).filter(h => h.record_id === r.record_id)
-        hazards.forEach(h => { attached[h.hazard_id] = true })
-        timeline.push({ kind: 'record', time: r.created_at || '', data: Object.assign({}, r, { hazards }) })
-      })
+      // 隐患映射：挂整改记录 + 状态步骤
+      const hazardMap = {}
       ;(task.hazards || []).forEach(h => {
-        if (!attached[h.hazard_id]) timeline.push({ kind: 'hazard', time: h.created_at || '', data: Object.assign({}, h, { hazards: [] }) })
+        h.statusLabel = HAZARD_STATUS[h.status] || h.status
+        h.steps = buildHazardSteps(h.status)
+        h.rectifyRecords = []
+        hazardMap[h.hazard_id] = h
+      })
+
+      // 分离日常巡查记录和整改反馈：整改反馈挂到对应隐患下
+      const timeline = []
+      ;(task.records || []).forEach(r => {
+        if (r.type === 'rectify' && r.hazard_id && hazardMap[r.hazard_id]) {
+          hazardMap[r.hazard_id].rectifyRecords.push(r)
+        } else {
+          const hazards = (task.hazards || []).filter(h => h.record_id === r.record_id)
+          timeline.push({ kind: 'record', time: r.created_at || '', data: Object.assign({}, r, { hazards }) })
+        }
+      })
+      // 独立隐患（未关联巡查记录）
+      ;(task.hazards || []).forEach(h => {
+        if (!h.record_id) {
+          timeline.push({ kind: 'hazard', time: h.created_at || '', data: Object.assign({}, h, { hazards: [] }) })
+        }
       })
       timeline.sort((a, b) => (b.time || '').localeCompare(a.time || ''))
 
-      this.setData({ task, timeline })
+      // 整改记录按时间正序（早→晚），方便查看整改进展
+      Object.values(hazardMap).forEach(h => {
+        h.rectifyRecords.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
+      })
 
-      const photoPaths = {}, shotPaths = {}
-      for (const r of (task.records || [])) {
-        for (const m of (r.media || [])) {
-          if (m.kind === 'photo') { try { photoPaths[m.media_id] = await downloadMedia(m.media_id) } catch (e) {} }
+      // 按日期分组
+      const groups = []
+      timeline.forEach(item => {
+        const dateKey = formatDateKey(item.time)
+        let group = groups.find(g => g.dateKey === dateKey)
+        if (!group) {
+          group = { dateKey, dateLabel: formatDateLabel(item.time), isToday: formatDateLabel(item.time) === '今天', items: [] }
+          groups.push(group)
         }
-      }
-      for (const h of (task.hazards || [])) {
-        for (const s of (h.shots || [])) { try { shotPaths[s.shot_id] = await downloadShot(s.shot_id) } catch (e) {} }
-      }
+        group.items.push(item)
+      })
+
+      this.setData({ task, groups })
+
+      // 并行下载照片和截图
+      const photoIds = [], shotIds = []
+      ;(task.records || []).forEach(r => {
+        (r.media || []).forEach(m => { if (m.kind === 'photo') photoIds.push(m.media_id) })
+      })
+      ;(task.hazards || []).forEach(h => {
+        (h.shots || []).forEach(s => shotIds.push(s.shot_id))
+      })
+      const [photoEntries, shotEntries] = await Promise.all([
+        Promise.all(photoIds.map(id => downloadMedia(id).then(p => [id, p]).catch(() => [id, '']))),
+        Promise.all(shotIds.map(id => downloadShot(id).then(p => [id, p]).catch(() => [id, ''])))
+      ])
+      const photoPaths = {}, shotPaths = {}
+      photoEntries.forEach(([id, p]) => { if (p) photoPaths[id] = p })
+      shotEntries.forEach(([id, p]) => { if (p) shotPaths[id] = p })
       this.setData({ photoPaths, shotPaths })
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' })
@@ -89,10 +157,14 @@ Page({
   },
   async playVideo(e) {
     const id = e.currentTarget.dataset.id
+    wx.showLoading({ title: '加载中…' })
     try {
       const path = await downloadMedia(id)
+      wx.hideLoading()
       wx.previewMedia({ sources: [{ url: path, type: 'video' }] })
-    } catch (err) { wx.showToast({ title: err.message, icon: 'none' }) }
-  },
-  formatTime(v) { return v ? String(v).replace('T', ' ').slice(0, 16) : '-' }
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: err.message, icon: 'none' })
+    }
+  }
 })

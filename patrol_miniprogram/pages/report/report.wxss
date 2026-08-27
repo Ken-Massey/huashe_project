@@ -16,7 +16,7 @@
 .photo-cell {
   position: relative;
   height: 200rpx;
-  border-radius: 8rpx;
+  border-radius: 12rpx;
   overflow: hidden;
 }
 .photo-img {
@@ -42,23 +42,23 @@
   align-items: center;
   justify-content: center;
   gap: 4rpx;
-  background: #f0f4f2;
-  border: 1rpx dashed #b9c6c1;
-  color: #7c8783;
+  background: linear-gradient(160deg, #f2f8ff, #eaf3ff);
+  border: 2rpx dashed #9ec6ef;
+  color: #4d88c7;
 }
 .add-plus { font-size: 52rpx; line-height: 1; }
 .add-text { font-size: 24rpx; }
 
 .loc-btn {
   margin: 0;
-  color: #2f806b;
-  background: #e8f2ee;
+  color: #409eff;
+  background: #ecf5ff;
 }
 .loc-result {
   display: flex;
   flex-direction: column;
   gap: 4rpx;
-  color: #4a5450;
+  color: #606266;
 }
 
 .form-item {
@@ -70,24 +70,26 @@
 .input, .textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 18rpx 20rpx;
-  border: 1rpx solid #e3e7e6;
-  border-radius: 8rpx;
-  background: #fbfcfc;
+  padding: 20rpx 22rpx;
+  border: 1rpx solid #dcdfe6;
+  border-radius: 12rpx;
+  background: #f7fafd;
   font-size: 28rpx;
+  color: #303133;
 }
 .textarea {
-  min-height: 140rpx;
+  min-height: 160rpx;
 }
 .picker-value {
-  padding: 18rpx 20rpx;
-  border: 1rpx solid #e3e7e6;
-  border-radius: 8rpx;
-  background: #fbfcfc;
+  padding: 20rpx 22rpx;
+  border: 1rpx solid #dcdfe6;
+  border-radius: 12rpx;
+  background: #f7fafd;
   font-size: 28rpx;
+  color: #303133;
 }
 .picker-value.placeholder {
-  color: #9aa5a1;
+  color: #a8abb2;
 }
 
 .submit-btn {

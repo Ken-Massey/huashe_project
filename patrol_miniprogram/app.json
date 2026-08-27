@@ -7,7 +7,7 @@
     "pages/hazard/hazard"
   ],
   "window": {
-    "navigationBarBackgroundColor": "#2f806b",
+    "navigationBarBackgroundColor": "#1b3a67",
     "navigationBarTitleText": "现场符合性巡查",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#f5f7f8",

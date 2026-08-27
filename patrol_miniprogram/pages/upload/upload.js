@@ -13,6 +13,8 @@ Page({
     hazards: [], hazardLabels: [], hazardIndex: -1,
     media: [],
     location: null,
+    locStatus: '',      // 定位状态文字
+    locAccuracy: 0,     // 定位精度（米）
     note: '',
     submitReview: true,
     // 日常巡查的隐患声明
@@ -20,7 +22,10 @@ Page({
     hazardTypes: [], hazardTypeLabels: [], hazardTypeIndex: -1,
     risks: [], riskLabels: [], riskIndex: -1,
     hazardDesc: '', shots: [],
-    submitting: false
+    submitting: false,
+    // 上传进度
+    uploadProgress: 0,
+    uploadLabel: ''
   },
   onLoad(options) {
     this.taskId = options.taskId
@@ -53,10 +58,26 @@ Page({
   onInput(e) { this.setData({ [e.currentTarget.dataset.field]: e.detail.value }) },
   onSubmitReview(e) { this.setData({ submitReview: e.detail.value }) },
   getLocation() {
+    this.setData({ locStatus: 'locating' })
     wx.getLocation({
       type: 'gcj02',
-      success: res => { this.setData({ location: { longitude: res.longitude, latitude: res.latitude, accuracy: res.accuracy } }); wx.showToast({ title: '定位成功', icon: 'success' }) },
-      fail: () => wx.showModal({ title: '定位失败', content: '请开启定位权限后重试', confirmText: '重试', success: r => { if (r.confirm) this.getLocation() } })
+      success: res => {
+        this.setData({
+          location: { longitude: res.longitude, latitude: res.latitude, accuracy: res.accuracy },
+          locStatus: 'success',
+          locAccuracy: Math.round(res.accuracy)
+        })
+        wx.showToast({ title: '定位成功', icon: 'success' })
+      },
+      fail: () => {
+        this.setData({ locStatus: 'fail' })
+        wx.showModal({
+          title: '定位失败',
+          content: '请检查定位权限是否开启，或在备注中填写位置描述',
+          confirmText: '重试',
+          success: r => { if (r.confirm) this.getLocation() }
+        })
+      }
     })
   },
   chooseMedia() {
@@ -67,7 +88,12 @@ Page({
       sizeType: ['compressed'],
       maxDuration: 60,
       success: res => {
-        const media = this.data.media.concat(res.tempFiles.map(f => ({ path: f.tempFilePath, kind: f.fileType === 'video' ? 'video' : 'photo' })))
+        const media = this.data.media.concat(res.tempFiles.map(f => ({
+          path: f.tempFilePath,
+          kind: f.fileType === 'video' ? 'video' : 'photo',
+          size: f.size || 0,
+          duration: f.duration || 0
+        })))
         this.setData({ media })
       }
     })
@@ -101,34 +127,58 @@ Page({
     }
     if (type === 'patrol' && hasHazard && !hazardDesc.trim()) { wx.showToast({ title: '请填写隐患描述', icon: 'none' }); return }
 
-    this.setData({ submitting: true })
+    this.setData({ submitting: true, uploadProgress: 0, uploadLabel: '正在提交…' })
     try {
       const record = await post('/rail/patrol/tasks/' + this.taskId + '/records', {
         type, hazard_id: hazardId, longitude: location.longitude, latitude: location.latitude, accuracy: location.accuracy, note
       })
-      wx.showLoading({ title: '上传中…', mask: true })
+
+      // 串行上传媒体，带进度
+      const totalFiles = media.length + (type === 'patrol' && hasHazard ? shots.length : 0)
+      let doneFiles = 0
       const takenAt = formatNow()
+
       for (let i = 0; i < media.length; i++) {
-        await uploadMedia(record.record_id, media[i].path, media[i].kind, takenAt)
+        const m = media[i]
+        this.setData({ uploadLabel: `正在上传 ${i + 1}/${media.length}` })
+        await uploadMedia(record.record_id, m.path, m.kind, takenAt, (p) => {
+          // 单个文件内的进度，折算到总进度
+          const fileBase = doneFiles / totalFiles * 100
+          const fileSpan = 1 / totalFiles * 100
+          this.setData({ uploadProgress: Math.round(fileBase + p.progress / 100 * fileSpan) })
+        })
+        doneFiles++
+        this.setData({ uploadProgress: Math.round(doneFiles / totalFiles * 100) })
       }
+
       // 日常巡查且声明有隐患 → 创建隐患（挂在本次巡查记录下）
       if (type === 'patrol' && hasHazard) {
+        this.setData({ uploadLabel: '正在保存隐患…' })
         const hazard = await post('/rail/patrol/tasks/' + this.taskId + '/hazards', {
           description: hazardDesc.trim(),
           hazard_type: this.data.hazardTypeIndex >= 0 ? this.data.hazardTypes[this.data.hazardTypeIndex].value : '',
           risk_level: this.data.riskIndex >= 0 ? this.data.risks[this.data.riskIndex].value : '',
           record_id: record.record_id
         })
-        for (const s of shots) { await uploadShot(hazard.hazard_id, s) }
+        for (let i = 0; i < shots.length; i++) {
+          this.setData({ uploadLabel: `正在上传截图 ${i + 1}/${shots.length}` })
+          await uploadShot(hazard.hazard_id, shots[i], (p) => {
+            const fileBase = doneFiles / totalFiles * 100
+            const fileSpan = 1 / totalFiles * 100
+            this.setData({ uploadProgress: Math.round(fileBase + p.progress / 100 * fileSpan) })
+          })
+          doneFiles++
+          this.setData({ uploadProgress: Math.round(doneFiles / totalFiles * 100) })
+        }
       }
       if (type === 'rectify' && submitReview) {
+        this.setData({ uploadLabel: '正在提交复核…' })
         await post('/rail/patrol/hazards/' + hazardId + '/submit')
       }
-      wx.hideLoading()
+      this.setData({ uploadProgress: 100, uploadLabel: '上报成功' })
       wx.showToast({ title: '上报成功', icon: 'success' })
       setTimeout(() => wx.navigateBack(), 800)
     } catch (e) {
-      wx.hideLoading()
       wx.showModal({ title: '上报失败', content: e.message, showCancel: false })
     } finally {
       this.setData({ submitting: false })

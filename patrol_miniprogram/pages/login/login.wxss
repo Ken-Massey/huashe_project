@@ -7,63 +7,108 @@
   box-sizing: border-box;
   padding: 60rpx 48rpx 120rpx;
   overflow: hidden;
-  background: linear-gradient(180deg, #13294b 0%, #1b3a67 32%, #2d5d95 58%, #6f9fc9 82%, #c3ddf2 100%);
+  background: linear-gradient(160deg, #13294b 0%, #1b3a67 34%, #2d5d95 60%, #6f9fc9 84%, #c3ddf2 100%);
 }
 
-/* 背景装饰（地铁线路网点缀） */
-.bg-deco {
+/* ===== 背景装饰：地铁线路网 ===== */
+.bg-deco { position: absolute; pointer-events: none; }
+.bg-circle {
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
+}
+.bg-c1 { width: 460rpx; height: 460rpx; top: -140rpx; right: -110rpx; }
+.bg-c2 { width: 340rpx; height: 340rpx; bottom: 100rpx; left: -130rpx; }
+
+/* 线路（弧形线条，模拟地铁线网） */
+.line {
   position: absolute;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  pointer-events: none;
+  border: 3rpx solid rgba(255, 255, 255, 0.18);
+  background: transparent !important;
 }
-.bg-deco-1 { width: 420rpx; height: 420rpx; top: -120rpx; right: -100rpx; }
-.bg-deco-2 { width: 320rpx; height: 320rpx; bottom: 80rpx; left: -120rpx; }
+.line-1 { width: 900rpx; height: 900rpx; top: 10%; left: -320rpx; }
+.line-2 { width: 700rpx; height: 700rpx; top: 26%; right: -280rpx; }
+.line-3 { width: 500rpx; height: 500rpx; bottom: -220rpx; left: 12%; }
 
+/* 车站圆点 */
+.station {
+  position: absolute;
+  width: 16rpx; height: 16rpx;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 8rpx rgba(255,255,255,0.22);
+}
+.station-1 { top: 21%; left: 17%; }
+.station-2 { top: 13%; right: 20%; }
+.station-3 { bottom: 27%; left: 12%; }
+.station-4 { bottom: 19%; right: 15%; }
+
+/* ===== 登录卡片 ===== */
 .login-card {
   position: relative;
   z-index: 2;
   width: 100%;
   max-width: 640rpx;
-  padding: 56rpx 48rpx 48rpx;
+  padding: 64rpx 48rpx 56rpx;
   background: #ffffff;
-  border-radius: 24rpx;
-  box-shadow: 0 24rpx 72rpx rgba(35, 82, 148, 0.22);
+  border-radius: 28rpx;
+  box-shadow: 0 24rpx 80rpx rgba(9, 25, 51, 0.35);
 }
 
-.logo {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 18rpx;
+.logo-wrap { display: flex; justify-content: center; margin-bottom: 22rpx; }
+.logo-badge {
+  width: 132rpx; height: 132rpx;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 36rpx;
+  background: linear-gradient(135deg, #2d5d95, #409eff);
+  box-shadow: 0 14rpx 32rpx rgba(45, 93, 149, 0.38);
 }
-.logo-icon { font-size: 88rpx; }
+.logo-icon { font-size: 72rpx; }
 
 .title {
   text-align: center;
-  font-size: 40rpx;
-  font-weight: 600;
+  font-size: 42rpx;
+  font-weight: 700;
   color: #1f2d3d;
   letter-spacing: 4rpx;
 }
 .subtitle {
-  margin: 12rpx 0 48rpx;
+  margin: 12rpx 0 52rpx;
   text-align: center;
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #8c9bab;
-  letter-spacing: 4rpx;
+  letter-spacing: 3rpx;
 }
 
-.field { margin-bottom: 32rpx; }
+.field { margin-bottom: 30rpx; }
 .input-wrap {
   display: flex;
   align-items: center;
-  height: 96rpx;
-  padding: 0 24rpx;
-  border: 2rpx solid #dcdfe6;
-  border-radius: 10rpx;
-  background: #fff;
+  height: 100rpx;
+  padding: 0 20rpx;
+  border: 2rpx solid #e4e9f2;
+  border-radius: 14rpx;
+  background: #f7fafd;
+  transition: all 0.2s ease;
 }
-.input-icon { font-size: 32rpx; margin-right: 16rpx; }
+.input-focus {
+  border-color: #409eff;
+  background: #fff;
+  box-shadow: 0 0 0 6rpx rgba(64, 158, 255, 0.12);
+}
+.input-error {
+  border-color: #f56c6c;
+  background: #fef0f0;
+  box-shadow: 0 0 0 6rpx rgba(245, 108, 108, 0.12);
+}
+.input-icon-box {
+  width: 56rpx; height: 56rpx;
+  margin-right: 18rpx;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12rpx;
+  background: #ecf5ff;
+}
+.input-icon { font-size: 28rpx; }
 .input {
   flex: 1;
   height: 100%;
@@ -72,29 +117,53 @@
 }
 .ph { color: #a8abb2; }
 
+/* 密码显示切换 */
+.pwd-toggle {
+  width: 56rpx; height: 56rpx;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32rpx;
+}
+
+/* 错误提示 */
+.error-msg {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin: -16rpx 0 24rpx;
+  padding: 14rpx 18rpx;
+  background: #fef0f0;
+  border-radius: 10rpx;
+  color: #f56c6c;
+  font-size: 24rpx;
+}
+.error-icon { font-size: 26rpx; }
+
 .login-btn {
   width: 100%;
-  height: 96rpx;
-  line-height: 96rpx;
-  margin-top: 12rpx;
-  border-radius: 10rpx;
-  background: #409eff;
+  height: 98rpx;
+  line-height: 98rpx;
+  margin-top: 16rpx;
+  border-radius: 14rpx;
+  background: linear-gradient(90deg, #409eff, #2d7fe0);
   color: #fff;
   font-size: 32rpx;
+  font-weight: 600;
   letter-spacing: 8rpx;
   text-align: center;
+  box-shadow: 0 10rpx 24rpx rgba(64, 158, 255, 0.35);
 }
 .login-btn::after { border: none; }
 .login-btn[disabled] { background: #a0cfff; color: #fff; }
-.login-btn-hover { background: #337ecc; }
+.login-btn-hover { opacity: 0.88; transform: scale(0.99); }
 
 .footer {
   position: fixed;
-  bottom: 32rpx;
+  bottom: 36rpx;
   left: 0;
   right: 0;
   text-align: center;
   font-size: 22rpx;
-  color: rgba(35, 67, 105, 0.65);
+  color: rgba(230, 240, 250, 0.75);
+  letter-spacing: 1rpx;
   z-index: 2;
 }

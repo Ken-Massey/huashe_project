@@ -50,11 +50,17 @@ public class PythonAuditClient
 
     public Object postFiles(String path, Map<String, MultipartFile> files, Map<String, String> fields)
     {
-        return postFiles(path, files, fields, Collections.emptyMap());
+        return postFiles(path, files, fields, Collections.emptyMap(), Collections.emptyMap());
     }
 
     public Object postFiles(String path, Map<String, MultipartFile> files, Map<String, String> fields,
             Map<String, MultipartFile[]> multiFiles)
+    {
+        return postFiles(path, files, fields, multiFiles, Collections.emptyMap());
+    }
+
+    public Object postFiles(String path, Map<String, MultipartFile> files, Map<String, String> fields,
+            Map<String, MultipartFile[]> multiFiles, Map<String, String> headers)
     {
         try
         {
@@ -67,6 +73,10 @@ public class PythonAuditClient
             if (StringUtils.isNotEmpty(token))
             {
                 request.header("X-Service-Token", token);
+            }
+            if (headers != null)
+            {
+                headers.forEach(request::header);
             }
             HttpResponse<String> response = uploadClient.send(
                     request.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
