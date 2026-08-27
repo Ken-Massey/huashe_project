@@ -712,6 +712,27 @@ def _session_review_profile(session: dict[str, Any]) -> str:
     })
 
 
+def _session_overall_context(session: dict[str, Any]) -> dict[str, Any]:
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    latest = session.get("latest_result") if isinstance(session.get("latest_result"), dict) else {}
+    context: dict[str, Any] = {}
+    for candidate in (
+        metadata.get("form_data"),
+        metadata.get("manual_context"),
+        latest.get("form_data"),
+        latest.get("manual_context"),
+        latest.get("manual_context_for_consistency"),
+    ):
+        if isinstance(candidate, dict):
+            context.update(candidate)
+    context["review_profile"] = _session_review_profile(session)
+    context["project_stage"] = metadata.get("stage_name") or context.get("project_stage") or ""
+    context["archive_binding"] = metadata.get("archive_binding") or {}
+    context["uploaded_documents"] = metadata.get("uploaded_documents") or context.get("uploaded_documents") or []
+    context["source_files"] = metadata.get("source_files") or context.get("source_files") or []
+    return context
+
+
 def _apply_review_profile_wording(items: list[dict[str, Any]], profile: str) -> list[dict[str, Any]]:
     if profile != "safety_assessment_report":
         return items
@@ -1250,9 +1271,25 @@ def _attach_audit_session(
     if consistency_items:
         items = _select_key_review_items(consistency_items + items, REVIEW_ITEM_MAX_COUNT)
     items = _ai_expand_review_items(result, items)
-    overall_opinion = _build_overall_review_item(result, items)
     review_profile = _infer_review_profile_from_result(result)
     manual_context = _extract_manual_context(result)
+    overall_context = {}
+    if isinstance(result, dict):
+        overall_context.update(result)
+    if isinstance(manual_context, dict):
+        overall_context.update(manual_context)
+    overall_context["review_profile"] = review_profile
+    if project:
+        overall_context.setdefault("project_name", project.get("project_name") or "")
+    if stage:
+        overall_context.setdefault("project_stage", stage.get("stage_name") or "")
+    overall_opinion = _sanitize_overall_opinion(
+        {},
+        _build_overall_review_item(result, items),
+        items,
+        overall_context,
+        force_formal=True,
+    )
     uploaded_documents = manual_context.get("uploaded_documents") if isinstance(manual_context, dict) else []
     if not isinstance(uploaded_documents, list):
         uploaded_documents = []
@@ -1271,6 +1308,7 @@ def _attach_audit_session(
             "archive_binding": result.get("archive_binding") or {},
             "overall_opinion": overall_opinion,
             "review_profile": review_profile,
+            "form_data": manual_context if isinstance(manual_context, dict) else {},
             "uploaded_documents": uploaded_documents,
             "source_files": source_files,
         },
@@ -1456,16 +1494,24 @@ def _ensure_detail_instruction_applied(
     return updated
 
 
-def _sanitize_overall_opinion(value: Any, fallback: dict[str, Any] | None, items: list[dict[str, Any]]) -> dict[str, Any]:
+def _sanitize_overall_opinion(
+    value: Any,
+    fallback: dict[str, Any] | None,
+    items: list[dict[str, Any]],
+    result_context: dict[str, Any] | None = None,
+    *,
+    force_formal: bool = False,
+) -> dict[str, Any]:
     source = value.get("overall_opinion") if isinstance(value, dict) else None
     if not isinstance(source, dict):
         source = fallback if isinstance(fallback, dict) else {}
     conclusion = _short_text(source.get("conclusion") or source.get("recommendation") or "", 1600)
     risk_level = _short_text(source.get("risk_level") or "", 40)
-    if not conclusion:
-        conclusion = _build_overall_review_item({"risk_level": risk_level}, items).get("conclusion") or ""
-    elif _overall_text_needs_formal_tone(conclusion):
-        conclusion = _formal_overall_review_text({"risk_level": risk_level}, items, conclusion)
+    context = dict(result_context or {})
+    if risk_level and not context.get("risk_level"):
+        context["risk_level"] = risk_level
+    if force_formal or not conclusion or _overall_text_needs_formal_tone(conclusion):
+        conclusion = _formal_overall_review_text(context, items, conclusion)
     return {
         "order_no": 0,
         "title": "综合评价",
@@ -1490,6 +1536,107 @@ def _contains_hard_rejection_text(*parts: Any) -> bool:
     return bool(re.search(r"(不予通过|不同意|不得(?:实施|施工|推进|进入)|不可(?:实施|施工)|退回|否决)", text))
 
 
+def _overall_form_context(result: dict[str, Any]) -> dict[str, Any]:
+    form: dict[str, Any] = {}
+    if isinstance(result, dict):
+        form.update(result)
+    project_data = result.get("project_data") if isinstance(result.get("project_data"), dict) else {}
+    for candidate in (
+        result.get("form_data"),
+        result.get("manual_context"),
+        result.get("manual_context_for_consistency"),
+        project_data.get("form_data") if isinstance(project_data, dict) else None,
+    ):
+        if isinstance(candidate, dict):
+            form.update(candidate)
+    if isinstance(result.get("project"), dict):
+        form.update({f"project_{key}": value for key, value in result["project"].items()})
+        form.update({key: value for key, value in result["project"].items() if key not in form})
+    if isinstance(result.get("metro_structure"), dict):
+        form.update({key: value for key, value in result["metro_structure"].items() if key not in form})
+    if isinstance(result.get("pit"), dict):
+        form.update({key: value for key, value in result["pit"].items() if key not in form})
+    return form
+
+
+def _usable_overall_value(value: Any) -> str:
+    if value in (None, "", [], {}):
+        return ""
+    if isinstance(value, list):
+        parts = [_usable_overall_value(item) for item in value]
+        return "、".join(part for part in parts if part)
+    text = str(value).strip()
+    if not text:
+        return ""
+    if re.search(r"(识别不到|请人工|未填写|未确认|待补充|待填写|暂无|未知|点击地图|自动识别)", text):
+        return ""
+    return text
+
+
+def _format_overall_meter(value: Any) -> str:
+    text = _usable_overall_value(value)
+    if not text:
+        return ""
+    try:
+        number = float(text)
+    except (TypeError, ValueError):
+        return text if re.search(r"(米|m|M)", text) else f"{text}米"
+    if number.is_integer():
+        return f"{int(number)}米"
+    return f"{number:g}米"
+
+
+def _support_form_text(value: Any) -> str:
+    text = _usable_overall_value(value)
+    if not text:
+        return ""
+    text = text.replace(",", "、")
+    return text if re.search(r"(支护|围护|桩|墙|锚|撑|帷幕|放坡)", text) else f"{text}支护"
+
+
+def _review_profile_label(profile: str) -> str:
+    if profile == "safety_assessment_report":
+        return "专项评估报告"
+    if profile == "design_scheme":
+        return "设计方案"
+    if profile == "construction_scheme":
+        return "施工方案"
+    return "报审资料"
+
+
+def _engineering_overview_sentence(result: dict[str, Any]) -> str:
+    form = _overall_form_context(result)
+    relation = _usable_overall_value(form.get("relative_relationship"))
+    line = _usable_overall_value(form.get("metro_line_name") or form.get("line_name"))
+    section = _usable_overall_value(form.get("metro_section_name") or form.get("section_name"))
+    pit_depth = _format_overall_meter(form.get("pit_depth_m"))
+    support = _support_form_text(form.get("support_components") or form.get("support_form") or form.get("support_type"))
+    horizontal = _format_overall_meter(form.get("minimum_horizontal_clearance_m"))
+    dewatering = _usable_overall_value(form.get("dewatering_method"))
+    buried = _format_overall_meter(form.get("buried_depth_m"))
+
+    clauses: list[str] = []
+    metro_target = "".join(part for part in (line, section) if part)
+    if relation:
+        if metro_target:
+            clauses.append(f"本项目与{metro_target}呈{relation}关系")
+        else:
+            clauses.append(f"本项目与地铁结构呈{relation}关系")
+    elif metro_target:
+        clauses.append(f"本项目邻近{metro_target}")
+    if pit_depth:
+        clauses.append(f"基坑开挖深度约为{pit_depth}")
+    if support:
+        clauses.append(f"采用{support}")
+    if horizontal:
+        clauses.append(f"支护结构与地铁结构边线最小水平距离约为{horizontal}")
+    if dewatering:
+        clauses.append(f"降水方式为{dewatering}")
+    if buried:
+        clauses.append(f"对应地铁结构埋深约为{buried}")
+    return "，".join(clauses) + "。" if clauses else ""
+
+
 def _formal_overall_review_text(
     result: dict[str, Any],
     selected_items: list[dict[str, Any]],
@@ -1503,6 +1650,12 @@ def _formal_overall_review_text(
         or ""
     )
     stage_key = _stage_key_for_overall(stage)
+    review_profile = (
+        str(result.get("review_profile") or "")
+        or _infer_review_profile_from_result(result)
+    )
+    overview = _engineering_overview_sentence(result)
+    profile_label = _review_profile_label(review_profile)
     has_items = bool(selected_items)
     hard_rejection = _contains_hard_rejection_text(
         raw_summary,
@@ -1516,40 +1669,66 @@ def _formal_overall_review_text(
         ],
     )
 
+    if review_profile == "safety_assessment_report":
+        base = (
+            "经审查，本次专项评估报告总体符合基坑项目涉铁保护区专项评估审查要求，已具备开展本阶段技术审查和评估结论复核的基础。"
+            "后续在落实下列审核意见、核实关键参数并完善评估结论后，可按程序推进后续报审工作。"
+        )
+        return f"{overview}{base}" if overview else base
+    if review_profile == "design_scheme":
+        base = (
+            "经审查，本次设计方案总体符合基坑项目涉铁保护区设计审查流程要求，已具备开展设计阶段合规审查和方案深化的基础。"
+            "后续在落实下列审核意见、完善相关资料及控制措施后，可按程序推进施工图深化及备案审查工作。"
+        )
+        return f"{overview}{base}" if overview else base
+    if review_profile == "construction_scheme":
+        base = (
+            "经审查，本次施工方案总体符合基坑项目涉铁保护区施工审查流程要求，已具备开展施工阶段合规审查和现场保护控制的基础。"
+            "后续在落实下列审核意见、完善施工组织及监测应急措施后，可按程序推进后续施工管理工作。"
+        )
+        return f"{overview}{base}" if overview else base
+
     if hard_rejection:
-        return (
+        base = (
             "经审查，本次报审资料已按基坑项目涉铁保护区审查流程完成阶段性核查，资料组织和审查程序总体符合本阶段合规审查要求。"
             "后续在落实下列审核意见、完成方案修改、资料补充和专项复核，并确认保护区安全控制措施完善后，可按程序推进后续工作。"
         )
+        return f"{overview}{base}" if overview else base
     if not has_items:
-        return (
-            "经审查，本次报审资料与本阶段地铁保护区管理要求总体相符，资料内容和审查程序总体符合基坑项目合规审查要求，未发现需单独列出的主要风险事项。"
+        base = (
+            f"经审查，本次{profile_label}与本阶段地铁保护区管理要求总体相符，资料内容和审查程序总体符合基坑项目合规审查要求，未发现需单独列出的主要风险事项。"
             "后续仍应按规范落实保护区管理、施工控制、监测和报审要求。"
         )
+        return f"{overview}{base}" if overview else base
     if stage_key == "规划":
-        return (
+        base = (
             "经审查，本次规划资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展规划阶段合规审查和方案深化的基础。"
             "后续在落实下列审核意见、完善线位布置、净距控制、专项评估及报审材料后，可按程序推进后续工作。"
         )
+        return f"{overview}{base}" if overview else base
     if stage_key == "设计":
-        return (
+        base = (
             "经审查，本次设计资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展设计阶段合规审查和方案完善的基础。"
             "后续在落实下列审核意见、补充完善相关资料及安全控制措施后，可按程序推进施工图深化及备案审查工作。"
         )
+        return f"{overview}{base}" if overview else base
     if stage_key == "施工":
-        return (
+        base = (
             "经审查，本次施工资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展施工阶段合规审查和现场保护控制的基础。"
             "后续在落实下列审核意见、完善施工组织及监测应急措施后，可按程序推进后续施工管理工作。"
         )
+        return f"{overview}{base}" if overview else base
     if stage_key == "出让":
-        return (
+        base = (
             "经审查，本次资料总体符合基坑项目涉铁保护区前期审查流程要求，已基本具备作为后续规划设计深化依据的合规基础。"
             "后续在落实下列审核意见、明确保护区控制条件及报审衔接要求后，可按程序推进后续工作。"
         )
-    return (
+        return f"{overview}{base}" if overview else base
+    base = (
         "经审查，本次资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展本阶段合规审查和方案深化的基础。"
         "后续在落实下列审核意见、补充完善相关资料及安全控制措施后，可按程序推进后续工作。"
     )
+    return f"{overview}{base}" if overview else base
 
 
 def _overall_text_needs_formal_tone(text: str) -> bool:
@@ -1739,6 +1918,7 @@ def _ai_rewrite_review_items(
         "version_no": session.get("current_version"),
         "overall_opinion": current_overall,
         "review_profile": review_profile,
+        "form_data": _session_overall_context(session),
         "items": current_items,
     }, ensure_ascii=False)
     prompt = (
@@ -1752,7 +1932,13 @@ def _ai_rewrite_review_items(
     items = _merge_partial_review_items(instruction, current_items, items)
     items = _ensure_detail_instruction_applied(instruction, current_items, items)
     items = _apply_review_profile_wording(items, review_profile)
-    overall = _sanitize_overall_opinion(value, current_overall, items)
+    overall = _sanitize_overall_opinion(
+        value,
+        current_overall,
+        items,
+        _session_overall_context(session),
+        force_formal=True,
+    )
     reply = "已根据你的指令更新审核结果。"
     if isinstance(value, dict) and value.get("reply"):
         reply = _clean_assistant_plain_text(value.get("reply"))[:1000] or reply
@@ -1768,7 +1954,13 @@ def _apply_audit_chat_instruction(session_id: str, instruction: str) -> dict[str
     deterministic = _deterministic_instruction_items(instruction, current_items)
     if deterministic is not None:
         items, reply = deterministic
-        overall = _sanitize_overall_opinion({}, (session.get("metadata") or {}).get("overall_opinion") or {}, items)
+        overall = _sanitize_overall_opinion(
+            {},
+            (session.get("metadata") or {}).get("overall_opinion") or {},
+            items,
+            _session_overall_context(session),
+            force_formal=True,
+        )
     elif _looks_like_review_edit_instruction(instruction):
         items, overall, reply = _ai_rewrite_review_items(instruction, session)
     else:
@@ -1820,7 +2012,16 @@ def _session_archive_data(
     form_data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     items = [item for item in (session.get("items") or []) if not _is_overall_review_item(item)]
-    overall_opinion = (session.get("metadata") or {}).get("overall_opinion") or {}
+    context = _session_overall_context(session)
+    if form_data:
+        context.update(form_data)
+    overall_opinion = _sanitize_overall_opinion(
+        {},
+        (session.get("metadata") or {}).get("overall_opinion") or {},
+        items,
+        context,
+        force_formal=True,
+    )
     risk_level = ""
     if items:
         risk_level = max(
@@ -1842,7 +2043,7 @@ def _session_archive_data(
         "version_no": session.get("current_version"),
         "review_items": items,
         "overall_opinion": overall_opinion,
-        "form_data": form_data or {},
+        "form_data": form_data or context,
         "latest_result": session.get("latest_result") or {},
     }
     return {
@@ -1855,7 +2056,8 @@ def _session_archive_data(
 
 
 def _session_project_data(session: dict[str, Any], payload: AuditSessionReplyPayload) -> dict[str, Any]:
-    form = dict(payload.form_data or {})
+    form = _session_overall_context(session)
+    form.update(payload.form_data or {})
     project_name = (
         payload.project_name
         or form.get("project_name")
@@ -1904,16 +2106,19 @@ def _session_reply_package(
     project = data["project"]
     items = [item for item in (session.get("items") or []) if not _is_overall_review_item(item)]
     overall_opinion = (session.get("metadata") or {}).get("overall_opinion") or {}
-    overall_conclusion = _short_text(overall_opinion.get("conclusion") or overall_opinion.get("recommendation") or "", 1600)
-    if not overall_conclusion or _overall_text_needs_formal_tone(overall_conclusion):
-        overall_conclusion = _formal_overall_review_text(
-            {
-                "project_stage": project.get("project_stage") or "",
-                "risk_level": _session_archive_data(session)["risk_level"],
-            },
-            items,
-            overall_conclusion,
-        )
+    overall_context = _session_overall_context(session)
+    overall_context.update(payload.form_data or {})
+    overall_context.update({
+        "project_stage": project.get("project_stage") or "",
+        "risk_level": _session_archive_data(session, payload.form_data)["risk_level"],
+    })
+    overall_conclusion = _sanitize_overall_opinion(
+        {},
+        overall_opinion,
+        items,
+        overall_context,
+        force_formal=True,
+    ).get("conclusion") or ""
     findings = []
     audit_opinions = []
     for item in items:
@@ -2108,10 +2313,15 @@ def _ensure_archive_record_session(record: dict[str, Any]) -> dict[str, Any]:
         items = []
     if not items:
         items = _audit_result_to_review_items(result_data)
+    form_data = result_data.get("form_data") if isinstance(result_data.get("form_data"), dict) else {}
+    if not form_data:
+        form_data = _extract_manual_context(result_data)
     overall = _sanitize_overall_opinion(
         {"overall_opinion": result_data.get("overall_opinion") or latest.get("overall_opinion") or {}},
         {},
         items,
+        form_data if isinstance(form_data, dict) else {},
+        force_formal=True,
     )
     manual_context = _extract_manual_context(result_data)
     uploaded_documents = manual_context.get("uploaded_documents") if isinstance(manual_context, dict) else []
@@ -2141,6 +2351,7 @@ def _ensure_archive_record_session(record: dict[str, Any]) -> dict[str, Any]:
             "overall_opinion": overall,
             "restored_from_archive_audit_id": record.get("audit_id"),
             "review_profile": _infer_review_profile_from_result(result_data),
+            "form_data": form_data if isinstance(form_data, dict) else {},
             "uploaded_documents": uploaded_documents,
             "source_files": source_files,
         },

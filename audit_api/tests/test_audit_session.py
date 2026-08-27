@@ -334,6 +334,35 @@ class AuditSessionApiTests(unittest.TestCase):
         self.assertIn("补充", items[0]["title"])
         self.assertIn("补充", items[0]["conclusion"])
 
+    def test_overall_opinion_uses_engineering_overview_and_document_profile(self):
+        overall = main._sanitize_overall_opinion(
+            {},
+            {},
+            [{"title": "止水帷幕", "conclusion": "核实止水帷幕可控性。", "risk_level": "中"}],
+            {
+                "review_profile": "safety_assessment_report",
+                "relative_relationship": "北侧",
+                "metro_line_name": "地铁2号线",
+                "metro_section_name": "云锦路站~莫愁湖站区间隧道",
+                "pit_depth_m": 6.7,
+                "support_components": ["钻孔灌注桩", "三轴搅拌桩止水帷幕"],
+                "minimum_horizontal_clearance_m": 20.1,
+                "dewatering_method": "管井降水",
+                "buried_depth_m": "14.5~16.5米",
+            },
+            force_formal=True,
+        )
+
+        text = overall["conclusion"]
+        self.assertIn("本项目与地铁2号线云锦路站~莫愁湖站区间隧道呈北侧关系", text)
+        self.assertIn("基坑开挖深度约为6.7米", text)
+        self.assertIn("采用钻孔灌注桩、三轴搅拌桩止水帷幕", text)
+        self.assertIn("支护结构与地铁结构边线最小水平距离约为20.1米", text)
+        self.assertIn("降水方式为管井降水", text)
+        self.assertIn("对应地铁结构埋深约为14.5~16.5米", text)
+        self.assertIn("本次专项评估报告总体符合", text)
+        self.assertNotIn("落实专项评估", text)
+
     def test_chat_rewrite_keeps_document_type_style_from_session_metadata(self):
         class FakeAgent:
             def complete_json(self, system, prompt, max_tokens):

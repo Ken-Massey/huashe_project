@@ -123,6 +123,7 @@
       :visible.sync="dataDialogVisible"
       width="980px"
       append-to-body
+      :close-on-click-modal="false"
       class="audit-data-dialog"
     >
         <el-alert
@@ -234,18 +235,21 @@
                   <div class="location-section-head">
                     <div>
                       <strong>项目位置</strong>
-                      <span>默认南京范围，点击地图或填写经纬度后自动检索 1 公里内项目</span>
+                      <span>默认南京范围，点击地图或填写位置后自动检索 50 米内项目</span>
                     </div>
                     <el-button size="mini" icon="el-icon-refresh" :loading="nearbyLoading" @click="refreshNearbyProjects">刷新附近项目</el-button>
                   </div>
                   <div class="location-input-grid">
                     <el-form-item label="位置描述">
-                      <div class="location-search-wrap">
+                      <div class="location-search-wrap" @mousedown.stop @click.stop>
                         <el-input
-                          v-model.trim="form.location"
+                          v-model="form.location"
                           class="location-search-input"
                           clearable
                           placeholder="例如：南京市建邺区江心洲"
+                          @mousedown.native.stop
+                          @click.native.stop
+                          @select.native.stop
                           @input="locationInputChanged"
                           @focus="showLocationSuggestions"
                           @change="locationChanged"
@@ -260,7 +264,7 @@
                             v-for="item in locationCandidates"
                             :key="`${item.name}-${item.address}-${item.longitude}-${item.latitude}`"
                             class="location-suggestion"
-                            @mousedown.prevent="locationSuggestionSelected(item)"
+                            @mousedown.stop.prevent="locationSuggestionSelected(item)"
                           >
                             <strong>{{ item.name }}</strong>
                             <span>{{ item.address }}</span>
@@ -269,21 +273,15 @@
                         </div>
                       </div>
                     </el-form-item>
-                    <el-form-item label="经度">
-                      <el-input v-model.trim="form.longitude" type="number" placeholder="点击地图自动填入" @change="projectCoordinateChanged" />
-                    </el-form-item>
-                    <el-form-item label="纬度">
-                      <el-input v-model.trim="form.latitude" type="number" placeholder="点击地图自动填入" @change="projectCoordinateChanged" />
-                    </el-form-item>
                   </div>
                   <div v-if="amapKey" ref="amapContainer" class="amap-container" />
                   <div v-else class="amap-fallback">
-                    未配置高德地图 Key，可先手动填写经纬度；配置 VUE_APP_AMAP_KEY 后会显示南京地图。
+                    未配置高德地图 Key，配置 VUE_APP_AMAP_KEY 后会显示南京地图并自动定位。
                   </div>
                   <div class="nearby-project-box">
                     <div class="nearby-project-head">
                       <strong>附近相关项目</strong>
-                      <span>默认 {{ nearbyRadius / 1000 }} 公里，勾选后纳入叠加审核</span>
+                      <span>自动检索 50 米内项目，勾选后纳入叠加审核</span>
                     </div>
                     <el-table
                       ref="nearbyProjectTable"
@@ -682,7 +680,7 @@ export default {
       archiveProjects: [], archiveLoading: false, selectedArchiveProjectId: '', selectedArchiveStageId: '',
       selectedArchiveProject: null, historyPreview: { record_count: 0, records: [] }, archiveLookupSequence: 0,
       inheritedFormSource: null,
-      nearbyRadius: 1000,
+      nearbyRadius: 50,
       nearbyProjects: [],
       selectedNearbyProjectIds: [],
       nearbyLoading: false,
@@ -695,6 +693,7 @@ export default {
       autoLocating: false,
       locationManuallyCleared: false,
       locationSelecting: false,
+      locationSelectionGuardUntil: 0,
       locationSearchSequence: 0,
       locationCandidates: [],
       locationSuggestionsVisible: false,
@@ -1109,7 +1108,7 @@ export default {
         }
         this.refreshAmapLayout()
       } catch (error) {
-        this.$message.warning('高德地图加载失败，可先手动填写经纬度')
+        this.$message.warning('高德地图加载失败，可先填写位置描述后重试')
       }
     },
     refreshAmapLayout() {
@@ -1196,7 +1195,10 @@ export default {
       if (this.locationInputTimer) clearTimeout(this.locationInputTimer)
       const text = String(value || '').trim()
       if (!text) {
-        this.clearProjectLocation()
+        this.locationSearchSequence += 1
+        this.locationCandidates = []
+        this.locationSuggestionsVisible = false
+        this.locationSuggestionLoading = false
         return
       }
       this.locationManuallyCleared = false
@@ -1218,6 +1220,7 @@ export default {
       if (!item) return
       this.locationSearchSequence += 1
       this.locationSelecting = true
+      this.locationSelectionGuardUntil = Date.now() + 1000
       this.locationManuallyCleared = false
       this.locationCandidates = []
       this.locationSuggestionsVisible = false
@@ -1228,7 +1231,7 @@ export default {
       this.$nextTick(() => {
         setTimeout(() => {
           this.locationSelecting = false
-        }, 200)
+        }, 800)
       })
     },
     geocodeAddress(address) {
@@ -1317,7 +1320,7 @@ export default {
       this.saveAuditDraft()
     },
     locationChanged() {
-      if (this.locationSelecting) return
+      if (this.locationSelecting || Date.now() < this.locationSelectionGuardUntil) return
       const locationText = String(this.form.location || '').trim()
       if (!locationText) {
         this.clearProjectLocation()
@@ -1334,7 +1337,8 @@ export default {
       this.searchLocationCandidates(locationText).then(rows => {
         if (searchSequence !== this.locationSearchSequence || this.locationSelecting) return
         if (rows.length) {
-          this.locationSuggestionSelected(rows[0])
+          this.locationCandidates = rows
+          this.locationSuggestionsVisible = true
           return
         }
         this.autoLocateProject(true)
@@ -2616,24 +2620,133 @@ export default {
     displayOverallOpinion(item) {
       const text = this.cleanChatMessageContent(item && (item.conclusion || item.recommendation) || '')
       if (!text) return ''
-      if (!this.overallOpinionNeedsPositiveTone(text)) return text
+      if (!this.overallOpinionNeedsPositiveTone(text) && !this.overallOpinionNeedsStandardTone(text)) return text
       return this.positiveOverallOpinionText()
     },
     overallOpinionNeedsPositiveTone(value) {
       return /(不予通过|不同意|不可实施|不得进入|不得实施|多项高风险|高风险及不合规|总体结论为|缺乏|不足|超限|缺陷|缺失|不满足|不符合|严禁|必须严格)/.test(String(value || ''))
     },
+    overallOpinionNeedsStandardTone(value) {
+      const text = String(value || '')
+      const profile = this.reviewProfileForOverallOpinion()
+      const overview = this.engineeringOverviewText()
+      if (profile === 'safety_assessment_report' && !text.includes('本次专项评估报告总体符合')) return true
+      if (profile === 'design_scheme' && !text.includes('本次设计方案总体符合')) return true
+      if (profile === 'construction_scheme' && !text.includes('本次施工方案总体符合')) return true
+      if (/本次(?:规划|设计|施工)?资料总体符合基坑项目涉铁保护区/.test(text)) return true
+      if (overview) {
+        const firstClause = overview.split('，')[0].replace(/。$/, '').trim()
+        if (firstClause && !text.includes(firstClause)) return true
+      }
+      return false
+    },
+    reviewProfileForOverallOpinion() {
+      const metadata = this.auditSession && this.auditSession.metadata || {}
+      const profile = String(metadata.review_profile || '').trim()
+      if (profile) return profile
+      const text = (this.documents || []).map(item => [
+        item.file && item.file.name,
+        item.name,
+        item.displayName,
+        item.role,
+        item.textPreview
+      ].filter(Boolean).join(' ')).join(' ')
+      if (/施工组织设计|专项施工方案|施工方案|桩基和支护施工方案|基坑支护施工/.test(text)) return 'construction_scheme'
+      if (/安全评估报告|安全影响评估|安全性影响评估|安全专项评估|专项评估报告|预评估报告|评估咨询项目/.test(text)) return 'safety_assessment_report'
+      if (/设计方案|方案设计|设计文件|设计资料/.test(text)) return 'design_scheme'
+      return ''
+    },
+    usableOverallValue(value) {
+      if (value === null || value === undefined || value === '') return ''
+      if (Array.isArray(value)) return value.map(item => this.usableOverallValue(item)).filter(Boolean).join('、')
+      const text = String(value).trim()
+      if (!text || /(识别不到|请人工|未填写|未确认|待补充|待填写|暂无|未知|点击地图|自动识别)/.test(text)) return ''
+      return text
+    },
+    formatOverallMeter(value) {
+      const text = this.usableOverallValue(value)
+      if (!text) return ''
+      const numberValue = Number(text)
+      if (Number.isFinite(numberValue)) return `${Number.isInteger(numberValue) ? numberValue : Number(numberValue.toFixed(3))}米`
+      return /米|m/i.test(text) ? text : `${text}米`
+    },
+    supportFormText(value) {
+      const text = this.usableOverallValue(value)
+      if (!text) return ''
+      const normalized = text.replace(/,/g, '、')
+      return /(支护|围护|桩|墙|锚|撑|帷幕|放坡)/.test(normalized) ? normalized : `${normalized}支护`
+    },
+    overallContextForm() {
+      const metadata = this.auditSession && this.auditSession.metadata || {}
+      const latest = this.auditSession && this.auditSession.latest_result || {}
+      const form = {}
+      ;[
+        metadata.form_data,
+        metadata.manual_context,
+        latest.form_data,
+        latest.manual_context,
+        latest.manual_context_for_consistency,
+        this.normalizedFormPayload()
+      ].forEach(item => {
+        if (item && typeof item === 'object' && !Array.isArray(item)) Object.assign(form, item)
+      })
+      return form
+    },
+    engineeringOverviewText() {
+      const form = this.overallContextForm()
+      const relation = this.usableOverallValue(form.relative_relationship)
+      const line = this.usableOverallValue(form.metro_line_name || form.line_name)
+      const section = this.usableOverallValue(form.metro_section_name || form.section_name)
+      const pitDepth = this.formatOverallMeter(form.pit_depth_m)
+      const support = this.supportFormText(form.support_components || form.support_form || form.support_type)
+      const horizontal = this.formatOverallMeter(form.minimum_horizontal_clearance_m)
+      const dewatering = this.usableOverallValue(form.dewatering_method)
+      const buried = this.formatOverallMeter(form.buried_depth_m)
+      const clauses = []
+      const metroTarget = `${line}${section}`
+      if (relation) {
+        clauses.push(metroTarget ? `本项目与${metroTarget}呈${relation}关系` : `本项目与地铁结构呈${relation}关系`)
+      } else if (metroTarget) {
+        clauses.push(`本项目邻近${metroTarget}`)
+      }
+      if (pitDepth) clauses.push(`基坑开挖深度约为${pitDepth}`)
+      if (support) clauses.push(`采用${support}`)
+      if (horizontal) clauses.push(`支护结构与地铁结构边线最小水平距离约为${horizontal}`)
+      if (dewatering) clauses.push(`降水方式为${dewatering}`)
+      if (buried) clauses.push(`对应地铁结构埋深约为${buried}`)
+      return clauses.length ? `${clauses.join('，')}。` : ''
+    },
     positiveOverallOpinionText() {
       const stage = String(this.form.project_stage || '').trim()
+      const overview = this.engineeringOverviewText()
+      const profile = this.reviewProfileForOverallOpinion()
+      let base = ''
+      if (profile === 'safety_assessment_report') {
+        base = '经审查，本次专项评估报告总体符合基坑项目涉铁保护区专项评估审查要求，已具备开展本阶段技术审查和评估结论复核的基础。后续在落实下列审核意见、核实关键参数并完善评估结论后，可按程序推进后续报审工作。'
+        return `${overview}${base}`
+      }
+      if (profile === 'design_scheme') {
+        base = '经审查，本次设计方案总体符合基坑项目涉铁保护区设计审查流程要求，已具备开展设计阶段合规审查和方案深化的基础。后续在落实下列审核意见、完善相关资料及控制措施后，可按程序推进施工图深化及备案审查工作。'
+        return `${overview}${base}`
+      }
+      if (profile === 'construction_scheme') {
+        base = '经审查，本次施工方案总体符合基坑项目涉铁保护区施工审查流程要求，已具备开展施工阶段合规审查和现场保护控制的基础。后续在落实下列审核意见、完善施工组织及监测应急措施后，可按程序推进后续施工管理工作。'
+        return `${overview}${base}`
+      }
       if (stage.includes('设计')) {
-        return '经审查，本次设计资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展设计阶段合规审查和方案完善的基础。后续在落实下列审核意见、补充完善相关资料及控制措施后，可按程序推进施工图深化及备案审查工作。'
+        base = '经审查，本次设计资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展设计阶段合规审查和方案完善的基础。后续在落实下列审核意见、补充完善相关资料及控制措施后，可按程序推进施工图深化及备案审查工作。'
+        return `${overview}${base}`
       }
       if (stage.includes('施工')) {
-        return '经审查，本次施工资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展施工阶段合规审查和现场保护控制的基础。后续在落实下列审核意见、完善施工组织及监测应急措施后，可按程序推进后续施工管理工作。'
+        base = '经审查，本次施工资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展施工阶段合规审查和现场保护控制的基础。后续在落实下列审核意见、完善施工组织及监测应急措施后，可按程序推进后续施工管理工作。'
+        return `${overview}${base}`
       }
       if (stage.includes('出让')) {
-        return '经审查，本次资料总体符合基坑项目涉铁保护区前期审查流程要求，已基本具备作为后续规划设计深化依据的合规基础。后续在落实下列审核意见、明确保护区控制条件及报审衔接要求后，可按程序推进后续工作。'
+        base = '经审查，本次资料总体符合基坑项目涉铁保护区前期审查流程要求，已基本具备作为后续规划设计深化依据的合规基础。后续在落实下列审核意见、明确保护区控制条件及报审衔接要求后，可按程序推进后续工作。'
+        return `${overview}${base}`
       }
-      return '经审查，本次资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展本阶段合规审查和方案深化的基础。后续在落实下列审核意见、补充完善相关资料及安全控制措施后，可按程序推进后续工作。'
+      base = '经审查，本次资料总体符合基坑项目涉铁保护区审查流程要求，已具备开展本阶段合规审查和方案深化的基础。后续在落实下列审核意见、补充完善相关资料及安全控制措施后，可按程序推进后续工作。'
+      return `${overview}${base}`
     },
     displayReviewTitle(item) {
       const rawTitle = this.cleanChatMessageContent(item && item.title || '')
@@ -2986,7 +3099,7 @@ export default {
 .location-section-head,.nearby-project-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .location-section-head strong,.nearby-project-head strong { display: block; color: #1f2f2b; font-size: 15px; }
 .location-section-head span,.nearby-project-head span { color: #77837e; font-size: 12px; }
-.location-input-grid { display: grid; grid-template-columns: minmax(0,1fr) 150px 150px; gap: 10px; }
+.location-input-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; }
 .location-input-grid ::v-deep .el-form-item { margin-bottom: 10px; }
 .location-input-grid ::v-deep .el-form-item__label { float: none; display: block; width: auto !important; padding: 0 0 4px; line-height: 20px; text-align: left; }
 .location-input-grid ::v-deep .el-form-item__content { margin-left: 0 !important; }
