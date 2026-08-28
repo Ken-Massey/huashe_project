@@ -82,6 +82,19 @@ export const constantRoutes = [
     ]
   },
   {
+    path: '/rail/workflow',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/rail/workflow/index'),
+        name: 'RailWorkflow',
+        meta: { title: '审核流转', noCache: true }
+      }
+    ]
+  },
+  {
     path: '/user',
     component: Layout,
     hidden: true,
@@ -106,6 +119,32 @@ export const constantRoutes = [
         component: () => import('@/views/rail/patrol/index'),
         name: 'RailPatrol',
         meta: { title: '现场符合性巡查', noCache: true }
+      }
+    ]
+  },
+  {
+    path: '/rail/knowledge',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/rail/knowledge/index'),
+        name: 'RailKnowledgeStatic',
+        meta: { title: '知识库', noCache: true }
+      }
+    ]
+  },
+  {
+    path: '/rail/archive',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/rail/archive/index'),
+        name: 'RailArchiveStatic',
+        meta: { title: '项目档案', noCache: true }
       }
     ]
   },

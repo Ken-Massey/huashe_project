@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.rail.RailAuditOpinionSnapshotMapper">
+
+    <resultMap type="com.ruoyi.system.domain.rail.RailAuditOpinionSnapshot" id="RailAuditOpinionSnapshotResult">
+        <id property="snapshotId" column="snapshot_id"/>
+        <result property="workflowId" column="workflow_id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="auditVersion" column="audit_version"/>
+        <result property="opinionNo" column="opinion_no"/>
+        <result property="opinionType" column="opinion_type"/>
+        <result property="title" column="title"/>
+        <result property="riskLevel" column="risk_level"/>
+        <result property="opinionContent" column="opinion_content"/>
+        <result property="resultJson" column="result_json"/>
+        <result property="sourceFilesJson" column="source_files_json"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <select id="selectSnapshotList" parameterType="com.ruoyi.system.domain.rail.RailAuditOpinionSnapshot" resultMap="RailAuditOpinionSnapshotResult">
+        select snapshot_id, workflow_id, session_id, audit_version, opinion_no, opinion_type, title,
+               risk_level, opinion_content, result_json, source_files_json, create_by, create_time,
+               update_by, update_time, remark
+        from rail_audit_opinion_snapshot
+        <where>
+            <if test="workflowId != null">and workflow_id = #{workflowId}</if>
+            <if test="sessionId != null and sessionId != ''">and session_id = #{sessionId}</if>
+            <if test="auditVersion != null">and audit_version = #{auditVersion}</if>
+        </where>
+        order by audit_version asc, opinion_no asc, snapshot_id asc
+    </select>
+
+    <insert id="insertSnapshot" parameterType="com.ruoyi.system.domain.rail.RailAuditOpinionSnapshot" useGeneratedKeys="true" keyProperty="snapshotId">
+        insert into rail_audit_opinion_snapshot
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="workflowId != null">workflow_id,</if>
+            <if test="sessionId != null">session_id,</if>
+            <if test="auditVersion != null">audit_version,</if>
+            <if test="opinionNo != null">opinion_no,</if>
+            <if test="opinionType != null">opinion_type,</if>
+            <if test="title != null">title,</if>
+            <if test="riskLevel != null">risk_level,</if>
+            <if test="opinionContent != null">opinion_content,</if>
+            <if test="resultJson != null">result_json,</if>
+            <if test="sourceFilesJson != null">source_files_json,</if>
+            <if test="createBy != null">create_by,</if>
+            create_time,
+            <if test="remark != null">remark,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="workflowId != null">#{workflowId},</if>
+            <if test="sessionId != null">#{sessionId},</if>
+            <if test="auditVersion != null">#{auditVersion},</if>
+            <if test="opinionNo != null">#{opinionNo},</if>
+            <if test="opinionType != null">#{opinionType},</if>
+            <if test="title != null">#{title},</if>
+            <if test="riskLevel != null">#{riskLevel},</if>
+            <if test="opinionContent != null">#{opinionContent},</if>
+            <if test="resultJson != null">#{resultJson},</if>
+            <if test="sourceFilesJson != null">#{sourceFilesJson},</if>
+            <if test="createBy != null">#{createBy},</if>
+            sysdate(),
+            <if test="remark != null">#{remark},</if>
+        </trim>
+    </insert>
+
+</mapper>

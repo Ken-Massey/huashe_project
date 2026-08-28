@@ -260,6 +260,7 @@ import {
   listPatrolDicts, createPatrolDict, updatePatrolDict, deletePatrolDict
 } from '@/api/rail/patrol'
 import { listUser } from '@/api/system/user'
+import { checkPermi } from '@/utils/permission'
 
 export default {
   name: 'RailPatrol',
@@ -282,6 +283,9 @@ export default {
     }
   },
   computed: {
+    canManagePatrol() {
+      return checkPermi(['rail:patrol:manage']) || checkPermi(['system:user:list'])
+    },
     detailRecords() { return this.detail ? this.detail.records : [] },
     photoPreviewList() { return Object.values(this.photoUrls) },
     remainingHazards() {
@@ -324,7 +328,12 @@ export default {
     dictType() { if (this.dictVisible) this.loadDictItems() }
   },
   created() {
-    this.loadLineDict(); this.loadHazardDicts(); this.loadAccounts(); this.refresh()
+    this.loadLineDict()
+    this.loadHazardDicts()
+    if (this.canManagePatrol) {
+      this.loadAccounts()
+    }
+    this.refresh()
   },
   methods: {
     async refresh() { await Promise.all([this.loadStatistics(), this.loadTasks()]) },
@@ -346,6 +355,10 @@ export default {
       this.riskDict = await listPatrolDicts('hazard_risk') || []
     },
     async loadAccounts() {
+      if (!this.canManagePatrol) {
+        this.patrolAccounts = []
+        return
+      }
       try {
         const res = await listUser({ pageNum: 1, pageSize: 200, status: '0' })
         const rows = res.rows || []
@@ -368,7 +381,11 @@ export default {
     hazardTagType(h) { return { pending_confirm: 'warning', pending_rectify: 'warning', rectifying: 'primary', pending_review: 'warning', closed: 'success' }[h.status] || 'info' },
     formatTime(v) { if (!v) return '-'; return String(v).replace('T', ' ').slice(0, 19) },
 
-    openNewTask() { this.taskForm = { name: '', line: '', location_desc: '', requirement: '', assigned_user_id: '', assigned_user_name: '', remark: '' }; this.taskDialogVisible = true },
+    async openNewTask() {
+      this.taskForm = { name: '', line: '', location_desc: '', requirement: '', assigned_user_id: '', assigned_user_name: '', remark: '' }
+      await this.loadAccounts()
+      this.taskDialogVisible = true
+    },
     submitTask() {
       this.$refs.taskFormRef.validate(async valid => {
         if (!valid) return
