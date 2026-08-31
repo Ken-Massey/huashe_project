@@ -162,6 +162,19 @@ export const constantRoutes = [
     ]
   },
   {
+    path: '/rail/general',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/rail/general/index'),
+        name: 'RailGeneralStatic',
+        meta: { title: '通用管理', noCache: true }
+      }
+    ]
+  },
+  {
     path: '/rail/agent',
     component: Layout,
     hidden: true,

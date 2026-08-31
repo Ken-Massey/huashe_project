@@ -35,6 +35,7 @@ export default {
         { path: '/rail/knowledge', label: '知识库', icon: 'el-icon-collection' },
         { path: '/rail/agent', label: 'AI智能体', icon: 'el-icon-chat-dot-square' },
         { path: '/rail/archive', label: '项目档案', icon: 'el-icon-document-copy' },
+        { path: '/rail/general', label: '通用管理', icon: 'el-icon-s-data', permissions: ['rail:general:list', 'rail:general:query'] },
         // 账号管理：进入用户管理页，需管理员权限
         { path: '/system/user', label: '账号管理', icon: 'el-icon-s-tools', permission: 'system:user:list' }
       ]
@@ -44,8 +45,10 @@ export default {
     visibleItems() {
       const perms = this.$store.getters.permissions || []
       return this.items.filter(item => {
-        if (!item.permission) return true
-        return perms.includes('*:*:*') || perms.includes(item.permission)
+        if (!item.permission && !item.permissions) return true
+        if (perms.includes('*:*:*')) return true
+        if (item.permissions) return item.permissions.some(permission => perms.includes(permission))
+        return perms.includes(item.permission)
       })
     }
   },
