@@ -416,6 +416,8 @@ export default {
       uploading: false,
       total: 0,
       meetingList: [],
+      meetingStatsList: [],
+      meetingStatsTotal: 0,
       queryParams: { pageNum: 1, pageSize: 10, meetingName: '', meetingType: '', status: '', projectName: '' },
       meetingTypeOptions: [
         { label: '方案评审会', value: 'review' },
@@ -467,8 +469,8 @@ export default {
   },
   computed: {
     statistics() {
-      const stats = { total: this.meetingList.length, notified: 0, held: 0, tracking: 0, archived: 0 }
-      this.meetingList.forEach(item => {
+      const stats = { total: this.meetingStatsTotal, notified: 0, held: 0, tracking: 0, archived: 0 }
+      this.meetingStatsList.forEach(item => {
         if (Object.prototype.hasOwnProperty.call(stats, item.status)) stats[item.status] += 1
       })
       return stats
@@ -492,6 +494,7 @@ export default {
   },
   created() {
     this.applyRouteQuery()
+    this.loadMeetingStatistics()
     this.loadMeetings().then(() => {
       const meetingId = this.$route.query.meetingId
       if (meetingId) {
@@ -516,6 +519,20 @@ export default {
         this.total = res.total || 0
       }).finally(() => {
         this.loading = false
+      })
+    },
+    loadMeetingStatistics() {
+      const params = {
+        pageNum: 1,
+        pageSize: 10000,
+        meetingName: '',
+        meetingType: '',
+        status: '',
+        projectName: ''
+      }
+      return listMeetings(params).then(res => {
+        this.meetingStatsList = res.rows || []
+        this.meetingStatsTotal = res.total || this.meetingStatsList.length
       })
     },
     handleQuery() {
@@ -549,6 +566,7 @@ export default {
           this.$modal.msgSuccess('保存成功')
           this.meetingDialogVisible = false
           this.loadMeetings()
+          this.loadMeetingStatistics()
         }).finally(() => {
           this.saving = false
         })
@@ -558,6 +576,7 @@ export default {
       this.$modal.confirm(`确认删除会议“${row.meetingName}”？`).then(() => deleteMeeting(row.meetingId)).then(() => {
         this.$modal.msgSuccess('删除成功')
         this.loadMeetings()
+        this.loadMeetingStatistics()
       })
     },
     openDetail(row) {
@@ -585,12 +604,14 @@ export default {
         this.$modal.msgSuccess('通知已记录')
         this.notifyVisible = false
         this.loadMeetings()
+        this.loadMeetingStatistics()
       })
     },
     doMarkHeld(row) {
       this.$modal.confirm(`确认将会议“${row.meetingName}”标记为已召开？`).then(() => markMeetingHeld(row.meetingId)).then(() => {
         this.$modal.msgSuccess('已标记为已召开')
         this.loadMeetings()
+        this.loadMeetingStatistics()
         if (this.detail.meetingId === row.meetingId) this.refreshDetail(row.meetingId)
       })
     },
@@ -598,6 +619,7 @@ export default {
       this.$modal.confirm(`归档前需确认会议纪要已确认，问题、决议和待办均已闭环。确认归档会议“${row.meetingName}”？`).then(() => archiveMeeting(row.meetingId)).then(() => {
         this.$modal.msgSuccess('归档成功')
         this.loadMeetings()
+        this.loadMeetingStatistics()
         if (this.detail.meetingId === row.meetingId) this.refreshDetail(row.meetingId)
       })
     },
@@ -696,6 +718,7 @@ export default {
         this.$modal.msgSuccess('已闭环')
         this.refreshDetail(this.detail.meetingId)
         this.loadMeetings()
+        this.loadMeetingStatistics()
       })
     },
     removeIssue(row) {
