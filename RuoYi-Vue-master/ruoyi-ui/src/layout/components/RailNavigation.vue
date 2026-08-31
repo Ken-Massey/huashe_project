@@ -31,6 +31,7 @@ export default {
         { path: '/rail/audit', label: '案例审核', icon: 'el-icon-finished' },
         { path: '/rail/workflow', label: '审核流转', icon: 'el-icon-s-claim', permission: 'rail:audit:workflow:list' },
         { path: '/rail/patrol', label: '现场符合性巡查', icon: 'el-icon-location-outline' },
+        { path: '/rail/meeting', label: '会议协调管理', icon: 'el-icon-s-cooperation', permission: 'rail:meeting:list' },
         { path: '/rail/knowledge', label: '知识库', icon: 'el-icon-collection' },
         { path: '/rail/agent', label: 'AI智能体', icon: 'el-icon-chat-dot-square' },
         { path: '/rail/archive', label: '项目档案', icon: 'el-icon-document-copy' },

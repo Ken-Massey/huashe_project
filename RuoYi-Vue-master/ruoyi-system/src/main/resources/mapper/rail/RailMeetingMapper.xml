@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.rail.RailMeetingMapper">
+
+    <sql id="meetingColumns">
+        meeting_id meetingId, meeting_code meetingCode, meeting_name meetingName,
+        meeting_type meetingType, project_id projectId, project_name projectName,
+        audit_id auditId, workflow_id workflowId, meeting_time meetingTime,
+        meeting_end_time meetingEndTime, meeting_place meetingPlace, online_url onlineUrl,
+        host_unit hostUnit, organize_unit organizeUnit, meeting_topic meetingTopic,
+        agenda, notice_content noticeContent, notice_time noticeTime, status,
+        archive_status archiveStatus, archive_time archiveTime, remark,
+        create_by createBy, create_time createTime, update_by updateBy, update_time updateTime
+    </sql>
+
+    <select id="selectMeetingList" parameterType="map" resultType="java.util.LinkedHashMap">
+        select <include refid="meetingColumns"/>
+        from rail_meeting
+        <where>
+            del_flag = '0'
+            <if test="meetingName != null and meetingName != ''">and meeting_name like concat('%', #{meetingName}, '%')</if>
+            <if test="meetingType != null and meetingType != ''">and meeting_type = #{meetingType}</if>
+            <if test="projectId != null and projectId != ''">and project_id = #{projectId}</if>
+            <if test="projectName != null and projectName != ''">and project_name like concat('%', #{projectName}, '%')</if>
+            <if test="status != null and status != ''">and status = #{status}</if>
+            <if test="createBy != null and createBy != ''">and create_by = #{createBy}</if>
+        </where>
+        order by meeting_time desc, update_time desc, meeting_id desc
+    </select>
+
+    <select id="selectMeetingById" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select <include refid="meetingColumns"/>
+        from rail_meeting
+        where meeting_id = #{meetingId} and del_flag = '0'
+    </select>
+
+    <insert id="insertMeeting" parameterType="map" useGeneratedKeys="true" keyProperty="meetingId">
+        insert into rail_meeting (
+            meeting_code, meeting_name, meeting_type, project_id, project_name, audit_id, workflow_id,
+            meeting_time, meeting_end_time, meeting_place, online_url, host_unit, organize_unit,
+            meeting_topic, agenda, notice_content, status, remark, create_by, create_time
+        ) values (
+            #{meetingCode}, #{meetingName}, #{meetingType}, #{projectId}, #{projectName}, #{auditId}, #{workflowId},
+            #{meetingTime}, #{meetingEndTime}, #{meetingPlace}, #{onlineUrl}, #{hostUnit}, #{organizeUnit},
+            #{meetingTopic}, #{agenda}, #{noticeContent}, #{status}, #{remark}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <update id="updateMeeting" parameterType="map">
+        update rail_meeting
+        <set>
+            <if test="meetingCode != null">meeting_code = #{meetingCode},</if>
+            <if test="meetingName != null">meeting_name = #{meetingName},</if>
+            <if test="meetingType != null">meeting_type = #{meetingType},</if>
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="projectName != null">project_name = #{projectName},</if>
+            <if test="auditId != null">audit_id = #{auditId},</if>
+            <if test="workflowId != null">workflow_id = #{workflowId},</if>
+            <if test="meetingTime != null">meeting_time = #{meetingTime},</if>
+            <if test="meetingEndTime != null">meeting_end_time = #{meetingEndTime},</if>
+            <if test="meetingPlace != null">meeting_place = #{meetingPlace},</if>
+            <if test="onlineUrl != null">online_url = #{onlineUrl},</if>
+            <if test="hostUnit != null">host_unit = #{hostUnit},</if>
+            <if test="organizeUnit != null">organize_unit = #{organizeUnit},</if>
+            <if test="meetingTopic != null">meeting_topic = #{meetingTopic},</if>
+            <if test="agenda != null">agenda = #{agenda},</if>
+            <if test="noticeContent != null">notice_content = #{noticeContent},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        </set>
+        where meeting_id = #{meetingId}
+    </update>
+
+    <delete id="deleteMeetingByIds" parameterType="Long">
+        update rail_meeting set del_flag = '2', update_time = sysdate()
+        where meeting_id in
+        <foreach collection="array" item="meetingId" open="(" separator="," close=")">
+            #{meetingId}
+        </foreach>
+    </delete>
+
+    <update id="updateMeetingStatus" parameterType="map">
+        update rail_meeting
+        set status = #{status},
+            <if test="noticeContent != null">notice_content = #{noticeContent}, notice_time = sysdate(),</if>
+            <if test="archiveStatus != null">archive_status = #{archiveStatus}, archive_time = sysdate(),</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where meeting_id = #{meetingId}
+    </update>
+
+    <select id="selectParticipantList" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select participant_id participantId, meeting_id meetingId, user_id userId,
+               participant_name participantName, unit_name unitName, duty, phone, email,
+               participant_role participantRole, sign_status signStatus, sign_time signTime,
+               sign_remark signRemark, create_by createBy, create_time createTime,
+               update_by updateBy, update_time updateTime
+        from rail_meeting_participant
+        where meeting_id = #{meetingId}
+        order by participant_id asc
+    </select>
+
+    <insert id="insertParticipant" parameterType="map" useGeneratedKeys="true" keyProperty="participantId">
+        insert into rail_meeting_participant (
+            meeting_id, user_id, participant_name, unit_name, duty, phone, email,
+            participant_role, sign_status, sign_time, sign_remark, create_by, create_time
+        ) values (
+            #{meetingId}, #{userId}, #{participantName}, #{unitName}, #{duty}, #{phone}, #{email},
+            #{participantRole}, coalesce(#{signStatus}, '0'), #{signTime}, #{signRemark}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <update id="updateParticipant" parameterType="map">
+        update rail_meeting_participant
+        <set>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="participantName != null">participant_name = #{participantName},</if>
+            <if test="unitName != null">unit_name = #{unitName},</if>
+            <if test="duty != null">duty = #{duty},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="participantRole != null">participant_role = #{participantRole},</if>
+            <if test="signStatus != null">sign_status = #{signStatus},</if>
+            <if test="signTime != null">sign_time = #{signTime},</if>
+            <if test="signRemark != null">sign_remark = #{signRemark},</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        </set>
+        where participant_id = #{participantId}
+    </update>
+
+    <delete id="deleteParticipantByIds" parameterType="Long">
+        delete from rail_meeting_participant
+        where participant_id in
+        <foreach collection="array" item="participantId" open="(" separator="," close=")">
+            #{participantId}
+        </foreach>
+    </delete>
+
+    <select id="selectFileList" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select file_id fileId, meeting_id meetingId, file_type fileType, file_name fileName,
+               stored_name storedName, file_path filePath, file_size fileSize, mime_type mimeType,
+               description, create_by createBy, create_time createTime, update_by updateBy, update_time updateTime
+        from rail_meeting_file
+        where meeting_id = #{meetingId} and del_flag = '0'
+        order by create_time desc, file_id desc
+    </select>
+
+    <select id="selectFileById" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select file_id fileId, meeting_id meetingId, file_type fileType, file_name fileName,
+               stored_name storedName, file_path filePath, file_size fileSize, mime_type mimeType,
+               description, create_by createBy, create_time createTime
+        from rail_meeting_file
+        where file_id = #{fileId} and del_flag = '0'
+    </select>
+
+    <insert id="insertFile" parameterType="map" useGeneratedKeys="true" keyProperty="fileId">
+        insert into rail_meeting_file (
+            meeting_id, file_type, file_name, stored_name, file_path, file_size,
+            mime_type, description, create_by, create_time
+        ) values (
+            #{meetingId}, #{fileType}, #{fileName}, #{storedName}, #{filePath}, #{fileSize},
+            #{mimeType}, #{description}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <delete id="deleteFileByIds" parameterType="Long">
+        update rail_meeting_file set del_flag = '2', update_time = sysdate()
+        where file_id in
+        <foreach collection="array" item="fileId" open="(" separator="," close=")">
+            #{fileId}
+        </foreach>
+    </delete>
+
+    <select id="selectMinutesByMeetingId" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select minutes_id minutesId, meeting_id meetingId, minutes_title minutesTitle,
+               minutes_content minutesContent, compile_user_id compileUserId, compile_by compileBy,
+               compile_time compileTime, confirm_status confirmStatus, confirm_user_id confirmUserId,
+               confirm_by confirmBy, confirm_time confirmTime, confirm_opinion confirmOpinion,
+               create_by createBy, create_time createTime, update_by updateBy, update_time updateTime
+        from rail_meeting_minutes
+        where meeting_id = #{meetingId}
+        order by minutes_id desc
+        limit 1
+    </select>
+
+    <insert id="insertMinutes" parameterType="map" useGeneratedKeys="true" keyProperty="minutesId">
+        insert into rail_meeting_minutes (
+            meeting_id, minutes_title, minutes_content, compile_user_id, compile_by,
+            compile_time, confirm_status, create_by, create_time
+        ) values (
+            #{meetingId}, #{minutesTitle}, #{minutesContent}, #{compileUserId}, #{compileBy},
+            sysdate(), coalesce(#{confirmStatus}, '0'), #{createBy}, sysdate()
+        )
+    </insert>
+
+    <update id="updateMinutes" parameterType="map">
+        update rail_meeting_minutes
+        set minutes_title = #{minutesTitle},
+            minutes_content = #{minutesContent},
+            compile_user_id = #{compileUserId},
+            compile_by = #{compileBy},
+            compile_time = sysdate(),
+            <if test="confirmStatus != null">confirm_status = #{confirmStatus},</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where minutes_id = #{minutesId}
+    </update>
+
+    <update id="confirmMinutes" parameterType="map">
+        update rail_meeting_minutes
+        set confirm_status = #{confirmStatus},
+            confirm_user_id = #{confirmUserId},
+            confirm_by = #{confirmBy},
+            confirm_time = sysdate(),
+            confirm_opinion = #{confirmOpinion},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where meeting_id = #{meetingId}
+        <if test="minutesId != null">and minutes_id = #{minutesId}</if>
+    </update>
+
+    <select id="selectIssueList" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select issue_id issueId, meeting_id meetingId, issue_title issueTitle,
+               issue_content issueContent, issue_type issueType, risk_level riskLevel,
+               responsible_unit responsibleUnit, responsible_user responsibleUser,
+               due_time dueTime, status, close_time closeTime, close_remark closeRemark,
+               create_by createBy, create_time createTime, update_by updateBy, update_time updateTime
+        from rail_meeting_issue
+        where meeting_id = #{meetingId} and del_flag = '0'
+        order by issue_id asc
+    </select>
+
+    <insert id="insertIssue" parameterType="map" useGeneratedKeys="true" keyProperty="issueId">
+        insert into rail_meeting_issue (
+            meeting_id, issue_title, issue_content, issue_type, risk_level,
+            responsible_unit, responsible_user, due_time, status, create_by, create_time
+        ) values (
+            #{meetingId}, #{issueTitle}, #{issueContent}, #{issueType}, #{riskLevel},
+            #{responsibleUnit}, #{responsibleUser}, #{dueTime}, #{status}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <update id="updateIssue" parameterType="map">
+        update rail_meeting_issue
+        <set>
+            <if test="issueTitle != null">issue_title = #{issueTitle},</if>
+            <if test="issueContent != null">issue_content = #{issueContent},</if>
+            <if test="issueType != null">issue_type = #{issueType},</if>
+            <if test="riskLevel != null">risk_level = #{riskLevel},</if>
+            <if test="responsibleUnit != null">responsible_unit = #{responsibleUnit},</if>
+            <if test="responsibleUser != null">responsible_user = #{responsibleUser},</if>
+            <if test="dueTime != null">due_time = #{dueTime},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="closeTime != null">close_time = #{closeTime},</if>
+            <if test="closeRemark != null">close_remark = #{closeRemark},</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        </set>
+        where issue_id = #{issueId}
+    </update>
+
+    <delete id="deleteIssueByIds" parameterType="Long">
+        update rail_meeting_issue set del_flag = '2', update_time = sysdate()
+        where issue_id in
+        <foreach collection="array" item="issueId" open="(" separator="," close=")">
+            #{issueId}
+        </foreach>
+    </delete>
+
+    <select id="selectDecisionList" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select decision_id decisionId, meeting_id meetingId, decision_title decisionTitle,
+               decision_content decisionContent, responsible_unit responsibleUnit,
+               responsible_user responsibleUser, due_time dueTime, status, close_time closeTime,
+               close_remark closeRemark, create_by createBy, create_time createTime,
+               update_by updateBy, update_time updateTime
+        from rail_meeting_decision
+        where meeting_id = #{meetingId} and del_flag = '0'
+        order by decision_id asc
+    </select>
+
+    <insert id="insertDecision" parameterType="map" useGeneratedKeys="true" keyProperty="decisionId">
+        insert into rail_meeting_decision (
+            meeting_id, decision_title, decision_content, responsible_unit,
+            responsible_user, due_time, status, create_by, create_time
+        ) values (
+            #{meetingId}, #{decisionTitle}, #{decisionContent}, #{responsibleUnit},
+            #{responsibleUser}, #{dueTime}, #{status}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <update id="updateDecision" parameterType="map">
+        update rail_meeting_decision
+        <set>
+            <if test="decisionTitle != null">decision_title = #{decisionTitle},</if>
+            <if test="decisionContent != null">decision_content = #{decisionContent},</if>
+            <if test="responsibleUnit != null">responsible_unit = #{responsibleUnit},</if>
+            <if test="responsibleUser != null">responsible_user = #{responsibleUser},</if>
+            <if test="dueTime != null">due_time = #{dueTime},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="closeTime != null">close_time = #{closeTime},</if>
+            <if test="closeRemark != null">close_remark = #{closeRemark},</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        </set>
+        where decision_id = #{decisionId}
+    </update>
+
+    <delete id="deleteDecisionByIds" parameterType="Long">
+        update rail_meeting_decision set del_flag = '2', update_time = sysdate()
+        where decision_id in
+        <foreach collection="array" item="decisionId" open="(" separator="," close=")">
+            #{decisionId}
+        </foreach>
+    </delete>
+
+    <select id="selectTodoList" parameterType="map" resultType="java.util.LinkedHashMap">
+        select todo_id todoId, meeting_id meetingId, source_type sourceType, source_id sourceId,
+               todo_title todoTitle, todo_content todoContent, responsible_unit responsibleUnit,
+               responsible_user_id responsibleUserId, responsible_user responsibleUser,
+               due_time dueTime, priority, status, finish_content finishContent,
+               finish_time finishTime, close_time closeTime, close_by closeBy,
+               close_remark closeRemark, create_by createBy, create_time createTime,
+               update_by updateBy, update_time updateTime
+        from rail_meeting_todo
+        <where>
+            del_flag = '0'
+            <if test="meetingId != null">and meeting_id = #{meetingId}</if>
+            <if test="status != null and status != ''">and status = #{status}</if>
+            <if test="responsibleUserId != null">and responsible_user_id = #{responsibleUserId}</if>
+        </where>
+        order by due_time asc, todo_id asc
+    </select>
+
+    <insert id="insertTodo" parameterType="map" useGeneratedKeys="true" keyProperty="todoId">
+        insert into rail_meeting_todo (
+            meeting_id, source_type, source_id, todo_title, todo_content,
+            responsible_unit, responsible_user_id, responsible_user, due_time,
+            priority, status, create_by, create_time
+        ) values (
+            #{meetingId}, #{sourceType}, #{sourceId}, #{todoTitle}, #{todoContent},
+            #{responsibleUnit}, #{responsibleUserId}, #{responsibleUser}, #{dueTime},
+            coalesce(#{priority}, 'normal'), #{status}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <update id="updateTodo" parameterType="map">
+        update rail_meeting_todo
+        <set>
+            <if test="sourceType != null">source_type = #{sourceType},</if>
+            <if test="sourceId != null">source_id = #{sourceId},</if>
+            <if test="todoTitle != null">todo_title = #{todoTitle},</if>
+            <if test="todoContent != null">todo_content = #{todoContent},</if>
+            <if test="responsibleUnit != null">responsible_unit = #{responsibleUnit},</if>
+            <if test="responsibleUserId != null">responsible_user_id = #{responsibleUserId},</if>
+            <if test="responsibleUser != null">responsible_user = #{responsibleUser},</if>
+            <if test="dueTime != null">due_time = #{dueTime},</if>
+            <if test="priority != null">priority = #{priority},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="finishContent != null">finish_content = #{finishContent},</if>
+            <if test="finishTime != null">finish_time = #{finishTime},</if>
+            <if test="closeTime != null">close_time = #{closeTime},</if>
+            <if test="closeBy != null">close_by = #{closeBy},</if>
+            <if test="closeRemark != null">close_remark = #{closeRemark},</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        </set>
+        where todo_id = #{todoId}
+    </update>
+
+    <delete id="deleteTodoByIds" parameterType="Long">
+        update rail_meeting_todo set del_flag = '2', update_time = sysdate()
+        where todo_id in
+        <foreach collection="array" item="todoId" open="(" separator="," close=")">
+            #{todoId}
+        </foreach>
+    </delete>
+
+    <insert id="insertLog" parameterType="map">
+        insert into rail_meeting_log (
+            meeting_id, target_type, target_id, action_code, action_name,
+            from_status, to_status, operator_id, operator_name, opinion,
+            snapshot_json, create_by, create_time
+        ) values (
+            #{meetingId}, #{targetType}, #{targetId}, #{actionCode}, #{actionName},
+            #{fromStatus}, #{toStatus}, #{operatorId}, #{operatorName}, #{opinion},
+            #{snapshotJson}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <select id="selectLogList" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select log_id logId, meeting_id meetingId, target_type targetType, target_id targetId,
+               action_code actionCode, action_name actionName, from_status fromStatus,
+               to_status toStatus, operator_id operatorId, operator_name operatorName,
+               opinion, snapshot_json snapshotJson, create_by createBy, create_time createTime
+        from rail_meeting_log
+        where meeting_id = #{meetingId}
+        order by create_time desc, log_id desc
+    </select>
+
+</mapper>

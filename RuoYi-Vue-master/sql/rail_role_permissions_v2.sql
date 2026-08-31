@@ -1,7 +1,7 @@
 -- 轨道智审角色权限同步脚本
 -- 执行库：huashe_database
 -- 用途：
--- 1. 所有普通角色都能看到案例审核、现场符合性巡查、知识库、项目档案模块。
+-- 1. 所有普通角色都能看到案例审核、现场符合性巡查、会议协调管理、知识库、项目档案模块。
 -- 2. 经办人、审核人、终审人按流程职责分配按钮权限。
 -- 3. 账号体系沿用若依 sys_user、sys_role、sys_user_role、sys_role_menu。
 
@@ -78,12 +78,37 @@ on duplicate key update
   icon = values(icon),
   remark = values(remark);
 
+update sys_menu
+set order_num = 5
+where menu_id = 2004 and parent_id = 2000;
+
+update sys_menu
+set order_num = 6
+where menu_id = 2005 and parent_id = 2000;
+
+insert into sys_menu
+  (menu_id, menu_name, parent_id, order_num, path, component, query, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+values
+  (2007, '会议协调管理', 2000, 4, 'meeting', 'rail/meeting/index', '', 1, 0, 'C', '0', '0', 'rail:meeting:list', 'peoples', 'admin', sysdate(), '会议通知、参会登记、材料上传、纪要编制、问题决议和待办闭环')
+on duplicate key update
+  menu_name = values(menu_name),
+  parent_id = values(parent_id),
+  order_num = values(order_num),
+  path = values(path),
+  component = values(component),
+  visible = values(visible),
+  status = values(status),
+  perms = values(perms),
+  icon = values(icon),
+  remark = values(remark);
+
 -- 新增更细的流程按钮权限。
 insert into sys_menu
   (menu_id, menu_name, parent_id, order_num, path, component, query, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
 values
   (2024, '提交终审', 2001, 15, '#', '', '', 1, 0, 'F', '0', '0', 'rail:audit:workflow:submitFinal', '#', 'admin', sysdate(), '审核人提交至终审节点'),
-  (2025, '终审通过', 2001, 16, '#', '', '', 1, 0, 'F', '0', '0', 'rail:audit:workflow:final', '#', 'admin', sysdate(), '终审人确认通过流程')
+  (2025, '终审通过', 2001, 16, '#', '', '', 1, 0, 'F', '0', '0', 'rail:audit:workflow:final', '#', 'admin', sysdate(), '终审人确认通过流程'),
+  (2026, '会议查询', 2007, 1, '#', '', '', 1, 0, 'F', '0', '0', 'rail:meeting:query', '#', 'admin', sysdate(), '查看会议详情')
 on duplicate key update
   menu_name = values(menu_name),
   parent_id = values(parent_id),
@@ -107,7 +132,7 @@ where menu_id = 2022;
 insert ignore into sys_role_menu (role_id, menu_id)
 select r.role_id, m.menu_id
 from sys_role r
-join sys_menu m on m.menu_id in (2000, 2001, 2004, 2005, 2006, 2013)
+join sys_menu m on m.menu_id in (2000, 2001, 2004, 2005, 2006, 2007, 2013, 2026)
 where r.del_flag = '0'
   and r.status = '0'
   and r.role_id <> 1;
@@ -127,7 +152,7 @@ where r.role_key in ('rail_handler', 'rail_reviewer', 'rail_final_reviewer')
 insert ignore into sys_role_menu (role_id, menu_id)
 select r.role_id, m.menu_id
 from sys_role r
-join sys_menu m on m.menu_id in (2000, 2001, 2004, 2005, 2006, 2013)
+join sys_menu m on m.menu_id in (2000, 2001, 2004, 2005, 2006, 2007, 2013, 2026)
 where r.del_flag = '0'
   and r.status = '0'
   and r.role_id <> 1;
@@ -137,18 +162,18 @@ insert ignore into sys_role_menu (role_id, menu_id)
 select @handler_role_id, m.menu_id
 from sys_menu m
 where @handler_role_id is not null
-  and m.menu_id in (2000, 2001, 2004, 2005, 2006, 2013, 2018, 2019);
+  and m.menu_id in (2000, 2001, 2004, 2005, 2006, 2007, 2013, 2018, 2019, 2026);
 
 -- 审核人：通过、退回、提交终审。
 insert ignore into sys_role_menu (role_id, menu_id)
 select @reviewer_role_id, m.menu_id
 from sys_menu m
 where @reviewer_role_id is not null
-  and m.menu_id in (2000, 2001, 2004, 2005, 2006, 2013, 2018, 2020, 2021, 2024);
+  and m.menu_id in (2000, 2001, 2004, 2005, 2006, 2007, 2013, 2018, 2020, 2021, 2024, 2026);
 
 -- 终审人：终审、归档。
 insert ignore into sys_role_menu (role_id, menu_id)
 select @final_role_id, m.menu_id
 from sys_menu m
 where @final_role_id is not null
-  and m.menu_id in (2000, 2001, 2004, 2005, 2006, 2013, 2018, 2022, 2025);
+  and m.menu_id in (2000, 2001, 2004, 2005, 2006, 2007, 2013, 2018, 2022, 2025, 2026);
