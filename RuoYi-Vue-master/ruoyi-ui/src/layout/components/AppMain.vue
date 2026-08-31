@@ -47,7 +47,8 @@ export default {
   min-height: 100vh;
   width: 100%;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 
   &:fullscreen,
   &:-webkit-full-screen,

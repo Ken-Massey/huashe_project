@@ -71,7 +71,7 @@
             :key="record.id"
             class="document-row"
             :class="{ 'previewable-document': canPreviewDocument(record) }"
-            :title="documentPreviewTitle(record)"
+            :title="documentHoverTitle(record)"
             @click="openDocumentPreview(record)"
           >
             <i :class="record.status === 'failed' ? 'el-icon-warning-outline' : (record.status === 'done' ? 'el-icon-document-checked' : 'el-icon-loading')" />
@@ -470,6 +470,57 @@
                   </div>
                   <el-button size="mini" type="primary" plain icon="el-icon-plus" @click="openReviewItemDialog()">新增条目</el-button>
                 </div>
+                <div v-if="auditSession" v-hasPermi="['rail:audit:workflow:list']" class="workflow-panel">
+                  <div class="workflow-panel-main">
+                    <strong>审核流转</strong>
+                    <el-tag size="mini" :type="workflowStatusType">{{ workflowStatusLabel }}</el-tag>
+                    <span v-if="workflowCurrentNodeLabel">当前节点：{{ workflowCurrentNodeLabel }}</span>
+                    <span v-if="workflowCurrentAssignee">处理人：{{ workflowCurrentAssignee }}</span>
+                  </div>
+                  <div class="workflow-panel-actions">
+                    <el-button size="mini" plain icon="el-icon-refresh" :loading="workflowLoading" @click="refreshWorkflowInfo">刷新</el-button>
+                    <el-button
+                      v-if="canSubmitWorkflow"
+                      v-hasPermi="['rail:audit:workflow:submit']"
+                      size="mini"
+                      type="primary"
+                      :loading="workflowSubmitting"
+                      @click="submitWorkflowReview"
+                    >
+                      提交审核
+                    </el-button>
+                    <el-button
+                      v-if="canApproveWorkflow"
+                      size="mini"
+                      type="success"
+                      :loading="workflowSubmitting"
+                      @click="approveWorkflowReview"
+                    >
+                      {{ workflowApproveButtonText }}
+                    </el-button>
+                    <el-button
+                      v-if="canReturnWorkflow"
+                      size="mini"
+                      type="warning"
+                      plain
+                      :loading="workflowSubmitting"
+                      @click="returnWorkflowReview"
+                    >
+                      退回
+                    </el-button>
+                    <el-button
+                      v-if="canArchiveWorkflow"
+                      size="mini"
+                      type="primary"
+                      plain
+                      :loading="workflowSubmitting"
+                      @click="archiveWorkflowReview"
+                    >
+                      流程归档
+                    </el-button>
+                    <el-button v-if="workflowInfo" size="mini" type="text" @click="openWorkflowHistory">流转记录</el-button>
+                  </div>
+                </div>
                 <el-empty v-if="!messageReviewItems(message).length && !messageOverallOpinion(message)" description="暂无审核条目" />
                 <div v-if="messageOverallOpinion(message)" class="overall-review-card leading">
                   <h4>综合评价</h4>
@@ -544,13 +595,13 @@
                   :key="`composer_${record.id}`"
                   class="composer-file-card"
                   :class="{ 'previewable-document': canPreviewDocument(record) }"
-                  :title="documentPreviewTitle(record)"
+                  :title="documentHoverTitle(record)"
                   @click="openDocumentPreview(record)"
                 >
                   <span class="composer-file-icon">{{ fileTypeBadge(record.file && record.file.name) }}</span>
                   <span class="composer-file-meta">
-                    <strong>{{ record.file && record.file.name }}</strong>
-                    <small>{{ fileKindText(record.file && record.file.name) }} · {{ formatFileSize(record.file && record.file.size) }}</small>
+                    <strong :title="record.file && record.file.name">{{ record.file && record.file.name }}</strong>
+                    <small :title="record.file && record.file.name">{{ fileKindText(record.file && record.file.name) }} · {{ formatFileSize(record.file && record.file.size) }}</small>
                   </span>
                   <el-tag
                     size="mini"
@@ -618,6 +669,63 @@
       </span>
     </el-dialog>
 
+    <el-dialog title="审核流转记录" :visible.sync="workflowHistoryDialogVisible" width="760px" append-to-body class="workflow-history-dialog">
+      <div v-if="workflowInfo" class="workflow-history-head">
+        <div>
+          <strong>{{ workflowValue(workflowInfo, 'projectName') || form.project_name || '未命名项目' }}</strong>
+          <span>{{ workflowValue(workflowInfo, 'stageName') || form.project_stage || '未填写阶段' }}</span>
+        </div>
+        <el-tag :type="workflowStatusType">{{ workflowStatusLabel }}</el-tag>
+      </div>
+      <el-tabs>
+        <el-tab-pane label="流转记录">
+          <el-timeline v-if="workflowLogs.length">
+            <el-timeline-item
+              v-for="log in workflowLogs"
+              :key="workflowValue(log, 'logId') || `${workflowValue(log, 'action')}_${workflowValue(log, 'createTime')}`"
+              :timestamp="formatWorkflowTime(workflowValue(log, 'createTime'))"
+            >
+              <div class="workflow-log-item">
+                <strong>{{ workflowActionLabel(workflowValue(log, 'action')) }}</strong>
+                <span>{{ workflowValue(log, 'operatorName') || workflowValue(log, 'operator') || '系统' }}</span>
+                <p v-if="workflowValue(log, 'opinion')">{{ workflowValue(log, 'opinion') }}</p>
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+          <el-empty v-else description="暂无流转记录" />
+        </el-tab-pane>
+        <el-tab-pane label="审核任务">
+          <el-table :data="workflowTasks" size="mini" border>
+            <el-table-column label="节点" min-width="120">
+              <template slot-scope="{ row }">{{ workflowValue(row, 'nodeName') || workflowValue(row, 'nodeCode') }}</template>
+            </el-table-column>
+            <el-table-column label="处理人" min-width="120">
+              <template slot-scope="{ row }">{{ workflowValue(row, 'assigneeName') || workflowValue(row, 'assignee') || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
+              <template slot-scope="{ row }">{{ workflowTaskStatusLabel(workflowValue(row, 'taskStatus')) }}</template>
+            </el-table-column>
+            <el-table-column label="创建时间" min-width="150">
+              <template slot-scope="{ row }">{{ formatWorkflowTime(workflowValue(row, 'createTime')) }}</template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="意见快照">
+          <el-table :data="workflowSnapshots" size="mini" border>
+            <el-table-column label="版本" width="90">
+              <template slot-scope="{ row }">第 {{ workflowValue(row, 'auditVersion') || '-' }} 版</template>
+            </el-table-column>
+            <el-table-column label="摘要" min-width="280">
+              <template slot-scope="{ row }">{{ workflowSnapshotSummary(row) }}</template>
+            </el-table-column>
+            <el-table-column label="创建时间" min-width="150">
+              <template slot-scope="{ row }">{{ formatWorkflowTime(workflowValue(row, 'createTime')) }}</template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -635,6 +743,12 @@ import {
   listArchiveProjects, getArchiveProject,
   getPreviousStageAudits, listNearbyArchiveProjects
 } from '@/api/rail/archive'
+import {
+  listAuditWorkflow, getAuditWorkflow,
+  submitAuditWorkflow, approveAuditWorkflow,
+  returnAuditWorkflow, archiveAuditWorkflow
+} from '@/api/rail/workflow'
+import { checkPermi } from '@/utils/permission'
 
 function defaultForm() {
   return {
@@ -660,6 +774,8 @@ export default {
       auditTaskId: '', auditResult: null, replyResult: null, auditSubmitting: false, replySubmitting: false,
       auditSession: null, reviewItems: [], chatMessages: [], chatInstruction: '', chatSubmitting: false,
       expandedSnapshotIds: {},
+      workflowInfo: null, workflowTasks: [], workflowLogs: [], workflowSnapshots: [],
+      workflowLoading: false, workflowSubmitting: false, workflowHistoryDialogVisible: false,
       prepPanelExpanded: false,
       uploadDialogVisible: false,
       uploadSourceTab: 'library',
@@ -898,6 +1014,69 @@ export default {
       }
       return ''
     },
+    workflowId() {
+      return this.workflowValue(this.workflowInfo, 'workflowId') || ''
+    },
+    workflowStatus() {
+      return this.workflowValue(this.workflowInfo, 'workflowStatus') || (this.auditSession ? 'DRAFT' : '')
+    },
+    workflowStatusLabel() {
+      const map = {
+        DRAFT: '待提交',
+        REVIEW: '审核中',
+        FINAL: '终审中',
+        APPROVED: '已通过',
+        RETURNED: '已退回',
+        ARCHIVED: '已归档',
+        CANCELLED: '已取消'
+      }
+      return map[this.workflowStatus] || '待提交'
+    },
+    workflowStatusType() {
+      const map = {
+        REVIEW: 'warning',
+        FINAL: 'warning',
+        APPROVED: 'success',
+        RETURNED: 'danger',
+        ARCHIVED: 'info',
+        CANCELLED: 'info'
+      }
+      return map[this.workflowStatus] || 'info'
+    },
+    workflowCurrentNodeCode() {
+      return this.workflowValue(this.workflowInfo, 'currentNodeCode') || ''
+    },
+    workflowCurrentNodeLabel() {
+      const map = { SUBMIT: '经办人提交', REVIEW: '审核人复核', FINAL: '终审归档' }
+      return this.workflowValue(this.workflowInfo, 'currentNodeName') || map[this.workflowCurrentNodeCode] || ''
+    },
+    workflowCurrentAssignee() {
+      return this.workflowValue(this.workflowInfo, 'currentAssignee') || ''
+    },
+    canSubmitWorkflow() {
+      return Boolean(this.auditSession && this.currentOverallOpinion && !['REVIEW', 'FINAL', 'APPROVED', 'ARCHIVED'].includes(this.workflowStatus))
+    },
+    workflowApproveButtonText() {
+      if (this.workflowCurrentNodeCode === 'REVIEW') return '提交终审'
+      if (this.workflowCurrentNodeCode === 'FINAL') return '终审通过'
+      return '通过'
+    },
+    canApproveWorkflow() {
+      if (!this.workflowId || ['APPROVED', 'ARCHIVED'].includes(this.workflowStatus)) return false
+      if (this.workflowCurrentNodeCode === 'REVIEW') {
+        return checkPermi(['rail:audit:workflow:approve', 'rail:audit:workflow:submitFinal'])
+      }
+      if (this.workflowCurrentNodeCode === 'FINAL') {
+        return checkPermi(['rail:audit:workflow:final', 'rail:audit:workflow:approve'])
+      }
+      return false
+    },
+    canReturnWorkflow() {
+      return Boolean(this.workflowId && ['REVIEW', 'FINAL'].includes(this.workflowCurrentNodeCode) && !['RETURNED', 'APPROVED', 'ARCHIVED'].includes(this.workflowStatus) && checkPermi(['rail:audit:workflow:return']))
+    },
+    canArchiveWorkflow() {
+      return Boolean(this.workflowId && this.workflowStatus === 'APPROVED' && checkPermi(['rail:audit:workflow:archive']))
+    },
     bestMatch() { return this.auditResult && this.auditResult.advice_result && this.auditResult.advice_result.best_match },
     matchScore() {
       const value = this.bestMatch && (this.bestMatch.score == null ? this.bestMatch.similarity : this.bestMatch.score)
@@ -959,7 +1138,9 @@ export default {
     }
   },
   created() {
-    if (this.$route.query.sessionId) {
+    if (this.$route.query.workflowId) {
+      this.openRouteWorkflow()
+    } else if (this.$route.query.sessionId) {
       this.openRouteAuditSession()
     } else {
       this.restoreAuditDraft()
@@ -1424,6 +1605,10 @@ export default {
       if (record && record.restored) return '这是历史文件记录，需重新选择原文件后才能预览'
       return '当前文件类型暂不支持网页预览'
     },
+    documentHoverTitle(record) {
+      const name = record && record.file && record.file.name ? record.file.name : '未命名文件'
+      return `${name}\n${this.documentPreviewTitle(record)}`
+    },
     openDocumentPreview(record) {
       if (!record || !record.file) return
       if (record.restored) {
@@ -1662,6 +1847,10 @@ export default {
           auditSession: this.auditSession,
           reviewItems: this.reviewItems,
           chatMessages: this.chatMessages,
+          workflowInfo: this.workflowInfo,
+          workflowTasks: this.workflowTasks,
+          workflowLogs: this.workflowLogs,
+          workflowSnapshots: this.workflowSnapshots,
           baselineAuditSignature: this.baselineAuditSignature,
           conflictSelections: this.conflictSelections,
           documentSummaries
@@ -1691,6 +1880,10 @@ export default {
         this.replyResult = draft.replyResult || null
         this.auditSession = draft.auditSession || null
         this.reviewItems = draft.reviewItems || []
+        this.workflowInfo = draft.workflowInfo || null
+        this.workflowTasks = draft.workflowTasks || []
+        this.workflowLogs = draft.workflowLogs || []
+        this.workflowSnapshots = draft.workflowSnapshots || []
         this.conflictSelections = draft.conflictSelections || {}
         this.chatMessages = this.auditSession
           ? this.ensureSnapshotMessages({ ...this.auditSession, items: this.reviewItems, messages: draft.chatMessages || [] }, this.auditResult || {}, draft.chatMessages || [])
@@ -1708,6 +1901,7 @@ export default {
           textPreview: item.textPreview || ''
         }))
         this.documentSequence = this.documents.length
+        if (this.auditSession) this.$nextTick(() => this.refreshWorkflowInfo())
       } catch (error) {
         sessionStorage.removeItem(AUDIT_DRAFT_KEY)
       }
@@ -1735,10 +1929,30 @@ export default {
         this.$message.error('项目档案加载失败，请刷新页面重试')
       } finally { this.archiveLoading = false }
     },
+    async openRouteWorkflow() {
+      sessionStorage.removeItem(AUDIT_DRAFT_KEY)
+      await this.loadArchiveSelection()
+      const workflowId = String(this.$route.query.workflowId || '')
+      if (!workflowId) return
+      try {
+        await this.loadWorkflowDetail(workflowId)
+        const sessionId = this.workflowValue(this.workflowInfo, 'sessionId')
+        if (sessionId) {
+          await this.hydrateRouteAuditSession(sessionId)
+        } else {
+          this.saveAuditDraft()
+        }
+      } catch (error) {
+        this.$message.error('审核流转记录加载失败，请在审核流转中重新进入')
+      }
+    },
     async openRouteAuditSession() {
       sessionStorage.removeItem(AUDIT_DRAFT_KEY)
       await this.loadArchiveSelection()
       const sessionId = String(this.$route.query.sessionId || '')
+      await this.hydrateRouteAuditSession(sessionId)
+    },
+    async hydrateRouteAuditSession(sessionId) {
       if (!sessionId) return
       try {
         const session = await getAuditSession(sessionId)
@@ -1758,6 +1972,7 @@ export default {
         this.documents = this.restoredDocumentsFromSession(session)
         this.documentSequence = this.documents.length
         this.baselineAuditSignature = this.currentAuditSignature
+        await this.refreshWorkflowInfo()
         this.saveAuditDraft()
         this.$nextTick(() => this.scrollToResultPanel())
       } catch (error) {
@@ -2444,6 +2659,7 @@ export default {
       this.reviewItems = session.items || result.review_items || []
       this.chatMessages = this.ensureSnapshotMessages(session, result, this.chatMessages)
       this.scrollToChatBottom()
+      this.$nextTick(() => this.refreshWorkflowInfo())
     },
     auditCompleted(result) {
       this.auditSubmitting = false
@@ -2854,6 +3070,212 @@ export default {
       this.reviewItems = session.items || []
       this.chatMessages = this.ensureSnapshotMessages(session, { review_items: this.reviewItems }, this.chatMessages)
       this.saveAuditDraft()
+      this.$nextTick(() => this.refreshWorkflowInfo())
+    },
+    workflowValue(row, camel, snake) {
+      if (!row) return ''
+      if (row[camel] !== undefined && row[camel] !== null) return row[camel]
+      const snakeKey = snake || camel.replace(/[A-Z]/g, match => '_' + match.toLowerCase())
+      const value = row[snakeKey]
+      return value !== undefined && value !== null ? value : ''
+    },
+    workflowRows(response) {
+      if (!response) return []
+      if (Array.isArray(response.rows)) return response.rows
+      if (Array.isArray(response.data)) return response.data
+      if (Array.isArray(response)) return response
+      return []
+    },
+    workflowDetail(response) {
+      if (!response) return null
+      return response.data || response.workflow || response
+    },
+    async refreshWorkflowInfo() {
+      const sessionId = this.auditSession && (this.auditSession.session_id || this.auditSession.sessionId)
+      if (!sessionId) {
+        this.workflowInfo = null
+        this.workflowTasks = []
+        this.workflowLogs = []
+        this.workflowSnapshots = []
+        return
+      }
+      this.workflowLoading = true
+      try {
+        const listRes = await listAuditWorkflow({ sessionId })
+        const workflow = this.workflowRows(listRes)[0] || null
+        if (!workflow) {
+          this.workflowInfo = null
+          this.workflowTasks = []
+          this.workflowLogs = []
+          this.workflowSnapshots = []
+          this.saveAuditDraft()
+          return
+        }
+        const workflowId = this.workflowValue(workflow, 'workflowId')
+        if (workflowId) await this.loadWorkflowDetail(workflowId)
+        else this.workflowInfo = workflow
+      } catch (error) {
+        if (this.workflowHistoryDialogVisible) this.$message.error('刷新审核流转信息失败')
+      } finally {
+        this.workflowLoading = false
+      }
+    },
+    async loadWorkflowDetail(workflowId) {
+      if (!workflowId) return
+      const detail = await getAuditWorkflow(workflowId)
+      const data = this.workflowDetail(detail) || {}
+      this.workflowInfo = data
+      this.workflowTasks = detail.tasks || data.tasks || []
+      this.workflowLogs = detail.logs || data.logs || []
+      this.workflowSnapshots = detail.snapshots || data.snapshots || []
+      this.saveAuditDraft()
+    },
+    workflowLatestResultPayload() {
+      return {
+        audit_session: this.auditSession,
+        latest_result: (this.auditSession && this.auditSession.latest_result) || this.auditResult || {},
+        review_items: this.auditReviewItems,
+        overall_opinion: this.currentOverallOpinion || {},
+        form_data: this.normalizedFormPayload(),
+        selected_nearby_projects: this.selectedNearbyProjects
+      }
+    },
+    buildWorkflowPayload(opinion = '') {
+      const session = this.auditSession || {}
+      const overall = this.currentOverallOpinion || {}
+      const stageName = String(this.form.project_stage || '').trim() ||
+        (this.selectedArchiveStage && (this.selectedArchiveStage.stage_name || this.selectedArchiveStage.name)) || ''
+      const resultPayload = this.workflowLatestResultPayload()
+      return {
+        workflowId: this.workflowId || null,
+        sessionId: session.session_id || session.sessionId || '',
+        projectId: this.selectedArchiveProjectId || '',
+        stageId: this.selectedArchiveStageId || '',
+        projectName: String(this.form.project_name || '').trim(),
+        stageName,
+        auditVersion: this.currentDisplayVersion,
+        latestSummary: overall.conclusion || '',
+        latestRiskLevel: overall.risk_level || '',
+        latestResultJson: JSON.stringify(resultPayload),
+        sourceFilesJson: JSON.stringify(this.uploadedDocumentPayload()),
+        snapshotJson: JSON.stringify(resultPayload),
+        opinion
+      }
+    },
+    workflowErrorMessage(error, fallback) {
+      const data = error && error.response && error.response.data
+      return (data && (data.msg || data.detail)) || (error && (error.msg || error.message)) || fallback
+    },
+    async submitWorkflowReview() {
+      if (!this.auditSession) return this.$message.warning('请先生成审核结果')
+      if (!this.currentOverallOpinion && !this.auditReviewItems.length) return this.$message.warning('当前没有可提交的审核结果')
+      const payload = this.buildWorkflowPayload('提交审核')
+      if (!payload.projectName) return this.$message.warning('请先填写项目名称')
+      this.workflowSubmitting = true
+      try {
+        const res = await submitAuditWorkflow(payload)
+        const data = this.workflowDetail(res)
+        const workflowId = this.workflowValue(data, 'workflowId') || this.workflowId
+        if (workflowId) await this.loadWorkflowDetail(workflowId)
+        else await this.refreshWorkflowInfo()
+        this.$message.success('已提交审核')
+      } catch (error) {
+        this.$message.error(this.workflowErrorMessage(error, '提交审核失败'))
+      } finally {
+        this.workflowSubmitting = false
+      }
+    },
+    async approveWorkflowReview() {
+      if (!this.workflowId) return
+      const actionLabel = this.workflowApproveButtonText
+      try {
+        const { value } = await this.$prompt('可填写审核意见；不填写则默认为同意。', actionLabel, {
+          inputValue: '同意',
+          confirmButtonText: actionLabel,
+          cancelButtonText: '取消'
+        })
+        this.workflowSubmitting = true
+        await approveAuditWorkflow({ workflowId: this.workflowId, opinion: value || '同意' })
+        await this.refreshWorkflowInfo()
+        this.$message.success(`已${actionLabel}`)
+      } catch (error) {
+        if (error !== 'cancel') this.$message.error(this.workflowErrorMessage(error, `${actionLabel}失败`))
+      } finally {
+        this.workflowSubmitting = false
+      }
+    },
+    async returnWorkflowReview() {
+      if (!this.workflowId) return
+      try {
+        const { value } = await this.$prompt('请填写退回原因，便于经办人修改。', '退回修改', {
+          inputType: 'textarea',
+          inputValidator: value => Boolean(String(value || '').trim()) || '请填写退回原因',
+          confirmButtonText: '退回',
+          cancelButtonText: '取消'
+        })
+        this.workflowSubmitting = true
+        await returnAuditWorkflow({ workflowId: this.workflowId, opinion: String(value || '').trim() })
+        await this.refreshWorkflowInfo()
+        this.$message.success('已退回修改')
+      } catch (error) {
+        if (error !== 'cancel') this.$message.error(this.workflowErrorMessage(error, '退回失败'))
+      } finally {
+        this.workflowSubmitting = false
+      }
+    },
+    async archiveWorkflowReview() {
+      if (!this.workflowId) return
+      try {
+        await this.$confirm('确认将该审核流程归档吗？归档后将作为最终流转记录保留。', '流程归档', {
+          type: 'warning',
+          confirmButtonText: '归档',
+          cancelButtonText: '取消'
+        })
+        this.workflowSubmitting = true
+        await archiveAuditWorkflow({ workflowId: this.workflowId, opinion: '归档' })
+        await this.refreshWorkflowInfo()
+        this.$message.success('流程已归档')
+      } catch (error) {
+        if (error !== 'cancel') this.$message.error(this.workflowErrorMessage(error, '归档失败'))
+      } finally {
+        this.workflowSubmitting = false
+      }
+    },
+    async openWorkflowHistory() {
+      await this.refreshWorkflowInfo()
+      this.workflowHistoryDialogVisible = true
+    },
+    formatWorkflowTime(value) {
+      if (!value) return ''
+      return String(value).replace('T', ' ').replace(/\.\d+.*$/, '')
+    },
+    workflowActionLabel(value) {
+      const map = {
+        SUBMIT: '提交审核',
+        APPROVE: '审核通过',
+        RETURN: '退回修改',
+        ARCHIVE: '流程归档',
+        CANCEL: '取消流程'
+      }
+      return map[value] || value || '-'
+    },
+    workflowTaskStatusLabel(value) {
+      const map = { TODO: '待处理', DONE: '已处理', CANCELLED: '已取消' }
+      return map[value] || value || '-'
+    },
+    workflowSnapshotSummary(snapshot) {
+      const summary = this.workflowValue(snapshot, 'latestSummary') || this.workflowValue(snapshot, 'summary')
+      if (summary) return summary
+      const raw = this.workflowValue(snapshot, 'snapshotJson')
+      if (!raw) return '-'
+      try {
+        const data = JSON.parse(raw)
+        return (data.overall_opinion && data.overall_opinion.conclusion) ||
+          (data.latest_result && data.latest_result.overall_opinion && data.latest_result.overall_opinion.conclusion) ||
+          '-'
+      } catch (error) {
+        return String(raw).slice(0, 80)
+      }
     },
     async saveReviewItem() {
       if (!this.auditSession) return this.$message.warning('请先完成审核')
@@ -3005,6 +3427,13 @@ export default {
       this.auditResult = null
       this.replyResult = null
       this.auditSession = null
+      this.workflowInfo = null
+      this.workflowTasks = []
+      this.workflowLogs = []
+      this.workflowSnapshots = []
+      this.workflowLoading = false
+      this.workflowSubmitting = false
+      this.workflowHistoryDialogVisible = false
       this.auditSubmitting = false
       this.chatSubmitting = false
       this.reviewItems = []
@@ -3153,6 +3582,18 @@ export default {
 .review-bubble { width: min(980px, calc(100% - 52px)); max-width: calc(100% - 52px); }
 .review-bubble-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .review-bubble-head strong,.review-bubble-head small { display: block; }.review-bubble-head small { margin-top: 5px; color: #7d8782; font-size: 12px; }
+.workflow-panel { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -2px 0 14px; padding: 10px 12px; border: 1px solid #dfece7; border-radius: 8px; background: #f8fcfb; }
+.workflow-panel-main { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 8px; color: #4b5a56; }
+.workflow-panel-main strong { color: #1f4f43; }
+.workflow-panel-main span { color: #6d7b76; font-size: 12px; }
+.workflow-panel-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.workflow-history-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid #e3ebe8; border-radius: 8px; background: #f8fcfb; }
+.workflow-history-head strong,.workflow-history-head span { display: block; }
+.workflow-history-head strong { color: #1f4f43; }
+.workflow-history-head span { margin-top: 3px; color: #78837f; font-size: 12px; }
+.workflow-log-item { color: #2d3a36; line-height: 1.7; }
+.workflow-log-item span { margin-left: 8px; color: #7a8581; }
+.workflow-log-item p { margin: 6px 0 0; color: #4e5a56; }
 .review-item-card { margin-bottom: 12px; border: 1px solid #e2e9e6; border-radius: 8px; padding: 15px 16px; background: #fff; }
 .review-item-card:hover { border-color: #c7ddd5; box-shadow: 0 6px 18px rgba(39, 71, 61, .06); }
 .review-item-head { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 10px; align-items: start; }
@@ -3207,5 +3648,5 @@ export default {
 @media (max-width: 1100px) { .decision-grid { grid-template-columns: repeat(2,1fr); } }
 @media (max-width: 760px) { .document-row { grid-template-columns: 22px minmax(0,1fr) 118px 24px; }.document-row > .el-tag { display: none; }.role-select { width: 118px; }.location-input-grid { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .review-brief { align-items: stretch; flex-direction: column; }.brief-actions { display: grid; grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .command-bar,.result-actions { align-items: stretch; flex-direction: column; }.command-bar > div,.result-actions > div { display: grid; grid-template-columns: 1fr; }.decision-grid { grid-template-columns: 1fr; }.chat-composer { border-radius: 22px; padding: 12px; }.review-item-head { grid-template-columns: 30px minmax(0,1fr); }.review-actions { grid-column: 2; } }
+@media (max-width: 700px) { .command-bar,.result-actions,.workflow-panel { align-items: stretch; flex-direction: column; }.command-bar > div,.result-actions > div,.workflow-panel-actions { display: grid; grid-template-columns: 1fr; }.decision-grid { grid-template-columns: 1fr; }.chat-composer { border-radius: 22px; padding: 12px; }.review-item-head { grid-template-columns: 30px minmax(0,1fr); }.review-actions { grid-column: 2; } }
 </style>

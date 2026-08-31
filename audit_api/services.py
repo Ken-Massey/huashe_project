@@ -353,6 +353,54 @@ def _attachment_summaries(attachments: dict[str, Path] | None) -> list[dict[str,
     return summaries
 
 
+def _paragraph_jsonl_excerpt(paragraph_jsonl: str | Path, limit: int = 6000) -> str:
+    source = Path(paragraph_jsonl)
+    if not source.exists():
+        return ""
+    fragments: list[str] = []
+    total = 0
+    with source.open("r", encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()
+            if not text:
+                continue
+            fragments.append(text)
+            total += len(text)
+            if total >= limit:
+                break
+    return " ".join(fragments)[:limit]
+
+
+def _add_source_document_context(
+    options: dict[str, Any],
+    source_file: Path,
+    paragraph_jsonl: str | Path,
+) -> None:
+    excerpt = _paragraph_jsonl_excerpt(paragraph_jsonl)
+    if not excerpt:
+        return
+    manual_context = dict(options.get("manual_context") or {})
+    uploaded = list(manual_context.get("uploaded_documents") or [])
+    source_record = {
+        "name": source_file.name,
+        "role": "case",
+        "text_excerpt": excerpt,
+    }
+    uploaded = [
+        item for item in uploaded
+        if not (isinstance(item, dict) and item.get("name") == source_file.name and item.get("role") == "case")
+    ]
+    uploaded.insert(0, source_record)
+    manual_context["uploaded_documents"] = uploaded
+    manual_context["source_document_name"] = source_file.name
+    manual_context["source_document_text_excerpt"] = excerpt
+    options["manual_context"] = manual_context
+
+
 def _append_attachment_paragraphs(
     paragraph_jsonl: str | Path,
     attachments: dict[str, Path] | None,
@@ -737,6 +785,7 @@ def stage2_audit_worker(source_file: Path, options: dict[str, Any], attachments:
                 options=options,
                 progress=progress,
             )
+        _add_source_document_context(options, source_file, extraction["paragraph_jsonl"])
         progress("正在执行纯LLM+RAG知识库审核，不调用规则函数")
         attachment_summaries = _attachment_summaries(attachments)
         paragraph_source = _append_attachment_paragraphs(extraction["paragraph_jsonl"], attachments)
@@ -844,6 +893,7 @@ def stage2_full_worker(source_file: Path, options: dict[str, Any], attachments: 
                 python_executable=DEEPKE_PYTHON,
                 progress=progress,
             )
+            _add_source_document_context(options, source_file, audit["paragraph_jsonl"])
             case_json = Path(audit["case_json"])
             advice_dir = RESULT_ROOT / "stage2_full" / "advice" / task_id
             advice = run_match_new_case_advice(

@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.rail.RailGeneralMapper">
+
+    <sql id="itemColumns">
+        item_id itemId, item_code itemCode, item_type itemType, item_title itemTitle,
+        item_content itemContent, project_id projectId, project_name projectName,
+        line_name lineName, location_desc locationDesc, responsible_unit responsibleUnit,
+        responsible_user_id responsibleUserId, responsible_user responsibleUser,
+        source_channel sourceChannel, severity_level severityLevel, priority,
+        occur_time occurTime, due_time dueTime, finish_time finishTime,
+        close_time closeTime, close_by closeBy, close_remark closeRemark,
+        review_user_id reviewUserId, review_by reviewBy, review_time reviewTime,
+        review_opinion reviewOpinion, archive_status archiveStatus, archive_time archiveTime,
+        status, extra_json extraJson, remark, create_by createBy, create_time createTime,
+        update_by updateBy, update_time updateTime
+    </sql>
+
+    <sql id="reportColumns">
+        report_id reportId, report_code reportCode, report_type reportType,
+        report_title reportTitle, report_period reportPeriod, summary_content summaryContent,
+        statistics_json statisticsJson, analysis_json analysisJson, submit_unit submitUnit,
+        receive_unit receiveUnit, submit_time submitTime, review_user_id reviewUserId,
+        review_by reviewBy, review_time reviewTime, review_opinion reviewOpinion,
+        publish_time publishTime, archive_status archiveStatus, archive_time archiveTime,
+        status, remark, create_by createBy, create_time createTime,
+        update_by updateBy, update_time updateTime
+    </sql>
+
+    <select id="selectItemList" parameterType="map" resultType="java.util.LinkedHashMap">
+        select <include refid="itemColumns"/>
+        from rail_general_item
+        <where>
+            del_flag = '0'
+            <if test="itemType != null and itemType != ''">and item_type = #{itemType}</if>
+            <if test="itemTitle != null and itemTitle != ''">and item_title like concat('%', #{itemTitle}, '%')</if>
+            <if test="projectId != null and projectId != ''">and project_id = #{projectId}</if>
+            <if test="projectName != null and projectName != ''">and project_name like concat('%', #{projectName}, '%')</if>
+            <if test="lineName != null and lineName != ''">and line_name like concat('%', #{lineName}, '%')</if>
+            <if test="severityLevel != null and severityLevel != ''">and severity_level = #{severityLevel}</if>
+            <if test="priority != null and priority != ''">and priority = #{priority}</if>
+            <if test="status != null and status != ''">and status = #{status}</if>
+            <if test="responsibleUserId != null and responsibleUserId != ''">and responsible_user_id = #{responsibleUserId}</if>
+            <if test="createBy != null and createBy != ''">and create_by = #{createBy}</if>
+            <if test="keyword != null and keyword != ''">
+                and (item_title like concat('%', #{keyword}, '%') or item_content like concat('%', #{keyword}, '%') or location_desc like concat('%', #{keyword}, '%'))
+            </if>
+        </where>
+        order by occur_time desc, update_time desc, item_id desc
+    </select>
+
+    <select id="selectItemById" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select <include refid="itemColumns"/>
+        from rail_general_item
+        where item_id = #{itemId} and del_flag = '0'
+    </select>
+
+    <insert id="insertItem" parameterType="map" useGeneratedKeys="true" keyProperty="itemId">
+        insert into rail_general_item (
+            item_code, item_type, item_title, item_content, project_id, project_name,
+            line_name, location_desc, responsible_unit, responsible_user_id, responsible_user,
+            source_channel, severity_level, priority, occur_time, due_time, status,
+            extra_json, remark, create_by, create_time
+        ) values (
+            #{itemCode}, #{itemType}, #{itemTitle}, #{itemContent}, #{projectId}, #{projectName},
+            #{lineName}, #{locationDesc}, #{responsibleUnit}, #{responsibleUserId}, #{responsibleUser},
+            #{sourceChannel}, #{severityLevel}, #{priority}, #{occurTime}, #{dueTime}, #{status},
+            #{extraJson}, #{remark}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <update id="updateItem" parameterType="map">
+        update rail_general_item
+        <set>
+            <if test="itemCode != null">item_code = #{itemCode},</if>
+            <if test="itemType != null">item_type = #{itemType},</if>
+            <if test="itemTitle != null">item_title = #{itemTitle},</if>
+            <if test="itemContent != null">item_content = #{itemContent},</if>
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="projectName != null">project_name = #{projectName},</if>
+            <if test="lineName != null">line_name = #{lineName},</if>
+            <if test="locationDesc != null">location_desc = #{locationDesc},</if>
+            <if test="responsibleUnit != null">responsible_unit = #{responsibleUnit},</if>
+            <if test="responsibleUserId != null">responsible_user_id = #{responsibleUserId},</if>
+            <if test="responsibleUser != null">responsible_user = #{responsibleUser},</if>
+            <if test="sourceChannel != null">source_channel = #{sourceChannel},</if>
+            <if test="severityLevel != null">severity_level = #{severityLevel},</if>
+            <if test="priority != null">priority = #{priority},</if>
+            <if test="occurTime != null">occur_time = #{occurTime},</if>
+            <if test="dueTime != null">due_time = #{dueTime},</if>
+            <if test="finishTime != null">finish_time = #{finishTime},</if>
+            <if test="closeTime != null">close_time = #{closeTime},</if>
+            <if test="closeBy != null">close_by = #{closeBy},</if>
+            <if test="closeRemark != null">close_remark = #{closeRemark},</if>
+            <if test="reviewUserId != null">review_user_id = #{reviewUserId},</if>
+            <if test="reviewBy != null">review_by = #{reviewBy},</if>
+            <if test="reviewOpinion != null">review_opinion = #{reviewOpinion},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="extraJson != null">extra_json = #{extraJson},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        </set>
+        where item_id = #{itemId}
+    </update>
+
+    <delete id="deleteItemByIds" parameterType="Long">
+        update rail_general_item set del_flag = '2', update_time = sysdate()
+        where item_id in
+        <foreach collection="array" item="itemId" open="(" separator="," close=")">
+            #{itemId}
+        </foreach>
+    </delete>
+
+    <update id="updateItemStatus" parameterType="map">
+        update rail_general_item
+        set status = #{status},
+            <if test="reviewUserId != null">review_user_id = #{reviewUserId},</if>
+            <if test="reviewBy != null">review_by = #{reviewBy}, review_time = sysdate(),</if>
+            <if test="reviewOpinion != null">review_opinion = #{reviewOpinion},</if>
+            <if test="closeBy != null">close_by = #{closeBy}, close_time = sysdate(), finish_time = sysdate(),</if>
+            <if test="closeRemark != null">close_remark = #{closeRemark},</if>
+            <if test="archiveStatus != null">archive_status = #{archiveStatus}, archive_time = sysdate(),</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where item_id = #{itemId}
+    </update>
+
+    <select id="selectReportList" parameterType="map" resultType="java.util.LinkedHashMap">
+        select <include refid="reportColumns"/>
+        from rail_general_report
+        <where>
+            del_flag = '0'
+            <if test="reportType != null and reportType != ''">and report_type = #{reportType}</if>
+            <if test="reportTitle != null and reportTitle != ''">and report_title like concat('%', #{reportTitle}, '%')</if>
+            <if test="reportPeriod != null and reportPeriod != ''">and report_period = #{reportPeriod}</if>
+            <if test="status != null and status != ''">and status = #{status}</if>
+            <if test="createBy != null and createBy != ''">and create_by = #{createBy}</if>
+            <if test="keyword != null and keyword != ''">
+                and (report_title like concat('%', #{keyword}, '%') or summary_content like concat('%', #{keyword}, '%'))
+            </if>
+        </where>
+        order by report_period desc, update_time desc, report_id desc
+    </select>
+
+    <select id="selectReportById" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select <include refid="reportColumns"/>
+        from rail_general_report
+        where report_id = #{reportId} and del_flag = '0'
+    </select>
+
+    <insert id="insertReport" parameterType="map" useGeneratedKeys="true" keyProperty="reportId">
+        insert into rail_general_report (
+            report_code, report_type, report_title, report_period, summary_content,
+            statistics_json, analysis_json, submit_unit, receive_unit, submit_time,
+            status, remark, create_by, create_time
+        ) values (
+            #{reportCode}, #{reportType}, #{reportTitle}, #{reportPeriod}, #{summaryContent},
+            #{statisticsJson}, #{analysisJson}, #{submitUnit}, #{receiveUnit}, #{submitTime},
+            #{status}, #{remark}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <update id="updateReport" parameterType="map">
+        update rail_general_report
+        <set>
+            <if test="reportCode != null">report_code = #{reportCode},</if>
+            <if test="reportType != null">report_type = #{reportType},</if>
+            <if test="reportTitle != null">report_title = #{reportTitle},</if>
+            <if test="reportPeriod != null">report_period = #{reportPeriod},</if>
+            <if test="summaryContent != null">summary_content = #{summaryContent},</if>
+            <if test="statisticsJson != null">statistics_json = #{statisticsJson},</if>
+            <if test="analysisJson != null">analysis_json = #{analysisJson},</if>
+            <if test="submitUnit != null">submit_unit = #{submitUnit},</if>
+            <if test="receiveUnit != null">receive_unit = #{receiveUnit},</if>
+            <if test="submitTime != null">submit_time = #{submitTime},</if>
+            <if test="reviewUserId != null">review_user_id = #{reviewUserId},</if>
+            <if test="reviewBy != null">review_by = #{reviewBy},</if>
+            <if test="reviewOpinion != null">review_opinion = #{reviewOpinion},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        </set>
+        where report_id = #{reportId}
+    </update>
+
+    <delete id="deleteReportByIds" parameterType="Long">
+        update rail_general_report set del_flag = '2', update_time = sysdate()
+        where report_id in
+        <foreach collection="array" item="reportId" open="(" separator="," close=")">
+            #{reportId}
+        </foreach>
+    </delete>
+
+    <update id="updateReportStatus" parameterType="map">
+        update rail_general_report
+        set status = #{status},
+            <if test="reviewUserId != null">review_user_id = #{reviewUserId},</if>
+            <if test="reviewBy != null">review_by = #{reviewBy}, review_time = sysdate(),</if>
+            <if test="reviewOpinion != null">review_opinion = #{reviewOpinion},</if>
+            <if test="status == 'published'">publish_time = sysdate(),</if>
+            <if test="status == 'reported'">submit_time = sysdate(),</if>
+            <if test="archiveStatus != null">archive_status = #{archiveStatus}, archive_time = sysdate(),</if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where report_id = #{reportId}
+    </update>
+
+    <select id="selectAttachmentList" parameterType="map" resultType="java.util.LinkedHashMap">
+        select attachment_id attachmentId, item_id itemId, report_id reportId,
+               file_type fileType, file_name fileName, stored_name storedName,
+               file_path filePath, file_size fileSize, mime_type mimeType,
+               description, create_by createBy, create_time createTime,
+               update_by updateBy, update_time updateTime
+        from rail_general_attachment
+        <where>
+            del_flag = '0'
+            <if test="itemId != null">and item_id = #{itemId}</if>
+            <if test="reportId != null">and report_id = #{reportId}</if>
+            <if test="fileType != null and fileType != ''">and file_type = #{fileType}</if>
+        </where>
+        order by create_time desc, attachment_id desc
+    </select>
+
+    <select id="selectAttachmentById" parameterType="Long" resultType="java.util.LinkedHashMap">
+        select attachment_id attachmentId, item_id itemId, report_id reportId,
+               file_type fileType, file_name fileName, stored_name storedName,
+               file_path filePath, file_size fileSize, mime_type mimeType,
+               description, create_by createBy, create_time createTime
+        from rail_general_attachment
+        where attachment_id = #{attachmentId} and del_flag = '0'
+    </select>
+
+    <insert id="insertAttachment" parameterType="map" useGeneratedKeys="true" keyProperty="attachmentId">
+        insert into rail_general_attachment (
+            item_id, report_id, file_type, file_name, stored_name, file_path,
+            file_size, mime_type, description, create_by, create_time
+        ) values (
+            #{itemId}, #{reportId}, #{fileType}, #{fileName}, #{storedName}, #{filePath},
+            #{fileSize}, #{mimeType}, #{description}, #{createBy}, sysdate()
+        )
+    </insert>
+
+    <delete id="deleteAttachmentByIds" parameterType="Long">
+        update rail_general_attachment set del_flag = '2', update_time = sysdate()
+        where attachment_id in
+        <foreach collection="array" item="attachmentId" open="(" separator="," close=")">
+            #{attachmentId}
+        </foreach>
+    </delete>
+
+    <insert id="insertLog" parameterType="map">
+        insert into rail_general_log (
+            target_type, target_id, action_code, action_name, from_status,
+            to_status, operator_id, operator_name, opinion, snapshot_json,
+            create_by, create_time
+        ) values (
+            #{targetType}, #{targetId}, #{actionCode}, #{actionName}, #{fromStatus},
+            #{toStatus}, #{operatorId}, #{operatorName}, #{opinion}, #{snapshotJson},
+            #{createBy}, sysdate()
+        )
+    </insert>
+
+    <select id="selectLogList" parameterType="map" resultType="java.util.LinkedHashMap">
+        select log_id logId, target_type targetType, target_id targetId,
+               action_code actionCode, action_name actionName, from_status fromStatus,
+               to_status toStatus, operator_id operatorId, operator_name operatorName,
+               opinion, snapshot_json snapshotJson, create_by createBy, create_time createTime
+        from rail_general_log
+        <where>
+            <if test="targetType != null and targetType != ''">and target_type = #{targetType}</if>
+            <if test="targetId != null">and target_id = #{targetId}</if>
+        </where>
+        order by create_time desc, log_id desc
+    </select>
+
+    <select id="selectItemStatistics" parameterType="map" resultType="java.util.LinkedHashMap">
+        select item_type itemType, status, severity_level severityLevel, count(*) total
+        from rail_general_item
+        where del_flag = '0'
+        group by item_type, status, severity_level
+        order by item_type asc, status asc, severity_level asc
+    </select>
+
+    <select id="selectItemTrend" parameterType="map" resultType="java.util.LinkedHashMap">
+        select date_format(create_time, '%Y-%m') month, item_type itemType, count(*) total
+        from rail_general_item
+        where del_flag = '0' and create_time is not null
+        group by date_format(create_time, '%Y-%m'), item_type
+        order by month asc, item_type asc
+    </select>
+
+    <select id="selectReportStatistics" parameterType="map" resultType="java.util.LinkedHashMap">
+        select report_type reportType, status, count(*) total
+        from rail_general_report
+        where del_flag = '0'
+        group by report_type, status
+        order by report_type asc, status asc
+    </select>
+
+</mapper>

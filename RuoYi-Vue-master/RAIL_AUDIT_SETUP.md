@@ -6,6 +6,7 @@
 - 若依 Java 后端：`RuoYi-Vue-master\ruoyi-admin`
 - Vue 2 前端：`RuoYi-Vue-master\ruoyi-ui`
 - 菜单增量脚本：`RuoYi-Vue-master\sql\rail_audit_menu.sql`
+- 通用管理脚本：`RuoYi-Vue-master\sql\rail_general_management_v1.sql`
 - 项目档案数据库：`runtime\project_archive\project_archive.sqlite3`
 
 浏览器只访问若依系统。若依后端负责权限校验并代理 Python 审核服务，项目档案由 Python 服务持久化。
@@ -25,9 +26,11 @@
 
 1. 创建 MySQL 数据库并执行 `sql/ry_20260417.sql`。
 2. 执行 `sql/rail_audit_menu.sql`。该脚本为幂等增量迁移，不会删除原有审核菜单或角色授权。
-3. 检查 `ruoyi-admin/src/main/resources/application-druid.yml` 的 MySQL 连接。
-4. 启动 MySQL 和 Redis。
-5. Python 与 Java 在同一台电脑运行时，Python 地址保持默认值即可。
+3. 执行 `sql/rail_general_management_v1.sql`，创建“通用管理”表、菜单和角色权限。
+4. 如只需要修复菜单显示或权限，可单独执行 `sql/rail_general_menu_repair.sql`。
+5. 检查 `ruoyi-admin/src/main/resources/application-druid.yml` 的 MySQL 连接。
+6. 启动 MySQL 和 Redis。
+7. Python 与 Java 在同一台电脑运行时，Python 地址保持默认值即可。
 
 生产环境建议为 Python 和 Java 设置同一个内部调用令牌：
 
@@ -116,8 +119,27 @@ npm run build:prod
 | `rail:archive:edit` | 编辑、排序和恢复项目或阶段 |
 | `rail:archive:remove` | 软归档项目或阶段 |
 | `rail:archive:audit:list` | 查看阶段审核详情和前序历史 |
+| `rail:general:list` | 查看通用管理菜单 |
+| `rail:general:query` | 查询通用事项、总结报表和详情 |
+| `rail:general:add` | 新增临时事项、安全隐患、总结和上报记录 |
+| `rail:general:edit` | 编辑通用事项和报表 |
+| `rail:general:remove` | 删除通用事项和报表 |
+| `rail:general:upload` | 上传或删除通用管理附件 |
+| `rail:general:submit` | 提交通用事项、总结或上报记录 |
+| `rail:general:review` | 审核或退回通用事项、总结和报表 |
+| `rail:general:close` | 闭环临时事项和安全隐患 |
+| `rail:general:statistics` | 查看统计分析和态势数据 |
+| `rail:general:report` | 生成、发布或提交数据上报 |
+| `rail:general:archive` | 归档通用事项和报表记录 |
 
 菜单脚本会让已经拥有“案例一键审核”菜单的非管理员角色自动获得“项目档案”和“审核记录查看”。其他管理权限需要在“系统管理 → 角色管理”中按需分配。
+
+“通用管理”角色建议：
+
+- 普通角色：查看通用管理和统计。
+- 经办人：登记事项、上传附件、提交、闭环和数据上报。
+- 审核人：查看、编辑、审核、闭环确认和统计。
+- 终审人：审核、数据上报、归档发布和统计。
 
 ## 7. 接口对应关系
 
@@ -127,6 +149,7 @@ npm run build:prod
 | 函件审核与复函 | `/rail/reply/tasks` |
 | 项目、阶段与审核历史 | `/rail/archives/**` |
 | 案例知识库 | `/rail/knowledge/**` |
+| 通用事项、隐患、总结和上报 | `/rail/general/**` |
 
 Python 原始档案接口统一位于 `/api/v1/project-archives/**`，不建议浏览器直接调用。
 
@@ -147,3 +170,5 @@ stage1_reply_system\.venv\Scripts\python.exe -m pytest audit_api\tests -q
 - 阶段无法选择：该阶段可能已经审核成功、正在排队、正在审核或已归档。
 - 阶段审核失败：可在项目档案中查看错误并重新提交，成功后仍只保留该阶段唯一记录。
 - 大文件上传失败：Java 当前单文件上限为 200 MB、单请求上限为 220 MB，反向代理也应配置对应限制。
+- 看不到“通用管理”：先执行 `sql/rail_general_menu_repair.sql`，再退出账号重新登录，刷新前端权限缓存。
+- 通用管理提示无权限：检查当前账号角色是否拥有 `rail:general:list` 或 `rail:general:query`；经办、审核、终审动作还需要对应按钮权限。

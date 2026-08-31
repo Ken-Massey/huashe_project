@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.rail.RailAuditTaskMapper">
+
+    <resultMap type="com.ruoyi.system.domain.rail.RailAuditTask" id="RailAuditTaskResult">
+        <id property="taskId" column="task_id"/>
+        <result property="workflowId" column="workflow_id"/>
+        <result property="nodeCode" column="node_code"/>
+        <result property="nodeName" column="node_name"/>
+        <result property="taskStatus" column="task_status"/>
+        <result property="assigneeId" column="assignee_id"/>
+        <result property="assigneeName" column="assignee_name"/>
+        <result property="roleKey" column="role_key"/>
+        <result property="receivedTime" column="received_time"/>
+        <result property="handledTime" column="handled_time"/>
+        <result property="handleOpinion" column="handle_opinion"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <sql id="selectTaskColumns">
+        task_id, workflow_id, node_code, node_name, task_status, assignee_id, assignee_name,
+        role_key, received_time, handled_time, handle_opinion, create_by, create_time,
+        update_by, update_time, remark
+    </sql>
+
+    <select id="selectTodoTaskByWorkflowId" parameterType="Long" resultMap="RailAuditTaskResult">
+        select <include refid="selectTaskColumns"/>
+        from rail_audit_task
+        where workflow_id = #{workflowId}
+          and task_status = 'TODO'
+        order by task_id desc
+        limit 1
+    </select>
+
+    <select id="selectTaskList" parameterType="com.ruoyi.system.domain.rail.RailAuditTask" resultMap="RailAuditTaskResult">
+        select <include refid="selectTaskColumns"/>
+        from rail_audit_task
+        <where>
+            <if test="workflowId != null">and workflow_id = #{workflowId}</if>
+            <if test="nodeCode != null and nodeCode != ''">and node_code = #{nodeCode}</if>
+            <if test="taskStatus != null and taskStatus != ''">and task_status = #{taskStatus}</if>
+            <if test="assigneeId != null">and assignee_id = #{assigneeId}</if>
+        </where>
+        order by task_id asc
+    </select>
+
+    <insert id="insertTask" parameterType="com.ruoyi.system.domain.rail.RailAuditTask" useGeneratedKeys="true" keyProperty="taskId">
+        insert into rail_audit_task
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="workflowId != null">workflow_id,</if>
+            <if test="nodeCode != null">node_code,</if>
+            <if test="nodeName != null">node_name,</if>
+            <if test="taskStatus != null">task_status,</if>
+            <if test="assigneeId != null">assignee_id,</if>
+            <if test="assigneeName != null">assignee_name,</if>
+            <if test="roleKey != null">role_key,</if>
+            <if test="receivedTime != null">received_time,</if>
+            <if test="handledTime != null">handled_time,</if>
+            <if test="handleOpinion != null">handle_opinion,</if>
+            <if test="createBy != null">create_by,</if>
+            create_time,
+            <if test="remark != null">remark,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="workflowId != null">#{workflowId},</if>
+            <if test="nodeCode != null">#{nodeCode},</if>
+            <if test="nodeName != null">#{nodeName},</if>
+            <if test="taskStatus != null">#{taskStatus},</if>
+            <if test="assigneeId != null">#{assigneeId},</if>
+            <if test="assigneeName != null">#{assigneeName},</if>
+            <if test="roleKey != null">#{roleKey},</if>
+            <if test="receivedTime != null">#{receivedTime},</if>
+            <if test="handledTime != null">#{handledTime},</if>
+            <if test="handleOpinion != null">#{handleOpinion},</if>
+            <if test="createBy != null">#{createBy},</if>
+            sysdate(),
+            <if test="remark != null">#{remark},</if>
+        </trim>
+    </insert>
+
+    <update id="updateTask" parameterType="com.ruoyi.system.domain.rail.RailAuditTask">
+        update rail_audit_task
+        set node_code = #{nodeCode},
+            node_name = #{nodeName},
+            task_status = #{taskStatus},
+            assignee_id = #{assigneeId},
+            assignee_name = #{assigneeName},
+            role_key = #{roleKey},
+            received_time = #{receivedTime},
+            handled_time = #{handledTime},
+            handle_opinion = #{handleOpinion},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where task_id = #{taskId}
+    </update>
+
+    <update id="cancelTodoTasks" parameterType="Long">
+        update rail_audit_task
+        set task_status = 'CANCEL',
+            handled_time = sysdate(),
+            update_time = sysdate()
+        where workflow_id = #{workflowId}
+          and task_status = 'TODO'
+    </update>
+
+</mapper>

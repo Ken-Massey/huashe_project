@@ -284,7 +284,7 @@ export default {
       this.selectedStageId = ''
       this.auditRecord = null
       if (this.selectedProjectId) this.loadProjectDetail()
-      else this.projectDetail = null
+      else { this.projectDetail = null }
     },
     async selectProject(id) {
       if (id === this.selectedProjectId && this.projectDetail) return

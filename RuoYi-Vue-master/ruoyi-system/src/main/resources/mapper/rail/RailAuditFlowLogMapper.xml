@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.rail.RailAuditFlowLogMapper">
+
+    <resultMap type="com.ruoyi.system.domain.rail.RailAuditFlowLog" id="RailAuditFlowLogResult">
+        <id property="logId" column="log_id"/>
+        <result property="workflowId" column="workflow_id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="actionCode" column="action_code"/>
+        <result property="actionName" column="action_name"/>
+        <result property="fromNodeCode" column="from_node_code"/>
+        <result property="toNodeCode" column="to_node_code"/>
+        <result property="operatorId" column="operator_id"/>
+        <result property="operatorName" column="operator_name"/>
+        <result property="opinion" column="opinion"/>
+        <result property="snapshotJson" column="snapshot_json"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <select id="selectLogList" parameterType="Long" resultMap="RailAuditFlowLogResult">
+        select log_id, workflow_id, task_id, action_code, action_name, from_node_code, to_node_code,
+               operator_id, operator_name, opinion, snapshot_json, create_by, create_time,
+               update_by, update_time, remark
+        from rail_audit_flow_log
+        where workflow_id = #{workflowId}
+        order by log_id asc
+    </select>
+
+    <insert id="insertLog" parameterType="com.ruoyi.system.domain.rail.RailAuditFlowLog" useGeneratedKeys="true" keyProperty="logId">
+        insert into rail_audit_flow_log
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="workflowId != null">workflow_id,</if>
+            <if test="taskId != null">task_id,</if>
+            <if test="actionCode != null">action_code,</if>
+            <if test="actionName != null">action_name,</if>
+            <if test="fromNodeCode != null">from_node_code,</if>
+            <if test="toNodeCode != null">to_node_code,</if>
+            <if test="operatorId != null">operator_id,</if>
+            <if test="operatorName != null">operator_name,</if>
+            <if test="opinion != null">opinion,</if>
+            <if test="snapshotJson != null">snapshot_json,</if>
+            <if test="createBy != null">create_by,</if>
+            create_time,
+            <if test="remark != null">remark,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="workflowId != null">#{workflowId},</if>
+            <if test="taskId != null">#{taskId},</if>
+            <if test="actionCode != null">#{actionCode},</if>
+            <if test="actionName != null">#{actionName},</if>
+            <if test="fromNodeCode != null">#{fromNodeCode},</if>
+            <if test="toNodeCode != null">#{toNodeCode},</if>
+            <if test="operatorId != null">#{operatorId},</if>
+            <if test="operatorName != null">#{operatorName},</if>
+            <if test="opinion != null">#{opinion},</if>
+            <if test="snapshotJson != null">#{snapshotJson},</if>
+            <if test="createBy != null">#{createBy},</if>
+            sysdate(),
+            <if test="remark != null">#{remark},</if>
+        </trim>
+    </insert>
+
+</mapper>

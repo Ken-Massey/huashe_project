@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.rail.RailAuditWorkflowMapper">
+
+    <resultMap type="com.ruoyi.system.domain.rail.RailAuditWorkflow" id="RailAuditWorkflowResult">
+        <id property="workflowId" column="workflow_id"/>
+        <result property="flowCode" column="flow_code"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="stageId" column="stage_id"/>
+        <result property="projectName" column="project_name"/>
+        <result property="stageName" column="stage_name"/>
+        <result property="auditVersion" column="audit_version"/>
+        <result property="workflowStatus" column="workflow_status"/>
+        <result property="currentNodeCode" column="current_node_code"/>
+        <result property="currentNodeName" column="current_node_name"/>
+        <result property="currentAssigneeId" column="current_assignee_id"/>
+        <result property="currentAssignee" column="current_assignee"/>
+        <result property="initiatorId" column="initiator_id"/>
+        <result property="initiatorName" column="initiator_name"/>
+        <result property="latestSummary" column="latest_summary"/>
+        <result property="latestRiskLevel" column="latest_risk_level"/>
+        <result property="latestResultJson" column="latest_result_json"/>
+        <result property="submittedTime" column="submitted_time"/>
+        <result property="approvedTime" column="approved_time"/>
+        <result property="archivedTime" column="archived_time"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <sql id="selectWorkflowColumns">
+        workflow_id, flow_code, session_id, project_id, stage_id, project_name, stage_name,
+        audit_version, workflow_status, current_node_code, current_node_name, current_assignee_id,
+        current_assignee, initiator_id, initiator_name, latest_summary, latest_risk_level,
+        latest_result_json, submitted_time, approved_time, archived_time, create_by, create_time,
+        update_by, update_time, remark
+    </sql>
+
+    <sql id="selectWorkflowColumnsWithAlias">
+        w.workflow_id, w.flow_code, w.session_id, w.project_id, w.stage_id, w.project_name, w.stage_name,
+        w.audit_version, w.workflow_status, w.current_node_code, w.current_node_name, w.current_assignee_id,
+        w.current_assignee, w.initiator_id, w.initiator_name, w.latest_summary, w.latest_risk_level,
+        w.latest_result_json, w.submitted_time, w.approved_time, w.archived_time, w.create_by, w.create_time,
+        w.update_by, w.update_time, w.remark
+    </sql>
+
+    <select id="selectWorkflowById" parameterType="Long" resultMap="RailAuditWorkflowResult">
+        select <include refid="selectWorkflowColumns"/>
+        from rail_audit_workflow
+        where workflow_id = #{workflowId}
+    </select>
+
+    <select id="selectWorkflowByBusinessKey" parameterType="com.ruoyi.system.domain.rail.RailAuditWorkflow" resultMap="RailAuditWorkflowResult">
+        select <include refid="selectWorkflowColumns"/>
+        from rail_audit_workflow
+        <where>
+            flow_code = #{flowCode}
+            <choose>
+                <when test="stageId != null and stageId != ''">
+                    and stage_id = #{stageId}
+                </when>
+                <when test="sessionId != null and sessionId != ''">
+                    and session_id = #{sessionId}
+                </when>
+                <otherwise>
+                    and project_id = #{projectId}
+                </otherwise>
+            </choose>
+        </where>
+        order by workflow_id desc
+        limit 1
+    </select>
+
+    <select id="selectWorkflowList" parameterType="com.ruoyi.system.domain.rail.RailAuditWorkflow" resultMap="RailAuditWorkflowResult">
+        select <include refid="selectWorkflowColumns"/>
+        from rail_audit_workflow
+        <where>
+            <if test="flowCode != null and flowCode != ''">and flow_code = #{flowCode}</if>
+            <if test="sessionId != null and sessionId != ''">and session_id = #{sessionId}</if>
+            <if test="projectId != null and projectId != ''">and project_id = #{projectId}</if>
+            <if test="stageId != null and stageId != ''">and stage_id = #{stageId}</if>
+            <if test="projectName != null and projectName != ''">and project_name like concat('%', #{projectName}, '%')</if>
+            <if test="workflowStatus != null and workflowStatus != ''">and workflow_status = #{workflowStatus}</if>
+            <if test="currentAssigneeId != null">and current_assignee_id = #{currentAssigneeId}</if>
+        </where>
+        order by update_time desc, workflow_id desc
+    </select>
+
+    <select id="selectTodoWorkflowList" parameterType="com.ruoyi.system.domain.rail.RailAuditWorkflow" resultMap="RailAuditWorkflowResult">
+        select distinct <include refid="selectWorkflowColumnsWithAlias"/>
+        from rail_audit_workflow w
+        inner join rail_audit_task t on t.workflow_id = w.workflow_id and t.task_status = 'TODO'
+        left join sys_role r on r.role_key = t.role_key and r.status = '0' and r.del_flag = '0'
+        left join sys_user_role ur on ur.role_id = r.role_id
+        <where>
+            <if test="currentUserId != null">
+                and (t.assignee_id = #{currentUserId} or (t.assignee_id is null and ur.user_id = #{currentUserId}))
+            </if>
+            <if test="flowCode != null and flowCode != ''">and w.flow_code = #{flowCode}</if>
+            <if test="projectName != null and projectName != ''">and w.project_name like concat('%', #{projectName}, '%')</if>
+            <if test="workflowStatus != null and workflowStatus != ''">and w.workflow_status = #{workflowStatus}</if>
+        </where>
+        order by w.update_time desc, w.workflow_id desc
+    </select>
+
+    <insert id="insertWorkflow" parameterType="com.ruoyi.system.domain.rail.RailAuditWorkflow" useGeneratedKeys="true" keyProperty="workflowId">
+        insert into rail_audit_workflow
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="flowCode != null">flow_code,</if>
+            <if test="sessionId != null">session_id,</if>
+            <if test="projectId != null">project_id,</if>
+            <if test="stageId != null">stage_id,</if>
+            <if test="projectName != null">project_name,</if>
+            <if test="stageName != null">stage_name,</if>
+            <if test="auditVersion != null">audit_version,</if>
+            <if test="workflowStatus != null">workflow_status,</if>
+            <if test="currentNodeCode != null">current_node_code,</if>
+            <if test="currentNodeName != null">current_node_name,</if>
+            <if test="currentAssigneeId != null">current_assignee_id,</if>
+            <if test="currentAssignee != null">current_assignee,</if>
+            <if test="initiatorId != null">initiator_id,</if>
+            <if test="initiatorName != null">initiator_name,</if>
+            <if test="latestSummary != null">latest_summary,</if>
+            <if test="latestRiskLevel != null">latest_risk_level,</if>
+            <if test="latestResultJson != null">latest_result_json,</if>
+            <if test="submittedTime != null">submitted_time,</if>
+            <if test="approvedTime != null">approved_time,</if>
+            <if test="archivedTime != null">archived_time,</if>
+            <if test="createBy != null">create_by,</if>
+            create_time,
+            <if test="remark != null">remark,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="flowCode != null">#{flowCode},</if>
+            <if test="sessionId != null">#{sessionId},</if>
+            <if test="projectId != null">#{projectId},</if>
+            <if test="stageId != null">#{stageId},</if>
+            <if test="projectName != null">#{projectName},</if>
+            <if test="stageName != null">#{stageName},</if>
+            <if test="auditVersion != null">#{auditVersion},</if>
+            <if test="workflowStatus != null">#{workflowStatus},</if>
+            <if test="currentNodeCode != null">#{currentNodeCode},</if>
+            <if test="currentNodeName != null">#{currentNodeName},</if>
+            <if test="currentAssigneeId != null">#{currentAssigneeId},</if>
+            <if test="currentAssignee != null">#{currentAssignee},</if>
+            <if test="initiatorId != null">#{initiatorId},</if>
+            <if test="initiatorName != null">#{initiatorName},</if>
+            <if test="latestSummary != null">#{latestSummary},</if>
+            <if test="latestRiskLevel != null">#{latestRiskLevel},</if>
+            <if test="latestResultJson != null">#{latestResultJson},</if>
+            <if test="submittedTime != null">#{submittedTime},</if>
+            <if test="approvedTime != null">#{approvedTime},</if>
+            <if test="archivedTime != null">#{archivedTime},</if>
+            <if test="createBy != null">#{createBy},</if>
+            sysdate(),
+            <if test="remark != null">#{remark},</if>
+        </trim>
+    </insert>
+
+    <update id="updateWorkflow" parameterType="com.ruoyi.system.domain.rail.RailAuditWorkflow">
+        update rail_audit_workflow
+        set flow_code = #{flowCode},
+            session_id = #{sessionId},
+            project_id = #{projectId},
+            stage_id = #{stageId},
+            project_name = #{projectName},
+            stage_name = #{stageName},
+            audit_version = #{auditVersion},
+            workflow_status = #{workflowStatus},
+            current_node_code = #{currentNodeCode},
+            current_node_name = #{currentNodeName},
+            current_assignee_id = #{currentAssigneeId},
+            current_assignee = #{currentAssignee},
+            initiator_id = #{initiatorId},
+            initiator_name = #{initiatorName},
+            latest_summary = #{latestSummary},
+            latest_risk_level = #{latestRiskLevel},
+            latest_result_json = #{latestResultJson},
+            submitted_time = #{submittedTime},
+            approved_time = #{approvedTime},
+            archived_time = #{archivedTime},
+            update_by = #{updateBy},
+            update_time = sysdate(),
+            remark = #{remark}
+        where workflow_id = #{workflowId}
+    </update>
+
+</mapper>

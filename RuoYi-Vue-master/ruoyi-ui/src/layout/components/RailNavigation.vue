@@ -29,10 +29,13 @@ export default {
     return {
       items: [
         { path: '/rail/audit', label: '案例审核', icon: 'el-icon-finished' },
+        { path: '/rail/workflow', label: '审核流转', icon: 'el-icon-s-claim', permission: 'rail:audit:workflow:list' },
         { path: '/rail/patrol', label: '现场符合性巡查', icon: 'el-icon-location-outline' },
+        { path: '/rail/meeting', label: '会议协调管理', icon: 'el-icon-s-cooperation', permission: 'rail:meeting:list' },
         { path: '/rail/knowledge', label: '知识库', icon: 'el-icon-collection' },
         { path: '/rail/agent', label: 'AI智能体', icon: 'el-icon-chat-dot-square' },
         { path: '/rail/archive', label: '项目档案', icon: 'el-icon-document-copy' },
+        { path: '/rail/general', label: '通用管理', icon: 'el-icon-s-data', permissions: ['rail:general:list', 'rail:general:query'] },
         // 账号管理：进入用户管理页，需管理员权限
         { path: '/system/user', label: '账号管理', icon: 'el-icon-s-tools', permission: 'system:user:list' }
       ]
@@ -42,8 +45,10 @@ export default {
     visibleItems() {
       const perms = this.$store.getters.permissions || []
       return this.items.filter(item => {
-        if (!item.permission) return true
-        return perms.includes('*:*:*') || perms.includes(item.permission)
+        if (!item.permission && !item.permissions) return true
+        if (perms.includes('*:*:*')) return true
+        if (item.permissions) return item.permissions.some(permission => perms.includes(permission))
+        return perms.includes(item.permission)
       })
     }
   },
@@ -144,7 +149,7 @@ export default {
     border-right: 0;
   }
   .brand-mark { display: none; }
-  .business-links { display: grid; height: 100%; grid-template-columns: repeat(6, 1fr); }
+  .business-links { display: grid; height: 100%; grid-template-columns: repeat(auto-fit, minmax(52px, 1fr)); }
   .business-link { min-height: 68px; gap: 4px; padding: 5px 3px; font-size: 11px; }
   .business-link i { font-size: 20px; }
   .business-link.active::before { inset: 0 12px auto; width: auto; height: 3px; }

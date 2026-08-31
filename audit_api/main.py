@@ -636,26 +636,92 @@ def _infer_review_profile_from_text(value: Any) -> str:
     if not text:
         return ""
     normalized = re.sub(r"\s+", "", text)
-    if re.search(r"(施工组织设计|专项施工方案|施工方案|桩基和支护施工方案|基坑支护施工)", normalized):
-        return "construction_scheme"
-    if re.search(r"(安全评估报告|安全影响评估|安全性影响评估|安全专项评估|专项评估报告|预评估报告|评估咨询项目)", normalized):
+    safety_pattern = (
+        r"(安全评估报告|安全影响评估|安全性影响评估|安全性影响预评估|安全专项评估|"
+        r"专项评估报告|预评估报告|评估咨询项目|涉地铁安全影响|涉地铁安全性影响|"
+        r"评估报告专家评审意见|报告专家评审意见)"
+    )
+    design_pattern = r"(设计方案|方案设计|设计文件|设计资料)"
+    construction_pattern = r"(施工组织设计|专项施工方案|施工方案|桩基和支护施工方案|基坑支护施工)"
+
+    if re.search(safety_pattern, normalized):
         return "safety_assessment_report"
-    if re.search(r"(设计方案|方案设计|设计文件|设计资料)", normalized):
+    if re.search(design_pattern, normalized):
         return "design_scheme"
+    if re.search(construction_pattern, normalized):
+        return "construction_scheme"
+    return ""
+
+
+def _infer_review_profile_from_name(name: Any) -> str:
+    text = re.sub(r"\s+", "", str(name or ""))
+    if not text:
+        return ""
+    suffix_trimmed = re.sub(r"\.(pdf|docx?|xlsx?|pptx?|txt)$", "", text, flags=re.I)
+    safety_pattern = (
+        r"(安全性|安全评估|安全影响|影响评估|影响预评估|预评估|"
+        r"专项评估|评估报告|评估咨询|涉地铁.*评估|地铁.*评估)"
+    )
+    design_pattern = r"(设计方案|方案设计|设计文件|设计资料|初步设计|施工图设计)"
+    construction_pattern = r"(施工组织设计|专项施工方案|施工方案|桩基.*支护.*方案|基坑支护施工|降水施工方案)"
+
+    if re.search(safety_pattern, suffix_trimmed):
+        return "safety_assessment_report"
+    if re.search(design_pattern, suffix_trimmed):
+        return "design_scheme"
+    if re.search(construction_pattern, suffix_trimmed):
+        return "construction_scheme"
+    return ""
+
+
+def _collect_profile_names(value: Any) -> list[str]:
+    names: list[str] = []
+    if value is None:
+        return names
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        for key in ("source_document_name", "name", "file_name", "filename", "original_file_name", "relative_path"):
+            item = value.get(key)
+            if item:
+                names.append(str(item))
+        for key in ("source_files", "uploaded_documents", "files", "attachments"):
+            child = value.get(key)
+            if child is not None:
+                names.extend(_collect_profile_names(child))
+        return names
+    if isinstance(value, list):
+        for item in value:
+            names.extend(_collect_profile_names(item))
+    return names
+
+
+def _infer_review_profile_from_names(*values: Any) -> str:
+    for value in values:
+        for name in _collect_profile_names(value):
+            profile = _infer_review_profile_from_name(name)
+            if profile:
+                return profile
     return ""
 
 
 def _infer_review_profile_from_result(result: dict[str, Any]) -> str:
     context = _extract_manual_context(result)
-    priority_parts: list[Any] = [
-        context.get("uploaded_documents") if isinstance(context, dict) else None,
-        context.get("incoming_letter_name") if isinstance(context, dict) else None,
-        context.get("rerun_context") if isinstance(context, dict) else None,
+    profile = _infer_review_profile_from_names(
+        context if isinstance(context, dict) else None,
         result.get("source_files"),
         result.get("file_name"),
         result.get("filename"),
+    )
+    if profile:
+        return profile
+
+    fallback_parts: list[Any] = [
+        context.get("uploaded_documents") if isinstance(context, dict) else None,
+        context.get("incoming_letter_name") if isinstance(context, dict) else None,
+        context.get("rerun_context") if isinstance(context, dict) else None,
     ]
-    for part in priority_parts:
+    for part in fallback_parts:
         profile = _infer_review_profile_from_text(part)
         if profile:
             return profile
@@ -733,24 +799,34 @@ def _session_overall_context(session: dict[str, Any]) -> dict[str, Any]:
     return context
 
 
-def _apply_review_profile_wording(items: list[dict[str, Any]], profile: str) -> list[dict[str, Any]]:
-    if profile != "safety_assessment_report":
-        return items
+def _normalize_safety_assessment_wording_text(text: Any) -> str:
+    value = str(text or "")
     replacements = (
         ("补充完善", "完善"),
+        ("完善补充", "完善"),
+        ("资料补充要求", "资料核实要求"),
+        ("补充资料要求", "核实资料要求"),
         ("需补充", "需核实并完善"),
         ("应补充", "应核实并完善"),
         ("请补充", "请核实并完善"),
+        ("建议补充", "建议核实并完善"),
+        ("要求补充", "要求核实并完善"),
+        ("待补充", "待核实完善"),
         ("补充", "完善"),
     )
+    for old, new in replacements:
+        value = value.replace(old, new)
+    return re.sub(r"(完善){2,}", "完善", value)
+
+
+def _apply_review_profile_wording(items: list[dict[str, Any]], profile: str) -> list[dict[str, Any]]:
+    if profile != "safety_assessment_report":
+        return items
     normalized: list[dict[str, Any]] = []
     for item in items:
         copied = dict(item)
         for key in ("title", "conclusion", "recommendation"):
-            text = str(copied.get(key) or "")
-            for old, new in replacements:
-                text = text.replace(old, new)
-            copied[key] = text
+            copied[key] = _normalize_safety_assessment_wording_text(copied.get(key) or "")
         normalized.append(copied)
     return normalized
 
@@ -1272,6 +1348,8 @@ def _attach_audit_session(
         items = _select_key_review_items(consistency_items + items, REVIEW_ITEM_MAX_COUNT)
     items = _ai_expand_review_items(result, items)
     review_profile = _infer_review_profile_from_result(result)
+    result["review_profile"] = review_profile
+    items = _apply_review_profile_wording(items, review_profile)
     manual_context = _extract_manual_context(result)
     overall_context = {}
     if isinstance(result, dict):
@@ -1290,6 +1368,8 @@ def _attach_audit_session(
         overall_context,
         force_formal=True,
     )
+    if review_profile == "safety_assessment_report":
+        overall_opinion["conclusion"] = _normalize_safety_assessment_wording_text(overall_opinion.get("conclusion") or "")
     uploaded_documents = manual_context.get("uploaded_documents") if isinstance(manual_context, dict) else []
     if not isinstance(uploaded_documents, list):
         uploaded_documents = []
