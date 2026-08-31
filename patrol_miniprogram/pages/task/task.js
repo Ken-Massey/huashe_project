@@ -1,4 +1,4 @@
-const { get, post, del, downloadMedia, downloadShot } = require('../../utils/request')
+const { get, post, del, downloadMedia, downloadShot, uploadMedia } = require('../../utils/request')
 
 const TASK_STATUS = { pending: '待执行', executing: '执行中', completed: '已完成', closed: '已关闭' }
 const HAZARD_STATUS = { pending_confirm: '待确认', pending_rectify: '待整改', rectifying: '整改中', pending_review: '待复核', closed: '已闭环' }
@@ -26,6 +26,17 @@ function formatDateLabel(iso) {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
 }
 
+function formatNow() {
+  const d = new Date()
+  const pad = n => (n < 10 ? '0' + n : '' + n)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+function parseTs(s) {
+  const d = new Date(String(s || '').replace(' ', 'T'))
+  return isNaN(d.getTime()) ? 0 : d.getTime()
+}
+
 function buildHazardSteps(status) {
   const idx = HAZARD_STEPS.indexOf(status)
   return HAZARD_STEPS.map((key, i) => ({
@@ -37,7 +48,10 @@ function buildHazardSteps(status) {
 }
 
 Page({
-  data: { task: null, groups: [], photoPaths: {}, shotPaths: {}, loading: false },
+  data: {
+    task: null, groups: [], photoPaths: {}, shotPaths: {}, loading: false,
+    rectifyUpload: { visible: false, hazardId: '', recordId: '', files: [], note: '' }
+  },
   onLoad(options) { this.taskId = options.id },
   onShow() { this.load() },
   async load() {
@@ -45,6 +59,8 @@ Page({
     try {
       const task = await get('/rail/patrol/tasks/' + this.taskId)
       task.statusLabel = TASK_STATUS[task.status] || task.status
+      this.hazards = task.hazards || []
+      this.records = task.records || []
 
       // 隐患映射：挂整改记录 + 状态步骤
       const hazardMap = {}
@@ -135,10 +151,92 @@ Page({
       }
     })
   },
+  uploadRectifyPhotos(e) {
+    const id = e.currentTarget.dataset.id
+    wx.chooseMedia({
+      count: 9,
+      mediaType: ['image'],
+      sourceType: ['camera', 'album'],
+      sizeType: ['compressed'],
+      success: res => {
+        const files = (res.tempFiles || []).map(f => f.tempFilePath)
+        if (!files.length) return
+        const cur = this.currentRectifyRecord(id)
+        this.setData({
+          rectifyUpload: {
+            visible: true,
+            hazardId: id,
+            recordId: cur ? cur.record_id : '',
+            files,
+            note: cur ? (cur.note || '') : ''
+          }
+        })
+      }
+    })
+  },
+  // 当前轮整改反馈记录：review_time 之后创建的整改记录（被驳回后新一轮则无 → 新建）
+  currentRectifyRecord(hazardId) {
+    const hazard = (this.hazards || []).find(h => h.hazard_id === hazardId)
+    const reviewTime = hazard ? (hazard.review_time || '') : ''
+    const list = (this.records || [])
+      .filter(r => r.type === 'rectify' && r.hazard_id === hazardId)
+      .filter(r => !reviewTime || parseTs(r.created_at) > parseTs(reviewTime))
+      .sort((a, b) => parseTs(b.created_at) - parseTs(a.created_at))
+    return list[0] || null
+  },
+  onRectifyNote(e) { this.setData({ 'rectifyUpload.note': e.detail.value }) },
+  cancelRectifyUpload() { this.setData({ 'rectifyUpload.visible': false }) },
+  noop() {},
+  confirmRectifyUpload() {
+    const up = this.data.rectifyUpload
+    if (!up.files.length) return
+    this.setData({ 'rectifyUpload.visible': false })
+    wx.showLoading({ title: '上传中…' })
+    this.doRectifyUpload(up)
+  },
+  async doRectifyUpload(up) {
+    try {
+      const takenAt = formatNow()
+      let recordId = up.recordId
+      if (recordId) {
+        // 追加到同一条整改反馈记录：先继承并更新备注，新图片追加其后
+        await post('/rail/patrol/records/' + recordId, { note: (up.note || '').trim() })
+      } else {
+        // 新建一条整改反馈记录（自动带定位；定位失败仍可上传，坐标留空）
+        let longitude = '', latitude = '', accuracy = ''
+        try {
+          const loc = await this.getLocationOnce()
+          longitude = loc.longitude
+          latitude = loc.latitude
+          accuracy = loc.accuracy
+        } catch (err) { /* 忽略定位失败 */ }
+        const record = await post('/rail/patrol/tasks/' + this.taskId + '/records', {
+          type: 'rectify', hazard_id: up.hazardId,
+          longitude, latitude, accuracy,
+          note: (up.note || '').trim()
+        })
+        recordId = record.record_id
+      }
+      for (let i = 0; i < up.files.length; i++) {
+        await uploadMedia(recordId, up.files[i], 'photo', takenAt)
+      }
+      wx.hideLoading()
+      wx.showToast({ title: '上传成功', icon: 'success' })
+      this.load()
+    } catch (err) {
+      wx.hideLoading()
+      wx.showModal({ title: '上传失败', content: err.message, showCancel: false })
+    }
+  },
+  getLocationOnce() {
+    return new Promise((resolve, reject) => {
+      wx.getLocation({ type: 'gcj02', success: resolve, fail: reject })
+    })
+  },
   submitReview(e) {
     const id = e.currentTarget.dataset.id
     wx.showModal({
-      title: '提交复核',
+      title: '整改完成',
       content: '确认整改已完成，提交平台复核？',
       success: async r => {
         if (!r.confirm) return

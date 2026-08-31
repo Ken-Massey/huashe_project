@@ -176,6 +176,13 @@ public class RailPatrolController
     }
 
     @PreAuthorize("@ss.hasAnyPermi('" + UPLOAD_PERMS + "')")
+    @PostMapping("/records/{recordId}")
+    public Object updateRecord(@PathVariable("recordId") String recordId, @RequestBody Map<String, Object> request)
+    {
+        return python.post("/api/v1/patrol/records/" + recordId, request, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('" + UPLOAD_PERMS + "')")
     @PostMapping(value = "/records/{recordId}/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Object addMedia(@PathVariable("recordId") String recordId,
             @RequestParam("file") MultipartFile file,

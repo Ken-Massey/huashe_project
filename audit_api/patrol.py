@@ -709,6 +709,17 @@ class PatrolRepository:
         record["media"] = [dict(item) for item in media]
         return record
 
+    def update_record_note(self, record_id: str, note: str | None, actor: dict[str, Any]) -> dict[str, Any]:
+        record = self.get_record(record_id)
+        if not actor.get("is_admin") and record.get("created_by") != str(actor.get("user_id") or ""):
+            raise ValueError("无权限修改该记录。")
+        note_value = _text(note if note is not None else record.get("note"), field="备注", maximum=1000)
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "UPDATE patrol_records SET note = ? WHERE record_id = ?", (note_value, record_id)
+            )
+        return self.get_record(record_id)
+
     def add_media(self, record_id: str, kind: str, stored_path: str | Path, file_name: str, taken_at: str = "") -> dict[str, Any]:
         if kind not in MEDIA_KINDS:
             raise ValueError("媒体类型无效。")
@@ -758,6 +769,18 @@ class PatrolRepository:
         hazard = self.get_hazard(hazard_id)
         if hazard["status"] != "rectifying":
             raise ValueError("只有整改中的隐患可以提交复核。")
+        # 必须有至少一条含整改图片的整改反馈记录（整改证据）
+        with self._connect() as connection:
+            evidence = int(connection.execute(
+                """
+                SELECT COUNT(*) AS c FROM patrol_media m
+                JOIN patrol_records r ON r.record_id = m.record_id
+                WHERE r.type = 'rectify' AND r.hazard_id = ? AND m.kind = 'photo'
+                """,
+                (hazard_id,),
+            ).fetchone()["c"])
+        if evidence <= 0:
+            raise ValueError("请先上传整改图片，再提交整改完成。")
         now = _now()
         with self._lock, self._connect() as connection:
             connection.execute(
@@ -1103,6 +1126,10 @@ class PatrolRecordCreatePayload(BaseModel):
     note: str = Field(default="", max_length=1000)
 
 
+class PatrolRecordUpdatePayload(BaseModel):
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class PatrolHazardCreatePayload(BaseModel):
     description: str = Field(min_length=1, max_length=2000)
     hazard_type: str = Field(default="", max_length=60)
@@ -1260,6 +1287,16 @@ def soft_delete_task(task_id: str, actor: dict = Depends(get_actor), repo: Patro
 def create_record(task_id: str, payload: PatrolRecordCreatePayload, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
     try:
         return repo.create_record(task_id, _model_values(payload), actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/records/{record_id}")
+def update_record(record_id: str, payload: PatrolRecordUpdatePayload, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    try:
+        return repo.update_record_note(record_id, payload.note, actor)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

@@ -98,9 +98,8 @@
             <view class="hazard-req" wx:if="{{ h.review_comment }}">复核意见：{{ h.review_comment }}</view>
 
             <view class="hazard-ops">
-              <button wx:if="{{ h.status === 'rectifying' }}" class="mini-btn" size="mini" data-id="{{ h.hazard_id }}" bindtap="submitReview">提交复核</button>
-              <text class="link-btn" data-id="{{ h.hazard_id }}" bindtap="editHazard">修改</text>
-              <text class="link-btn danger" data-id="{{ h.hazard_id }}" bindtap="deleteHazard">删除</text>
+              <button wx:if="{{ h.status === 'pending_rectify' || h.status === 'rectifying' }}" class="mini-btn" size="mini" data-id="{{ h.hazard_id }}" bindtap="uploadRectifyPhotos">整改图片上传</button>
+              <button wx:if="{{ h.status === 'rectifying' }}" class="mini-btn" size="mini" data-id="{{ h.hazard_id }}" bindtap="submitReview">整改完成</button>
             </view>
           </view>
         </block>
@@ -112,5 +111,23 @@
 
   <view class="actions">
     <button class="btn-primary" bindtap="goUpload">上传照片/视频</button>
+  </view>
+
+  <!-- 整改图片上传浮层 -->
+  <view class="rectify-mask" wx:if="{{ rectifyUpload.visible }}" catchtap="cancelRectifyUpload">
+    <view class="rectify-panel" catchtap="noop">
+      <view class="rectify-panel-title">整改图片上传（{{ rectifyUpload.files.length }} 张）</view>
+      <scroll-view scroll-y class="rectify-thumbs">
+        <view class="rectify-thumb-grid">
+          <image wx:for="{{ rectifyUpload.files }}" wx:key="index" class="rectify-thumb" src="{{ item }}" mode="aspectFill" />
+        </view>
+      </scroll-view>
+      <view class="rectify-note-label">整改备注（选填，默认继承上次）</view>
+      <textarea class="rectify-textarea" value="{{ rectifyUpload.note }}" bindinput="onRectifyNote" maxlength="1000" placeholder="整改情况说明" />
+      <view class="rectify-panel-actions">
+        <button class="rectify-btn cancel" size="mini" bindtap="cancelRectifyUpload">取消</button>
+        <button class="rectify-btn ok" size="mini" bindtap="confirmRectifyUpload">确认上传</button>
+      </view>
+    </view>
   </view>
 </view>

@@ -152,3 +152,42 @@
   background: linear-gradient(180deg, rgba(245,247,250,0), #f5f7fa 34%);
 }
 .actions button { flex: 1; border-radius: 12rpx; }
+
+/* ===== 整改图片上传浮层 ===== */
+.rectify-mask {
+  position: fixed;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+}
+.rectify-panel {
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.rectify-panel-title { font-size: 30rpx; font-weight: 700; color: #303133; margin-bottom: 16rpx; }
+.rectify-thumbs { max-height: 320rpx; }
+.rectify-thumb-grid { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.rectify-thumb { width: 140rpx; height: 140rpx; border-radius: 10rpx; background: #ecf3fb; }
+.rectify-note-label { font-size: 25rpx; color: #909399; margin: 16rpx 0 8rpx; }
+.rectify-textarea {
+  width: 100%;
+  height: 160rpx;
+  box-sizing: border-box;
+  border: 1rpx solid #dcdfe6;
+  border-radius: 10rpx;
+  padding: 16rpx;
+  font-size: 27rpx;
+}
+.rectify-panel-actions { display: flex; gap: 20rpx; margin-top: 20rpx; }
+.rectify-btn { flex: 1; border-radius: 999rpx; font-size: 27rpx; }
+.rectify-btn.cancel { background: #f4f4f5; color: #606266; }
+.rectify-btn.ok { background: #409eff; color: #fff; }
+.rectify-btn::after { border: none; }

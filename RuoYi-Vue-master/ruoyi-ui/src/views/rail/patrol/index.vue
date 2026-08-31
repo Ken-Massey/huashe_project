@@ -148,7 +148,15 @@
                 </template>
               </div>
               <!-- 该条目关联的隐患（记录下挂隐患 / 独立隐患） -->
-              <div v-for="h in (item.kind === 'record' ? item.data.hazards : [item.data])" :key="h.hazard_id" class="hazard-block">
+              <div v-for="h in (item.kind === 'record' ? item.data.hazards : [item.data])" :key="h.hazard_id" class="hazard-block" :class="{ 'hazard-closed': h.status === 'closed' }">
+                <!-- 隐患进展栏 -->
+                <div class="hazard-steps">
+                  <div v-for="s in hazardSteps(h)" :key="s.key" class="hazard-step" :class="{ done: s.done, current: s.current }">
+                    <div class="hazard-step-line"></div>
+                    <div class="hazard-step-dot"></div>
+                    <div class="hazard-step-label">{{ s.label }}</div>
+                  </div>
+                </div>
                 <div class="hazard-meta">
                   <el-tag size="mini" type="info" v-if="h.hazard_type">{{ h.hazard_type }}</el-tag>
                   <el-tag size="mini" :type="h.risk_level === '高' ? 'danger' : (h.risk_level === '中' ? 'warning' : 'info')" v-if="h.risk_level">{{ h.risk_level }}</el-tag>
@@ -163,12 +171,26 @@
                 </div>
                 <div class="hazard-desc">{{ h.description }}</div>
                 <div v-if="h.rectify_requirement" class="hazard-req">整改要求：{{ h.rectify_requirement }}</div>
+                <!-- 嵌套整改记录 -->
+                <div v-if="h.rectifyRecords && h.rectifyRecords.length" class="rectify-list">
+                  <div class="rectify-title">整改记录（{{ h.rectifyRecords.length }}）</div>
+                  <div v-for="rr in h.rectifyRecords" :key="rr.record_id" class="rectify-item">
+                    <div class="rectify-head"><span class="muted">{{ rr.created_by_name || '-' }} · {{ formatTime(rr.created_at) }}</span></div>
+                    <div v-if="rr.note" class="rectify-note">{{ rr.note }}</div>
+                    <div v-if="rr.media && rr.media.length" class="media-grid">
+                      <template v-for="rm in rr.media">
+                        <div v-if="rm.kind === 'photo'" :key="rm.media_id" class="media-thumb-wrap">
+                          <el-image :src="mediaUrl(rm)" fit="cover" :preview-src-list="photoPreviewList" class="media-thumb" />
+                        </div>
+                        <button v-else :key="rm.media_id" type="button" class="media-video" @click="playVideo(rm)"><i class="el-icon-video-play" />视频</button>
+                      </template>
+                    </div>
+                  </div>
+                </div>
                 <div v-if="h.review_comment" class="hazard-req">复核意见：{{ h.review_comment }}</div>
                 <div class="hazard-ops">
                   <el-button v-if="h.status === 'pending_confirm'" size="mini" type="primary" plain v-hasPermi="['rail:patrol:review']" @click="openConfirm(h)">确认并下发整改要求</el-button>
-                  <el-button v-if="h.status === 'pending_review'" size="mini" type="success" plain v-hasPermi="['rail:patrol:review']" @click="openReview(h)">复核</el-button>
-                  <el-button size="mini" type="text" icon="el-icon-edit" @click="openHazardEdit(h)">修改</el-button>
-                  <el-button size="mini" type="text" icon="el-icon-delete" class="danger-link" @click="doDeleteHazard(h)">删除</el-button>
+                  <el-button v-if="h.status === 'pending_review'" size="mini" type="success" plain v-hasPermi="['rail:patrol:review']" @click="openReview(h)">复核意见</el-button>
                 </div>
               </div>
             </article>
@@ -185,7 +207,7 @@
         <el-form-item label="隐患描述" prop="description"><el-input v-model="hazardForm.description" type="textarea" :rows="3" maxlength="2000" placeholder="违规施工、超范围施工等具体情况" /></el-form-item>
         <el-form-item label="隐患类型"><el-select v-model="hazardForm.hazard_type" clearable style="width: 100%"><el-option v-for="i in hazardTypeDict" :key="i.value" :label="i.label" :value="i.value" /></el-select></el-form-item>
         <el-form-item label="风险等级"><el-select v-model="hazardForm.risk_level" clearable style="width: 100%"><el-option v-for="i in riskDict" :key="i.value" :label="i.label" :value="i.value" /></el-select></el-form-item>
-        <el-form-item label="关联巡查记录"><el-select v-model="hazardForm.record_id" clearable filterable style="width: 100%" placeholder="可选，挂到某条巡查记录下"><el-option v-for="r in detailRecords" :key="r.record_id" :label="(r.type === 'rectify' ? '[整改]' : '[巡查]') + ' ' + formatTime(r.created_at)" :value="r.record_id" /></el-select></el-form-item>
+        <el-form-item label="关联巡查记录"><el-select v-model="hazardForm.record_id" clearable filterable style="width: 100%" placeholder="可选，挂到某条巡查记录下"><el-option v-for="r in detailRecords" :key="r.record_id" :label="'[巡查] ' + formatTime(r.created_at)" :value="r.record_id" /></el-select></el-form-item>
         <el-form-item label="圈注截图">
           <el-upload action="#" :auto-upload="false" list-type="picture-card" :limit="9" multiple accept="image/*" :on-change="onShotChange" :on-remove="onShotChange" :file-list="shotFileList">
             <i class="el-icon-plus" />
@@ -282,7 +304,7 @@ export default {
     }
   },
   computed: {
-    detailRecords() { return this.detail ? this.detail.records : [] },
+    detailRecords() { return this.detail ? (this.detail.records || []).filter(r => r.type === 'patrol') : [] },
     photoPreviewList() { return Object.values(this.photoUrls) },
     remainingHazards() {
       return this.detail ? (this.detail.hazards || []).filter(h => h.status !== 'closed').length : 0
@@ -306,15 +328,31 @@ export default {
       if (!this.detail) return []
       const items = []
       const attached = new Set()
-      ;(this.detail.records || []).forEach(r => {
-        const hazards = (this.detail.hazards || []).filter(h => h.record_id === r.record_id)
-        hazards.forEach(h => attached.add(h.hazard_id))
-        items.push({ kind: 'record', time: r.created_at || '', data: { id: r.record_id, ...r, hazards } })
+      // 隐患映射：挂整改记录
+      const hazardMap = {}
+      ;(this.detail.hazards || []).forEach(h => {
+        h.rectifyRecords = []
+        hazardMap[h.hazard_id] = h
       })
+      // 分离日常巡查和整改反馈：整改反馈挂到对应隐患下
+      ;(this.detail.records || []).forEach(r => {
+        if (r.type === 'rectify' && r.hazard_id && hazardMap[r.hazard_id]) {
+          hazardMap[r.hazard_id].rectifyRecords.push(r)
+        } else {
+          const hazards = (this.detail.hazards || []).filter(h => h.record_id === r.record_id)
+          hazards.forEach(h => attached.add(h.hazard_id))
+          items.push({ kind: 'record', time: r.created_at || '', data: { id: r.record_id, ...r, hazards } })
+        }
+      })
+      // 独立隐患（未关联巡查记录）
       ;(this.detail.hazards || []).forEach(h => {
         if (!attached.has(h.hazard_id)) {
           items.push({ kind: 'hazard', time: h.created_at || '', data: { id: h.hazard_id, ...h, hazards: [] } })
         }
+      })
+      // 整改记录按时间正序（早→晚）
+      Object.values(hazardMap).forEach(h => {
+        h.rectifyRecords.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
       })
       return items.sort((a, b) => (b.time || '').localeCompare(a.time || ''))
     },
@@ -366,6 +404,21 @@ export default {
     taskTagType(row) { return { pending: 'info', executing: 'primary', completed: 'success', closed: 'info' }[row.status] || 'info' },
     hazardStatusLabel(h) { return { pending_confirm: '待确认', pending_rectify: '待整改', rectifying: '整改中', pending_review: '待复核', closed: '已闭环' }[h.status] || h.status },
     hazardTagType(h) { return { pending_confirm: 'warning', pending_rectify: 'warning', rectifying: 'primary', pending_review: 'warning', closed: 'success' }[h.status] || 'info' },
+    hazardSteps(h) {
+      const steps = [
+        { key: 'pending_confirm', label: '待确认' },
+        { key: 'pending_rectify', label: '待整改' },
+        { key: 'rectifying', label: '整改中' },
+        { key: 'pending_review', label: '待复核' },
+        { key: 'closed', label: '已闭环' }
+      ]
+      const idx = steps.findIndex(s => s.key === h.status)
+      return steps.map((s, i) => ({
+        ...s,
+        done: i < idx || h.status === 'closed',
+        current: i === idx && h.status !== 'closed'
+      }))
+    },
     formatTime(v) { if (!v) return '-'; return String(v).replace('T', ' ').slice(0, 19) },
 
     openNewTask() { this.taskForm = { name: '', line: '', location_desc: '', requirement: '', assigned_user_id: '', assigned_user_name: '', remark: '' }; this.taskDialogVisible = true },
@@ -403,18 +456,25 @@ export default {
       }).catch(() => {})
     },
     async openDetail(task) {
-      this.detailVisible = true; this.detailLoading = true; this.detail = null; this.photoUrls = {}; this.videoUrls = {}
+      this.detailVisible = true; this.detailLoading = true; this.detail = null; this.photoUrls = {}; this.videoUrls = {}; this.shotUrls = {}
       try {
-        this.detail = await getPatrolTask(task.task_id)
-        this.detail.records.forEach(r => (r.media || []).forEach(m => { if (m.kind === 'photo') this.ensureMediaUrl(m) }))
+        const detail = await getPatrolTask(task.task_id)
+        // 预加载全部照片与截图 URL，再挂载 detail，避免图片 src 从空到 blob 造成首屏闪烁
+        const photoIds = []
+        ;(detail.records || []).forEach(r => (r.media || []).forEach(m => { if (m.kind === 'photo') photoIds.push(m.media_id) }))
+        const shotIds = []
+        ;(detail.hazards || []).forEach(h => (h.shots || []).forEach(s => shotIds.push(s.shot_id)))
+        await Promise.all(photoIds.map(id => this.loadMediaUrl(id)))
+        await Promise.all(shotIds.map(id => this.loadShotUrl(id)))
+        this.detail = detail
       } finally { this.detailLoading = false }
     },
-    async ensureMediaUrl(m) {
-      if (this.photoUrls[m.media_id] !== undefined) return
-      try { const blob = await getPatrolMediaFile(m.media_id); this.$set(this.photoUrls, m.media_id, URL.createObjectURL(blob)) }
-      catch (e) { this.$set(this.photoUrls, m.media_id, '') }
+    async loadMediaUrl(mediaId) {
+      if (this.photoUrls[mediaId] !== undefined) return
+      try { const blob = await getPatrolMediaFile(mediaId); this.$set(this.photoUrls, mediaId, URL.createObjectURL(blob)) }
+      catch (e) { this.$set(this.photoUrls, mediaId, '') }
     },
-    mediaUrl(m) { this.ensureMediaUrl(m); return this.photoUrls[m.media_id] || '' },
+    mediaUrl(m) { return this.photoUrls[m.media_id] || '' },
     hazardOnMedia(mediaId) {
       return (this.detail && this.detail.hazards) ? this.detail.hazards.find(h => h.media_id === mediaId) : null
     },
@@ -436,12 +496,12 @@ export default {
       }
       return ''
     },
-    async ensureShotUrl(s) {
-      if (this.shotUrls[s.shot_id] !== undefined) return
-      try { const blob = await getPatrolShotFile(s.shot_id); this.$set(this.shotUrls, s.shot_id, URL.createObjectURL(blob)) }
-      catch (e) { this.$set(this.shotUrls, s.shot_id, '') }
+    async loadShotUrl(shotId) {
+      if (this.shotUrls[shotId] !== undefined) return
+      try { const blob = await getPatrolShotFile(shotId); this.$set(this.shotUrls, shotId, URL.createObjectURL(blob)) }
+      catch (e) { this.$set(this.shotUrls, shotId, '') }
     },
-    shotUrl(s) { this.ensureShotUrl(s); return this.shotUrls[s.shot_id] || '' },
+    shotUrl(s) { return this.shotUrls[s.shot_id] || '' },
     async playVideo(m) {
       try { const blob = await getPatrolMediaFile(m.media_id); this.videoUrl = URL.createObjectURL(blob); this.videoVisible = true }
       catch (e) { this.$message.error('视频加载失败') }
@@ -585,4 +645,29 @@ export default {
 .compact-empty { padding: 26px 0; text-align: center; color: #9aa5a1; }
 .compact-empty i { font-size: 30px; }
 .compact-empty p { margin: 8px 0 2px; color: #6b7571; }
+
+/* 隐患块 */
+.hazard-block { border: 1px solid #fbe3e3; border-radius: 8px; padding: 14px 16px; margin-top: 10px; background: #fefafa; }
+.hazard-block.hazard-closed { border-color: #d9edc8; background: #f5fbf3; }
+
+/* 隐患进展栏 */
+.hazard-steps { display: flex; align-items: flex-start; margin-bottom: 12px; }
+.hazard-step { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; }
+.hazard-step-dot { width: 14px; height: 14px; border-radius: 50%; background: #dcdfe6; border: 3px solid #fff; box-shadow: 0 0 0 2px #dcdfe6; z-index: 1; }
+.hazard-step.done .hazard-step-dot { background: #67c23a; box-shadow: 0 0 0 2px #67c23a; }
+.hazard-step.current .hazard-step-dot { background: #409eff; box-shadow: 0 0 0 2px #409eff, 0 0 0 6px rgba(64,158,255,0.18); }
+.hazard-step-label { margin-top: 6px; font-size: 11px; color: #c0c4cc; white-space: nowrap; }
+.hazard-step.done .hazard-step-label { color: #67c23a; }
+.hazard-step.current .hazard-step-label { color: #409eff; font-weight: 600; }
+.hazard-step-line { position: absolute; top: 7px; left: 50%; width: 100%; height: 2px; background: #dcdfe6; z-index: 0; }
+.hazard-step.done .hazard-step-line { background: #67c23a; }
+.hazard-step:last-child .hazard-step-line { display: none; }
+
+/* 嵌套整改记录 */
+.rectify-list { margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.7); border-radius: 6px; border: 1px dashed #f0d0a0; }
+.rectify-title { font-size: 13px; font-weight: 600; color: #e6a23c; margin-bottom: 8px; }
+.rectify-item { padding: 8px 0; border-top: 1px solid #f5e6d0; }
+.rectify-item:first-child { border-top: none; padding-top: 0; }
+.rectify-head { margin-bottom: 4px; }
+.rectify-note { color: #4a5450; font-size: 13px; margin-bottom: 6px; }
 </style>

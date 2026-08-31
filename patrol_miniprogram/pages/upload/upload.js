@@ -16,7 +16,6 @@ Page({
     locStatus: '',      // 定位状态文字
     locAccuracy: 0,     // 定位精度（米）
     note: '',
-    submitReview: true,
     // 日常巡查的隐患声明
     hasHazard: false,
     hazardTypes: [], hazardTypeLabels: [], hazardTypeIndex: -1,
@@ -56,7 +55,6 @@ Page({
   onHasHazard(e) { this.setData({ hasHazard: e.detail.value }) },
   onNote(e) { this.setData({ note: e.detail.value }) },
   onInput(e) { this.setData({ [e.currentTarget.dataset.field]: e.detail.value }) },
-  onSubmitReview(e) { this.setData({ submitReview: e.detail.value }) },
   getLocation() {
     this.setData({ locStatus: 'locating' })
     wx.getLocation({
@@ -115,7 +113,7 @@ Page({
     const shots = this.data.shots.slice(); shots.splice(i, 1); this.setData({ shots })
   },
   async submit() {
-    const { typeIndex, hazardIndex, hazards, media, location, note, submitReview, hasHazard, hazardDesc, shots, submitting } = this.data
+    const { typeIndex, hazardIndex, hazards, media, location, note, hasHazard, hazardDesc, shots, submitting } = this.data
     if (submitting) return
     const type = typeIndex === 0 ? 'patrol' : 'rectify'
     if (!media.length) { wx.showToast({ title: '请先选择照片/视频', icon: 'none' }); return }
@@ -171,10 +169,7 @@ Page({
           this.setData({ uploadProgress: Math.round(doneFiles / totalFiles * 100) })
         }
       }
-      if (type === 'rectify' && submitReview) {
-        this.setData({ uploadLabel: '正在提交复核…' })
-        await post('/rail/patrol/hazards/' + hazardId + '/submit')
-      }
+      // 整改反馈仅上传证据；提交复核由任务页「整改完成」按钮完成
       this.setData({ uploadProgress: 100, uploadLabel: '上报成功' })
       wx.showToast({ title: '上报成功', icon: 'success' })
       setTimeout(() => wx.navigateBack(), 800)

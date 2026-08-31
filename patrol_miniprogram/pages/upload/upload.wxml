@@ -91,11 +91,6 @@
       <text class="field-label">备注</text>
       <textarea class="textarea" value="{{ note }}" bindinput="onNote" placeholder="现场情况说明（选填）" maxlength="1000" />
     </view>
-
-    <view class="form-item" wx:if="{{ typeIndex === 1 }}">
-      <switch checked="{{ submitReview }}" bindchange="onSubmitReview" color="#409eff" />
-      <text class="switch-label">整改完成，提交复核</text>
-    </view>
   </view>
 
   <button class="btn-primary submit-btn" disabled="{{ submitting }}" bindtap="submit">{{ submitting ? '上报中…' : '提交上报' }}</button>
