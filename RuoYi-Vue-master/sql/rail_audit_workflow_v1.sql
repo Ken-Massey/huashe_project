@@ -101,12 +101,43 @@ create table if not exists rail_audit_flow_log (
   snapshot_json       longtext                                   comment '操作时业务快照',
   create_by           varchar(64)     default ''                 comment '创建者',
   create_time         datetime                                   comment '创建时间',
+  update_by           varchar(64)     default ''                 comment '更新者',
+  update_time         datetime                                   comment '更新时间',
   remark              varchar(500)    default null               comment '备注',
   primary key (log_id),
   key idx_rail_flow_log_workflow (workflow_id),
   key idx_rail_flow_log_task (task_id),
   key idx_rail_flow_log_time (create_time)
 ) engine=innodb comment = '案例审核流转日志表';
+
+-- 兼容已执行过旧脚本的数据库：create table if not exists 不会给旧表自动补字段。
+set @ddl := (
+  select if(count(*) = 0,
+    'alter table rail_audit_flow_log add column update_by varchar(64) default '''' comment ''更新者'' after create_time',
+    'select 1'
+  )
+  from information_schema.columns
+  where table_schema = database()
+    and table_name = 'rail_audit_flow_log'
+    and column_name = 'update_by'
+);
+prepare stmt from @ddl;
+execute stmt;
+deallocate prepare stmt;
+
+set @ddl := (
+  select if(count(*) = 0,
+    'alter table rail_audit_flow_log add column update_time datetime comment ''更新时间'' after update_by',
+    'select 1'
+  )
+  from information_schema.columns
+  where table_schema = database()
+    and table_name = 'rail_audit_flow_log'
+    and column_name = 'update_time'
+);
+prepare stmt from @ddl;
+execute stmt;
+deallocate prepare stmt;
 
 -- 5) 审核意见快照：保留每版综合评价与条目，支撑历史追溯和归档展示
 create table if not exists rail_audit_opinion_snapshot (
@@ -174,6 +205,65 @@ insert into sys_role (
 )
 select @next_role_id, '终审人', 'rail_final_reviewer', 12, '1', 1, 1, '0', '0', 'admin', sysdate(), '', null, '案例审核最终确认、归档'
 where not exists (select 1 from sys_role where role_key = 'rail_final_reviewer');
+
+-- 确保案例审核菜单本身拥有“发起审核”权限。
+-- 后端创建审核任务统一校验 rail:audit:run；如果菜单 perms 没同步，普通用户会看到页面但无法审核。
+insert into sys_menu (
+  menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+  is_frame, is_cache, menu_type, visible, status, perms, icon,
+  create_by, create_time, update_by, update_time, remark
+) values (
+  2001, '案例审核', 2000, 1, 'audit', 'rail/audit/index', '', '',
+  1, 0, 'C', '0', '0', 'rail:audit:run', 'checkbox',
+  'admin', sysdate(), '', null, '资料上传、AI审核、审核结果查看与流程发起'
+)
+on duplicate key update
+  menu_name = values(menu_name),
+  parent_id = values(parent_id),
+  order_num = values(order_num),
+  path = values(path),
+  component = values(component),
+  query = values(query),
+  route_name = values(route_name),
+  is_frame = values(is_frame),
+  is_cache = values(is_cache),
+  menu_type = values(menu_type),
+  visible = values(visible),
+  status = values(status),
+  perms = values(perms),
+  icon = values(icon),
+  update_by = 'admin',
+  update_time = sysdate(),
+  remark = values(remark);
+
+-- 确保现场符合性巡查菜单拥有查看权限，普通用户进入页面时可加载字典、统计和列表。
+insert into sys_menu (
+  menu_id, menu_name, parent_id, order_num, path, component, query, route_name,
+  is_frame, is_cache, menu_type, visible, status, perms, icon,
+  create_by, create_time, update_by, update_time, remark
+) values (
+  2006, '现场符合性巡查', 2000, 3, 'patrol', 'rail/patrol/index', '', '',
+  1, 0, 'C', '0', '0', 'rail:patrol:list', 'location',
+  'admin', sysdate(), '', null, '巡查任务查看、现场媒体上报与隐患整改闭环'
+)
+on duplicate key update
+  menu_name = values(menu_name),
+  parent_id = values(parent_id),
+  order_num = values(order_num),
+  path = values(path),
+  component = values(component),
+  query = values(query),
+  route_name = values(route_name),
+  is_frame = values(is_frame),
+  is_cache = values(is_cache),
+  menu_type = values(menu_type),
+  visible = values(visible),
+  status = values(status),
+  perms = values(perms),
+  icon = values(icon),
+  update_by = 'admin',
+  update_time = sysdate(),
+  remark = values(remark);
 
 -- 8) 案例审核流程按钮权限，挂在“案例审核”菜单下
 insert into sys_menu (

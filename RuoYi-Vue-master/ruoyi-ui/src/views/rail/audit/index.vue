@@ -71,7 +71,7 @@
             :key="record.id"
             class="document-row"
             :class="{ 'previewable-document': canPreviewDocument(record) }"
-            :title="documentPreviewTitle(record)"
+            :title="documentHoverTitle(record)"
             @click="openDocumentPreview(record)"
           >
             <i :class="record.status === 'failed' ? 'el-icon-warning-outline' : (record.status === 'done' ? 'el-icon-document-checked' : 'el-icon-loading')" />
@@ -595,13 +595,13 @@
                   :key="`composer_${record.id}`"
                   class="composer-file-card"
                   :class="{ 'previewable-document': canPreviewDocument(record) }"
-                  :title="documentPreviewTitle(record)"
+                  :title="documentHoverTitle(record)"
                   @click="openDocumentPreview(record)"
                 >
                   <span class="composer-file-icon">{{ fileTypeBadge(record.file && record.file.name) }}</span>
                   <span class="composer-file-meta">
-                    <strong>{{ record.file && record.file.name }}</strong>
-                    <small>{{ fileKindText(record.file && record.file.name) }} · {{ formatFileSize(record.file && record.file.size) }}</small>
+                    <strong :title="record.file && record.file.name">{{ record.file && record.file.name }}</strong>
+                    <small :title="record.file && record.file.name">{{ fileKindText(record.file && record.file.name) }} · {{ formatFileSize(record.file && record.file.size) }}</small>
                   </span>
                   <el-tag
                     size="mini"
@@ -1604,6 +1604,10 @@ export default {
       if (this.canPreviewDocument(record)) return '点击在新标签页预览 PDF'
       if (record && record.restored) return '这是历史文件记录，需重新选择原文件后才能预览'
       return '当前文件类型暂不支持网页预览'
+    },
+    documentHoverTitle(record) {
+      const name = record && record.file && record.file.name ? record.file.name : '未命名文件'
+      return `${name}\n${this.documentPreviewTitle(record)}`
     },
     openDocumentPreview(record) {
       if (!record || !record.file) return

@@ -44,6 +44,40 @@ set role_name = '终审人',
     remark = '终审确认、流程归档'
 where role_key = 'rail_final_reviewer';
 
+-- 确保基础菜单绑定后端真正校验的权限码。
+-- 若这里只给了菜单入口但 perms 为空/旧值，普通用户能看到页面，点击“开始审核”仍会被后端 403 拦截。
+insert into sys_menu
+  (menu_id, menu_name, parent_id, order_num, path, component, query, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+values
+  (2001, '案例审核', 2000, 1, 'audit', 'rail/audit/index', '', 1, 0, 'C', '0', '0', 'rail:audit:run', 'checkbox', 'admin', sysdate(), '资料上传、AI审核、审核结果查看与流程发起')
+on duplicate key update
+  menu_name = values(menu_name),
+  parent_id = values(parent_id),
+  order_num = values(order_num),
+  path = values(path),
+  component = values(component),
+  visible = values(visible),
+  status = values(status),
+  perms = values(perms),
+  icon = values(icon),
+  remark = values(remark);
+
+insert into sys_menu
+  (menu_id, menu_name, parent_id, order_num, path, component, query, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+values
+  (2006, '现场符合性巡查', 2000, 3, 'patrol', 'rail/patrol/index', '', 1, 0, 'C', '0', '0', 'rail:patrol:list', 'location', 'admin', sysdate(), '巡查任务查看、现场媒体上报与隐患整改闭环')
+on duplicate key update
+  menu_name = values(menu_name),
+  parent_id = values(parent_id),
+  order_num = values(order_num),
+  path = values(path),
+  component = values(component),
+  visible = values(visible),
+  status = values(status),
+  perms = values(perms),
+  icon = values(icon),
+  remark = values(remark);
+
 -- 新增更细的流程按钮权限。
 insert into sys_menu
   (menu_id, menu_name, parent_id, order_num, path, component, query, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
