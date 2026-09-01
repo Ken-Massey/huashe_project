@@ -203,6 +203,30 @@ public class RailPatrolController
         copyDownload(python.download("/api/v1/patrol/media/" + mediaId + "/file"), response);
     }
 
+    // ---- 监测方案文档 ----
+
+    @PreAuthorize("@ss.hasAnyPermi('" + UPLOAD_PERMS + "')")
+    @PostMapping(value = "/tasks/{taskId}/docs", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Object addTaskDoc(@PathVariable("taskId") String taskId, @RequestParam("file") MultipartFile file)
+    {
+        return python.postFiles("/api/v1/patrol/tasks/" + taskId + "/docs", Map.of("file", file), Map.of(),
+                Map.of(), actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('" + VIEW_PERMS + "')")
+    @GetMapping("/docs/{docId}/file")
+    public void docFile(@PathVariable("docId") String docId, HttpServletResponse response) throws IOException
+    {
+        copyDownload(python.download("/api/v1/patrol/docs/" + docId + "/file"), response);
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('" + UPLOAD_PERMS + "')")
+    @DeleteMapping("/docs/{docId}")
+    public Object deleteTaskDoc(@PathVariable("docId") String docId)
+    {
+        return python.delete("/api/v1/patrol/docs/" + docId, actorHeaders());
+    }
+
     // ---- 隐患 ----
 
     @PreAuthorize("@ss.hasAnyPermi('" + UPLOAD_PERMS + "')")

@@ -1,4 +1,4 @@
-const { get, post, del, downloadMedia, downloadShot, uploadMedia } = require('../../utils/request')
+const { get, post, del, downloadMedia, downloadShot, downloadDoc, uploadMedia } = require('../../utils/request')
 
 const TASK_STATUS = { pending: '待执行', executing: '执行中', completed: '已完成', closed: '已关闭' }
 const HAZARD_STATUS = { pending_confirm: '待确认', pending_rectify: '待整改', rectifying: '整改中', pending_review: '待复核', closed: '已闭环' }
@@ -264,5 +264,42 @@ Page({
       wx.hideLoading()
       wx.showToast({ title: err.message, icon: 'none' })
     }
+  },
+  openDoc(e) {
+    const id = e.currentTarget.dataset.id
+    const kind = e.currentTarget.dataset.kind
+    wx.showLoading({ title: '打开中…' })
+    downloadDoc(id).then(path => {
+      wx.hideLoading()
+      if (kind === 'image') {
+        wx.previewImage({ current: path, urls: [path] })
+      } else {
+        wx.openDocument({
+          filePath: path, showMenu: true,
+          fail: () => wx.showToast({ title: '无法预览该文件', icon: 'none' })
+        })
+      }
+    }).catch(err => { wx.hideLoading(); wx.showToast({ title: err.message, icon: 'none' }) })
+  },
+  saveDoc(e) {
+    const id = e.currentTarget.dataset.id
+    const kind = e.currentTarget.dataset.kind
+    wx.showLoading({ title: '下载中…' })
+    downloadDoc(id).then(path => {
+      wx.hideLoading()
+      if (kind === 'image') {
+        wx.saveImageToPhotosAlbum({
+          filePath: path,
+          success: () => wx.showToast({ title: '已保存到相册', icon: 'success' }),
+          fail: () => wx.showToast({ title: '保存失败，请授权相册', icon: 'none' })
+        })
+      } else {
+        wx.openDocument({
+          filePath: path, showMenu: true,
+          success: () => wx.showToast({ title: '已打开，可转发/保存', icon: 'none' }),
+          fail: () => wx.showToast({ title: '无法打开该文件', icon: 'none' })
+        })
+      }
+    }).catch(err => { wx.hideLoading(); wx.showToast({ title: err.message, icon: 'none' }) })
   }
 })

@@ -40,6 +40,13 @@ MAX_PHOTOS_PER_RECORD = 9
 MAX_VIDEOS_PER_RECORD = 2
 MAX_PHOTO_BYTES = 20 * 1024 * 1024
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
+# 监测方案文档
+DOC_PDF_SUFFIXES = {".pdf"}
+DOC_WORD_SUFFIXES = {".doc", ".docx"}
+DOC_IMAGE_SUFFIXES = set(PHOTO_SUFFIXES)
+DOC_SUFFIXES = DOC_PDF_SUFFIXES | DOC_WORD_SUFFIXES | DOC_IMAGE_SUFFIXES
+MAX_DOC_BYTES = 50 * 1024 * 1024
+MAX_DOCS_PER_TASK = 9
 
 
 def _now() -> str:
@@ -138,6 +145,12 @@ class PatrolRepository:
                     dispatcher TEXT NOT NULL DEFAULT '',
                     dispatch_time TEXT NOT NULL DEFAULT '',
                     remark TEXT NOT NULL DEFAULT '',
+                    monitor_frequency TEXT NOT NULL DEFAULT '',
+                    monitor_points TEXT NOT NULL DEFAULT '',
+                    warning_threshold TEXT NOT NULL DEFAULT '',
+                    emergency_plan TEXT NOT NULL DEFAULT '',
+                    report_requirement TEXT NOT NULL DEFAULT '',
+                    review_opinion TEXT NOT NULL DEFAULT '',
                     legacy INTEGER NOT NULL DEFAULT 0,
                     deleted INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
@@ -205,6 +218,18 @@ class PatrolRepository:
                     FOREIGN KEY(hazard_id) REFERENCES patrol_hazards(hazard_id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS patrol_task_docs (
+                    doc_id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
+                    file_name TEXT NOT NULL DEFAULT '',
+                    file_path TEXT NOT NULL DEFAULT '',
+                    kind TEXT NOT NULL DEFAULT 'pdf'
+                        CHECK(kind IN ('pdf','word','image')),
+                    size INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(task_id) REFERENCES patrol_tasks(task_id) ON DELETE CASCADE
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_patrol_dict_type
                     ON patrol_dict(dict_type, enabled, sort, created_at);
                 CREATE INDEX IF NOT EXISTS idx_patrol_tasks_list
@@ -217,6 +242,8 @@ class PatrolRepository:
                     ON patrol_hazards(task_id, status, updated_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_patrol_hazard_shots
                     ON patrol_hazard_shots(hazard_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_patrol_task_docs
+                    ON patrol_task_docs(task_id, created_at);
                 """
             )
             # 存量库迁移：为已有 patrol_hazards 补 media_id / video_time 列
@@ -228,6 +255,17 @@ class PatrolRepository:
                 connection.execute("ALTER TABLE patrol_hazards ADD COLUMN media_id TEXT NOT NULL DEFAULT ''")
             if "video_time" not in hazard_columns:
                 connection.execute("ALTER TABLE patrol_hazards ADD COLUMN video_time TEXT NOT NULL DEFAULT ''")
+            # 存量库迁移：为已有 patrol_tasks 补监测方案字段列
+            task_columns = {
+                item["name"]
+                for item in connection.execute("PRAGMA table_info(patrol_tasks)").fetchall()
+            }
+            for column in (
+                "monitor_frequency", "monitor_points", "warning_threshold",
+                "emergency_plan", "report_requirement", "review_opinion",
+            ):
+                if column not in task_columns:
+                    connection.execute(f"ALTER TABLE patrol_tasks ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
         self._seed_default_dicts()
         self._migrate_legacy_events()
 
@@ -420,6 +458,12 @@ class PatrolRepository:
         assigned_user_id = _text(data.get("assigned_user_id"), field="指派账号", maximum=40)
         assigned_user_name = _text(data.get("assigned_user_name"), field="指派账号名称", maximum=60)
         remark = _text(data.get("remark"), field="备注", maximum=1000)
+        monitor_frequency = _text(data.get("monitor_frequency"), field="监测频率", maximum=2000)
+        monitor_points = _text(data.get("monitor_points"), field="监测点位", maximum=2000)
+        warning_threshold = _text(data.get("warning_threshold"), field="预警阈值", maximum=2000)
+        emergency_plan = _text(data.get("emergency_plan"), field="应急预案", maximum=2000)
+        report_requirement = _text(data.get("report_requirement"), field="数据报送要求", maximum=2000)
+        review_opinion = _text(data.get("review_opinion"), field="监测审查意见", maximum=2000)
         dispatcher = _text(actor.get("name") or actor.get("user_id"), field="派发人", maximum=60)
         with self._lock, self._connect() as connection:
             task_no = self._next_task_no(connection)
@@ -428,12 +472,17 @@ class PatrolRepository:
                 INSERT INTO patrol_tasks(
                     task_id, task_no, name, line, location_desc, requirement,
                     assigned_user_id, assigned_user_name, status, dispatcher, dispatch_time,
-                    remark, legacy, deleted, created_at, updated_at
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?)
+                    remark, monitor_frequency, monitor_points, warning_threshold,
+                    emergency_plan, report_requirement, review_opinion,
+                    legacy, deleted, created_at, updated_at
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
                 """,
                 (
                     task_id, task_no, name, line, location_desc, requirement,
-                    assigned_user_id, assigned_user_name, dispatcher, now, remark, now, now,
+                    assigned_user_id, assigned_user_name, dispatcher, now, remark,
+                    monitor_frequency, monitor_points, warning_threshold,
+                    emergency_plan, report_requirement, review_opinion,
+                    now, now,
                 ),
             )
         return self.get_task(task_id, actor)
@@ -480,6 +529,11 @@ class PatrolRepository:
         task["hazards"] = [
             {**dict(hazard), "shots": shot_map.get(hazard["hazard_id"], [])} for hazard in hazards
         ]
+        with self._connect() as connection:
+            doc_rows = connection.execute(
+                "SELECT * FROM patrol_task_docs WHERE task_id = ? ORDER BY created_at, doc_id", (task_id,)
+            ).fetchall()
+        task["docs"] = [dict(doc) for doc in doc_rows]
         return task
 
     def list_tasks(
@@ -561,14 +615,25 @@ class PatrolRepository:
         requirement = _text(data.get("requirement", current["requirement"]), field="巡查内容", maximum=2000)
         assigned_user_id = _text(data.get("assigned_user_id", current["assigned_user_id"]), field="指派账号", maximum=40)
         assigned_user_name = _text(data.get("assigned_user_name", current["assigned_user_name"]), field="指派账号名称", maximum=60)
+        monitor_frequency = _text(data.get("monitor_frequency", current["monitor_frequency"]), field="监测频率", maximum=2000)
+        monitor_points = _text(data.get("monitor_points", current["monitor_points"]), field="监测点位", maximum=2000)
+        warning_threshold = _text(data.get("warning_threshold", current["warning_threshold"]), field="预警阈值", maximum=2000)
+        emergency_plan = _text(data.get("emergency_plan", current["emergency_plan"]), field="应急预案", maximum=2000)
+        report_requirement = _text(data.get("report_requirement", current["report_requirement"]), field="数据报送要求", maximum=2000)
+        review_opinion = _text(data.get("review_opinion", current["review_opinion"]), field="监测审查意见", maximum=2000)
         with self._lock, self._connect() as connection:
             connection.execute(
                 """
                 UPDATE patrol_tasks SET name = ?, line = ?, location_desc = ?, requirement = ?,
-                    assigned_user_id = ?, assigned_user_name = ?, updated_at = ?
+                    assigned_user_id = ?, assigned_user_name = ?,
+                    monitor_frequency = ?, monitor_points = ?, warning_threshold = ?,
+                    emergency_plan = ?, report_requirement = ?, review_opinion = ?,
+                    updated_at = ?
                 WHERE task_id = ?
                 """,
-                (name, line, location_desc, requirement, assigned_user_id, assigned_user_name, _now(), task_id),
+                (name, line, location_desc, requirement, assigned_user_id, assigned_user_name,
+                 monitor_frequency, monitor_points, warning_threshold,
+                 emergency_plan, report_requirement, review_opinion, _now(), task_id),
             )
         return self.get_task(task_id, actor)
 
@@ -847,6 +912,53 @@ class PatrolRepository:
         Path(shot["file_path"]).unlink(missing_ok=True)
         return {"shot_id": shot_id, "deleted": True}
 
+    # ---- 监测方案文档 ----
+
+    def add_task_doc(
+        self, task_id: str, file_name: str, stored_path: str | Path, kind: str, size: int, actor: dict[str, Any]
+    ) -> dict[str, Any]:
+        if not actor.get("is_admin"):
+            raise ValueError("无权限上传监测方案文档。")
+        task = self.get_task(task_id, actor)
+        doc_id, now = _id("pdoc"), _now()
+        with self._lock, self._connect() as connection:
+            count = int(connection.execute(
+                "SELECT COUNT(*) FROM patrol_task_docs WHERE task_id = ?", (task_id,)
+            ).fetchone()[0])
+            if count >= MAX_DOCS_PER_TASK:
+                raise ValueError(f"每个任务最多{MAX_DOCS_PER_TASK}个监测方案文档。")
+            connection.execute(
+                """
+                INSERT INTO patrol_task_docs(doc_id, task_id, file_name, file_path, kind, size, created_at)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
+                """,
+                (doc_id, task_id, file_name, str(stored_path), kind, size, now),
+            )
+        return self.get_task_doc(doc_id)
+
+    def get_task_doc(self, doc_id: str) -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM patrol_task_docs WHERE doc_id = ?", (doc_id,)).fetchone()
+        if row is None:
+            raise KeyError("监测方案文档不存在。")
+        return dict(row)
+
+    def doc_file_path(self, doc_id: str) -> Path:
+        doc = self.get_task_doc(doc_id)
+        path = Path(doc["file_path"]).resolve()
+        if not path.exists() or not path.is_file():
+            raise KeyError("监测方案文档文件缺失。")
+        return path
+
+    def delete_task_doc(self, doc_id: str, actor: dict[str, Any]) -> dict[str, Any]:
+        if not actor.get("is_admin"):
+            raise ValueError("无权限删除监测方案文档。")
+        doc = self.get_task_doc(doc_id)
+        with self._lock, self._connect() as connection:
+            connection.execute("DELETE FROM patrol_task_docs WHERE doc_id = ?", (doc_id,))
+        Path(doc["file_path"]).unlink(missing_ok=True)
+        return {"doc_id": doc_id, "deleted": True}
+
     def update_hazard(self, hazard_id: str, data: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
         current = self.get_hazard(hazard_id)
         if not actor.get("is_admin") and current.get("created_by") != str(actor.get("user_id") or ""):
@@ -1102,6 +1214,12 @@ class PatrolTaskCreatePayload(BaseModel):
     assigned_user_id: str = Field(default="", max_length=40)
     assigned_user_name: str = Field(default="", max_length=60)
     remark: str = Field(default="", max_length=1000)
+    monitor_frequency: str = Field(default="", max_length=2000)
+    monitor_points: str = Field(default="", max_length=2000)
+    warning_threshold: str = Field(default="", max_length=2000)
+    emergency_plan: str = Field(default="", max_length=2000)
+    report_requirement: str = Field(default="", max_length=2000)
+    review_opinion: str = Field(default="", max_length=2000)
 
 
 class PatrolTaskUpdatePayload(BaseModel):
@@ -1111,6 +1229,12 @@ class PatrolTaskUpdatePayload(BaseModel):
     requirement: str | None = Field(default=None, max_length=2000)
     assigned_user_id: str | None = Field(default=None, max_length=40)
     assigned_user_name: str | None = Field(default=None, max_length=60)
+    monitor_frequency: str | None = Field(default=None, max_length=2000)
+    monitor_points: str | None = Field(default=None, max_length=2000)
+    warning_threshold: str | None = Field(default=None, max_length=2000)
+    emergency_plan: str | None = Field(default=None, max_length=2000)
+    report_requirement: str | None = Field(default=None, max_length=2000)
+    review_opinion: str | None = Field(default=None, max_length=2000)
 
 
 class PatrolTaskStatusPayload(BaseModel):
@@ -1495,3 +1619,65 @@ def shot_file(shot_id: str, repo: PatrolRepository = Depends(get_repository)) ->
         ".webp": "image/webp", ".bmp": "image/bmp",
     }.get(path.suffix.lower(), "application/octet-stream")
     return FileResponse(path, media_type=media_type, filename=path.name)
+
+
+# ---- 监测方案文档 ----
+
+_DOC_MEDIA_TYPES = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".webp": "image/webp", ".bmp": "image/bmp",
+}
+
+
+@router.post("/tasks/{task_id}/docs", status_code=201)
+async def add_task_doc(
+    task_id: str,
+    file: UploadFile = File(...),
+    actor: dict = Depends(get_actor),
+    repo: PatrolRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    suffix = Path(file.filename or ".pdf").suffix.lower()
+    if suffix not in DOC_SUFFIXES:
+        raise HTTPException(status_code=415, detail="仅支持 PDF、Word、图片文件。")
+    if suffix in DOC_PDF_SUFFIXES:
+        kind = "pdf"
+    elif suffix in DOC_WORD_SUFFIXES:
+        kind = "word"
+    else:
+        kind = "image"
+    try:
+        repo.get_task(task_id, actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    folder = repo.upload_root / "docs" / task_id
+    folder.mkdir(parents=True, exist_ok=True)
+    destination = folder / f"{uuid.uuid4().hex}{suffix}"
+    await _save_media(file, destination, MAX_DOC_BYTES, DOC_SUFFIXES)
+    try:
+        return repo.add_task_doc(task_id, Path(file.filename or destination.name).name, destination, kind, destination.stat().st_size, actor)
+    except ValueError as exc:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/docs/{doc_id}/file")
+def doc_file(doc_id: str, repo: PatrolRepository = Depends(get_repository)) -> FileResponse:
+    try:
+        path = repo.doc_file_path(doc_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    media_type = _DOC_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media_type, filename=path.name)
+
+
+@router.delete("/docs/{doc_id}")
+def delete_task_doc(doc_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    try:
+        return repo.delete_task_doc(doc_id, actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -115,6 +115,21 @@ function downloadShot(shotId) {
   })
 }
 
+// 下载监测方案文档到临时路径
+function downloadDoc(docId) {
+  return new Promise((resolve, reject) => {
+    wx.downloadFile({
+      url: baseURL + '/rail/patrol/docs/' + docId + '/file',
+      header: { Authorization: 'Bearer ' + getToken() },
+      success(res) {
+        if (res.statusCode === 200) resolve(res.tempFilePath)
+        else reject(new Error('加载失败（' + res.statusCode + '）'))
+      },
+      fail(err) { reject(new Error((err && err.errMsg) || '下载失败')) }
+    })
+  })
+}
+
 // 上传隐患圈注截图
 function uploadShot(hazardId, filePath, onProgress) {
   return new Promise((resolve, reject) => {
@@ -138,4 +153,4 @@ function uploadShot(hazardId, filePath, onProgress) {
   })
 }
 
-module.exports = { request, get, post, del, login, getUserInfo, uploadMedia, downloadMedia, downloadShot, uploadShot, baseURL, getToken }
+module.exports = { request, get, post, del, login, getUserInfo, uploadMedia, downloadMedia, downloadShot, downloadDoc, uploadShot, baseURL, getToken }

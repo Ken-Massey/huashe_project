@@ -97,6 +97,12 @@
         <el-form-item label="巡查内容"><el-input v-model="taskForm.requirement" type="textarea" :rows="3" maxlength="2000" placeholder="巡查要求、符合性核查要点" /></el-form-item>
         <el-form-item label="指派巡查员"><el-select v-model="taskForm.assigned_user_id" filterable style="width: 100%" @change="onAccountChange"><el-option v-for="u in patrolAccounts" :key="u.userId" :label="u.nickName || u.userName" :value="String(u.userId)" /></el-select></el-form-item>
         <el-form-item label="备注"><el-input v-model="taskForm.remark" maxlength="1000" /></el-form-item>
+        <el-divider content-position="left">监测方案（选填）</el-divider>
+        <el-form-item label="监测频率"><el-input v-model="taskForm.monitor_frequency" type="textarea" :rows="2" maxlength="2000" placeholder="如：每天 2 次 / 每周 1 次" /></el-form-item>
+        <el-form-item label="监测点位"><el-input v-model="taskForm.monitor_points" type="textarea" :rows="2" maxlength="2000" placeholder="点位布设与编号" /></el-form-item>
+        <el-form-item label="预警阈值"><el-input v-model="taskForm.warning_threshold" type="textarea" :rows="2" maxlength="2000" placeholder="累计值/速率报警阈值" /></el-form-item>
+        <el-form-item label="应急预案"><el-input v-model="taskForm.emergency_plan" type="textarea" :rows="2" maxlength="2000" /></el-form-item>
+        <el-form-item label="数据报送要求"><el-input v-model="taskForm.report_requirement" type="textarea" :rows="2" maxlength="2000" /></el-form-item>
       </el-form>
       <span slot="footer"><el-button @click="taskDialogVisible = false">取 消</el-button><el-button type="primary" :loading="taskSaving" @click="submitTask">提 交</el-button></span>
     </el-dialog>
@@ -115,6 +121,39 @@
           <el-descriptions-item label="派发人">{{ detail.dispatcher || '-' }}</el-descriptions-item>
           <el-descriptions-item label="派发时间">{{ formatTime(detail.dispatch_time || detail.created_at) }}</el-descriptions-item>
         </el-descriptions>
+
+        <!-- 监测方案 -->
+        <div class="monitor-card">
+          <div class="monitor-head">
+            <span class="monitor-title">📋 监测方案</span>
+            <el-button v-hasPermi="['rail:patrol:manage','rail:patrol:review']" size="mini" type="primary" plain icon="el-icon-edit" @click="openMonitorEdit">编辑监测方案</el-button>
+          </div>
+          <el-descriptions :column="2" size="small" border>
+            <el-descriptions-item label="监测频率" :span="2">{{ detail.monitor_frequency || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="监测点位" :span="2">{{ detail.monitor_points || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="预警阈值" :span="2">{{ detail.warning_threshold || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="应急预案" :span="2">{{ detail.emergency_plan || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="数据报送要求" :span="2">{{ detail.report_requirement || '—' }}</el-descriptions-item>
+          </el-descriptions>
+          <div class="monitor-opinion">
+            <div class="monitor-opinion-label">监测审查意见</div>
+            <div class="monitor-opinion-text">{{ detail.review_opinion || '暂无审查意见' }}</div>
+          </div>
+          <div class="monitor-docs">
+            <div class="monitor-docs-label">监测方案文档（{{ detail.docs ? detail.docs.length : 0 }}）</div>
+            <div v-if="detail.docs && detail.docs.length" class="doc-list">
+              <div v-for="d in detail.docs" :key="d.doc_id" class="doc-item">
+                <span class="doc-icon">{{ docIcon(d) }}</span>
+                <span class="doc-name" :title="d.file_name">{{ d.file_name }}</span>
+                <span class="doc-size">{{ formatSize(d.size) }}</span>
+                <el-button size="mini" type="text" @click="viewDoc(d)">查看</el-button>
+                <el-button size="mini" type="text" @click="downloadDoc(d)">下载</el-button>
+                <el-button v-hasPermi="['rail:patrol:manage','rail:patrol:review']" size="mini" type="text" class="danger-link" @click="deleteDoc(d)">删除</el-button>
+              </div>
+            </div>
+            <div v-else class="muted">暂无文档</div>
+          </div>
+        </div>
 
         <div class="detail-actions">
           <el-button v-if="detail.status === 'pending'" size="small" type="primary" plain v-hasPermi="['rail:patrol:manage']" @click="setStatus(detail, 'executing')">开始执行</el-button>
@@ -236,6 +275,20 @@
       <span slot="footer"><el-button @click="reviewVisible = false">取 消</el-button><el-button type="primary" @click="submitReview">提 交</el-button></span>
     </el-dialog>
 
+    <!-- 编辑监测方案 -->
+    <el-dialog title="编辑监测方案" :visible.sync="monitorVisible" width="560px" append-to-body>
+      <el-form label-width="100px">
+        <el-form-item label="监测审查意见"><el-input v-model="monitorForm.review_opinion" type="textarea" :rows="4" maxlength="2000" placeholder="技术审核 / 参数复核 / 点位核验 / 监测要求判定的审查意见" /></el-form-item>
+        <el-form-item label="方案文档">
+          <el-upload action="#" :auto-upload="false" :limit="9" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.bmp" :on-change="onDocChange">
+            <el-button size="small" icon="el-icon-upload2">选择文件</el-button>
+            <div slot="tip" class="el-upload__tip">支持 PDF / Word / 图片，单个 ≤50MB，最多 9 个；保存后生效</div>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <span slot="footer"><el-button @click="monitorVisible = false">取 消</el-button><el-button type="primary" :loading="monitorSaving" @click="submitMonitor">保 存</el-button></span>
+    </el-dialog>
+
     <!-- 视频预览 -->
     <el-dialog title="视频预览" :visible.sync="videoVisible" width="640px" append-to-body>
       <video v-if="videoUrl" :src="videoUrl" controls style="width: 100%; max-height: 60vh;" />
@@ -279,7 +332,8 @@
 import {
   listPatrolTasks, getPatrolTask, createPatrolTask, updatePatrolTask, setPatrolTaskStatus, deletePatrolTask, reopenPatrolTask,
   getPatrolStatistics, createPatrolHazard, confirmPatrolHazard, reviewPatrolHazard, updatePatrolHazard, deletePatrolHazard, getPatrolMediaFile, getPatrolShotFile, uploadPatrolShot,
-  listPatrolDicts, createPatrolDict, updatePatrolDict, deletePatrolDict
+  listPatrolDicts, createPatrolDict, updatePatrolDict, deletePatrolDict,
+  uploadPatrolDoc, getPatrolDocFile, deletePatrolDoc
 } from '@/api/rail/patrol'
 import { listUser } from '@/api/system/user'
 import { checkPermi } from '@/utils/permission'
@@ -299,6 +353,7 @@ export default {
       hazardDialogVisible: false, hazardForm: {}, hazardRules: { description: [{ required: true, message: '请输入隐患描述', trigger: 'blur' }] },
       confirmVisible: false, confirmForm: { rectify_requirement: '' }, confirmTarget: null,
       reviewVisible: false, reviewForm: { result: 'closed', comment: '' }, reviewTarget: null,
+      monitorVisible: false, monitorForm: { review_opinion: '' }, monitorSaving: false, docFiles: [],
       dictVisible: false, dictType: 'line', dictItems: [], dictLoading: false,
       dictEditingId: null, dictEditVisible: false, dictForm: { label: '', sort: 0, enabled: 1 },
       dictRules: { label: [{ required: true, message: '请输入名称', trigger: 'blur' }] }
@@ -435,7 +490,7 @@ export default {
     formatTime(v) { if (!v) return '-'; return String(v).replace('T', ' ').slice(0, 19) },
 
     async openNewTask() {
-      this.taskForm = { name: '', line: '', location_desc: '', requirement: '', assigned_user_id: '', assigned_user_name: '', remark: '' }
+      this.taskForm = { name: '', line: '', location_desc: '', requirement: '', assigned_user_id: '', assigned_user_name: '', remark: '', monitor_frequency: '', monitor_points: '', warning_threshold: '', emergency_plan: '', report_requirement: '' }
       await this.loadAccounts()
       this.taskDialogVisible = true
     },
@@ -448,7 +503,7 @@ export default {
       })
     },
     openEditTask(task) {
-      this.taskForm = { name: task.name, line: task.line, location_desc: task.location_desc, requirement: task.requirement, assigned_user_id: task.assigned_user_id, assigned_user_name: task.assigned_user_name, remark: task.remark }
+      this.taskForm = { name: task.name, line: task.line, location_desc: task.location_desc, requirement: task.requirement, assigned_user_id: task.assigned_user_id, assigned_user_name: task.assigned_user_name, remark: task.remark, monitor_frequency: task.monitor_frequency || '', monitor_points: task.monitor_points || '', warning_threshold: task.warning_threshold || '', emergency_plan: task.emergency_plan || '', report_requirement: task.report_requirement || '' }
       this.editingTaskId = task.task_id
       this.taskDialogVisible = true
     },
@@ -578,6 +633,72 @@ export default {
     },
     reloadDetail() { if (this.detail) this.openDetail({ task_id: this.detail.task_id }) },
 
+    // ---- 监测方案文档 ----
+    openMonitorEdit() {
+      this.monitorForm = { review_opinion: this.detail.review_opinion || '' }
+      this.docFiles = []
+      this.monitorVisible = true
+    },
+    onDocChange(file, fileList) {
+      this.docFiles = fileList.map(f => f.raw).filter(Boolean)
+    },
+    async submitMonitor() {
+      this.monitorSaving = true
+      try {
+        const tid = this.detail.task_id
+        for (const f of this.docFiles) {
+          const fd = new FormData()
+          fd.append('file', f)
+          await uploadPatrolDoc(tid, fd)
+        }
+        await updatePatrolTask(tid, { review_opinion: this.monitorForm.review_opinion })
+        this.$message.success('已保存')
+        this.monitorVisible = false
+        this.docFiles = []
+        this.reloadDetail()
+      } finally {
+        this.monitorSaving = false
+      }
+    },
+    async viewDoc(d) {
+      try {
+        const blob = await getPatrolDocFile(d.doc_id)
+        const url = URL.createObjectURL(blob)
+        if (d.kind === 'image' || d.kind === 'pdf') window.open(url, '_blank')
+        else this.triggerDownload(d.file_name, url)
+      } catch (e) { this.$message.error('打开失败') }
+    },
+    async downloadDoc(d) {
+      try {
+        const blob = await getPatrolDocFile(d.doc_id)
+        this.triggerDownload(d.file_name, URL.createObjectURL(blob))
+      } catch (e) { this.$message.error('下载失败') }
+    },
+    triggerDownload(name, url) {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    },
+    deleteDoc(d) {
+      this.$confirm(`确认删除文档「${d.file_name}」？`, '删除确认', { type: 'warning' }).then(async () => {
+        await deletePatrolDoc(d.doc_id); this.$message.success('已删除'); this.reloadDetail()
+      }).catch(() => {})
+    },
+    docIcon(d) {
+      if (d.kind === 'image') return '🖼'
+      if (d.kind === 'word') return '📄'
+      return '📕'
+    },
+    formatSize(n) {
+      if (n === null || n === undefined) return ''
+      if (n < 1024) return n + ' B'
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
+      return (n / 1024 / 1024).toFixed(1) + ' MB'
+    },
+
     async openDictDialog() { this.dictVisible = true; await this.loadDictItems() },
     async loadDictItems() {
       this.dictLoading = true
@@ -687,4 +808,19 @@ export default {
 .rectify-item:first-child { border-top: none; padding-top: 0; }
 .rectify-head { margin-bottom: 4px; }
 .rectify-note { color: #4a5450; font-size: 13px; margin-bottom: 6px; }
+
+/* 监测方案 */
+.monitor-card { margin: 16px 0; padding: 16px; background: #f8fbfe; border: 1px solid #e3edf7; border-radius: 8px; }
+.monitor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.monitor-title { font-size: 15px; font-weight: 700; color: #2d5d95; }
+.monitor-opinion { margin-top: 12px; padding: 12px; background: #fefaf0; border: 1px dashed #f0d0a0; border-radius: 6px; }
+.monitor-opinion-label { font-size: 13px; font-weight: 600; color: #e6a23c; margin-bottom: 6px; }
+.monitor-opinion-text { font-size: 13px; color: #303133; white-space: pre-wrap; word-break: break-all; }
+.monitor-docs { margin-top: 12px; }
+.monitor-docs-label { font-size: 13px; font-weight: 600; color: #606266; margin-bottom: 8px; }
+.doc-list { display: flex; flex-direction: column; gap: 6px; }
+.doc-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #fff; border: 1px solid #ebeef5; border-radius: 6px; }
+.doc-icon { font-size: 18px; }
+.doc-name { flex: 1; min-width: 0; font-size: 13px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-size { font-size: 12px; color: #a8abb2; white-space: nowrap; }
 </style>

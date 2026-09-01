@@ -191,3 +191,21 @@
 .rectify-btn.cancel { background: #f4f4f5; color: #606266; }
 .rectify-btn.ok { background: #409eff; color: #fff; }
 .rectify-btn::after { border: none; }
+
+/* ===== 监测方案 ===== */
+.monitor-card { background: #f8fbfe; border: 1rpx solid #e3edf7; }
+.monitor-head { margin-bottom: 14rpx; }
+.monitor-title { font-size: 28rpx; font-weight: 700; color: #2d5d95; }
+.monitor-field { margin-bottom: 12rpx; }
+.monitor-field-label { display: block; font-size: 22rpx; color: #909399; margin-bottom: 4rpx; }
+.monitor-field-val { font-size: 27rpx; color: #303133; line-height: 1.6; word-break: break-all; }
+.monitor-opinion { margin-top: 14rpx; padding: 16rpx; background: #fefaf0; border: 1rpx dashed #f0d0a0; border-radius: 10rpx; }
+.monitor-opinion-label { font-size: 24rpx; font-weight: 600; color: #e6a23c; margin-bottom: 6rpx; }
+.monitor-opinion-text { font-size: 26rpx; color: #303133; line-height: 1.6; word-break: break-all; }
+.monitor-docs { margin-top: 14rpx; }
+.monitor-docs-label { font-size: 24rpx; font-weight: 600; color: #606266; margin-bottom: 8rpx; }
+.doc-item { display: flex; align-items: center; gap: 10rpx; padding: 12rpx 10rpx; background: #fff; border: 1rpx solid #ebeef5; border-radius: 10rpx; margin-bottom: 8rpx; }
+.doc-item:last-child { margin-bottom: 0; }
+.doc-icon { font-size: 32rpx; }
+.doc-name { flex: 1; min-width: 0; font-size: 25rpx; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-link { flex: 0 0 auto; font-size: 25rpx; color: #409eff; padding: 0 4rpx; }

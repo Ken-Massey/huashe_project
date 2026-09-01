@@ -50,7 +50,7 @@
           </view>
         </view>
         <view class="task-name">{{ item.name }}</view>
-        <view class="task-line">📍 {{ item.line || '未填线路' }}<text wx:if="{{ item.location_desc }}"> · {{ item.location_desc }}</text></view>
+        <view class="task-line"><text class="ico">📍</text><text>{{ item.line || '未填线路' }}</text><text wx:if="{{ item.location_desc }}"> · {{ item.location_desc }}</text></view>
         <view class="task-meta">
           <text class="meta-chip">共 {{ item.hazard_count || 0 }} 隐患</text>
           <text class="meta-chip warn" wx:if="{{ item.open_hazard_count > 0 }}">剩 {{ item.open_hazard_count }} 未闭环</text>

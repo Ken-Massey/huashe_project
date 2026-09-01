@@ -1,9 +1,68 @@
 /* 全局样式（蓝色主题，与 Web 端 Element 风格统一） */
 page {
-  background: #f5f7fa;
-  color: #303133;
+  /* 设计变量：统一配色 / 圆角 / 间距 */
+  --c-primary: #409eff;
+  --c-primary-dark: #2d7fe0;
+  --c-primary-deep: #2d5d95;
+  --c-bg: #f5f7fa;
+  --c-card: #ffffff;
+  --c-text: #303133;
+  --c-text-sub: #606266;
+  --c-text-muted: #909399;
+  --c-text-light: #a8abb2;
+  --c-border: #e4e7ed;
+  --c-danger: #f56c6c;
+  --c-success: #67c23a;
+  --c-warn: #e6a23c;
+  --radius: 16rpx;
+  --radius-sm: 10rpx;
+  background: var(--c-bg);
+  color: var(--c-text);
   font-size: 28rpx;
   line-height: 1.5;
+}
+
+/* 通用 emoji 图标：内联小图标统一对齐与尺寸 */
+.ico {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  font-size: 30rpx;
+  line-height: 1;
+  margin-right: 6rpx;
+  vertical-align: -2rpx;
+}
+
+/* emoji 图标色块（仿登录输入框图标，统一视觉） */
+.ico-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 12rpx;
+  background: #ecf5ff;
+  font-size: 28rpx;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* 区块标题：统一渐变竖条（原 task 页样式提升为全局） */
+.section-title {
+  display: flex;
+  align-items: center;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--c-text);
+  margin-bottom: 20rpx;
+}
+.section-title::before {
+  content: '';
+  width: 8rpx;
+  height: 28rpx;
+  border-radius: 4rpx;
+  background: linear-gradient(180deg, var(--c-primary), var(--c-primary-deep));
+  margin-right: 12rpx;
 }
 
 .page {
@@ -12,15 +71,15 @@ page {
 }
 
 .card {
-  background: #fff;
-  border-radius: 16rpx;
+  background: var(--c-card);
+  border-radius: var(--radius);
   padding: 28rpx;
   margin-bottom: 20rpx;
   box-shadow: 0 2rpx 12rpx rgba(27, 58, 103, 0.06);
 }
 
 .btn-primary {
-  background: linear-gradient(90deg, #409eff, #2d7fe0);
+  background: linear-gradient(90deg, var(--c-primary), var(--c-primary-dark));
   color: #fff;
   border-radius: 12rpx;
   font-weight: 600;

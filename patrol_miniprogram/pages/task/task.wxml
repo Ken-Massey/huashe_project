@@ -1,3 +1,19 @@
+<!-- 任务详情加载骨架屏 -->
+<view class="page" wx:if="{{ loading && !task }}">
+  <view class="card">
+    <view class="skeleton-bar w40 h40"></view>
+    <view class="skeleton-bar w80"></view>
+    <view class="skeleton-bar w60"></view>
+  </view>
+  <view class="card">
+    <view class="skeleton-bar w50"></view>
+    <view class="skeleton-bar w40 h40"></view>
+    <view class="skeleton-bar w80"></view>
+    <view class="skeleton-bar w70"></view>
+    <view class="skeleton-bar w90"></view>
+  </view>
+</view>
+
 <view class="page" wx:if="{{ task }}">
   <!-- 任务信息卡 -->
   <view class="card">
@@ -15,6 +31,44 @@
   <view class="require-card" wx:if="{{ task.requirement }}">
     <view class="require-title">📋 巡查要求</view>
     <view class="require-content">{{ task.requirement }}</view>
+  </view>
+
+  <!-- 监测方案 -->
+  <view class="card monitor-card" wx:if="{{ task.monitor_frequency || task.monitor_points || task.warning_threshold || task.emergency_plan || task.report_requirement || task.review_opinion || (task.docs && task.docs.length) }}">
+    <view class="monitor-head"><text class="monitor-title">📋 监测方案</text></view>
+    <view class="monitor-field" wx:if="{{ task.monitor_frequency }}">
+      <text class="monitor-field-label">监测频率</text>
+      <text class="monitor-field-val">{{ task.monitor_frequency }}</text>
+    </view>
+    <view class="monitor-field" wx:if="{{ task.monitor_points }}">
+      <text class="monitor-field-label">监测点位</text>
+      <text class="monitor-field-val">{{ task.monitor_points }}</text>
+    </view>
+    <view class="monitor-field" wx:if="{{ task.warning_threshold }}">
+      <text class="monitor-field-label">预警阈值</text>
+      <text class="monitor-field-val">{{ task.warning_threshold }}</text>
+    </view>
+    <view class="monitor-field" wx:if="{{ task.emergency_plan }}">
+      <text class="monitor-field-label">应急预案</text>
+      <text class="monitor-field-val">{{ task.emergency_plan }}</text>
+    </view>
+    <view class="monitor-field" wx:if="{{ task.report_requirement }}">
+      <text class="monitor-field-label">数据报送要求</text>
+      <text class="monitor-field-val">{{ task.report_requirement }}</text>
+    </view>
+    <view class="monitor-opinion" wx:if="{{ task.review_opinion }}">
+      <text class="monitor-opinion-label">监测审查意见</text>
+      <text class="monitor-opinion-text">{{ task.review_opinion }}</text>
+    </view>
+    <view class="monitor-docs" wx:if="{{ task.docs && task.docs.length }}">
+      <text class="monitor-docs-label">监测方案文档（{{ task.docs.length }}）</text>
+      <view wx:for="{{ task.docs }}" wx:key="doc_id" class="doc-item">
+        <text class="doc-icon">{{ item.kind === 'image' ? '🖼' : (item.kind === 'word' ? '📄' : '📕') }}</text>
+        <text class="doc-name">{{ item.file_name }}</text>
+        <text class="doc-link" data-id="{{ item.doc_id }}" data-kind="{{ item.kind }}" bindtap="openDoc">查看</text>
+        <text class="doc-link" data-id="{{ item.doc_id }}" data-kind="{{ item.kind }}" bindtap="saveDoc">下载</text>
+      </view>
+    </view>
   </view>
 
   <!-- 巡查时间线 -->

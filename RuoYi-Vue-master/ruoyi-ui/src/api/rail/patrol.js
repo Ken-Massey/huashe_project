@@ -91,3 +91,20 @@ export function uploadPatrolShot(hazardId, form) {
 export function getPatrolShotFile(id) {
   return request({ url: `/rail/patrol/shots/${id}/file`, method: 'get', responseType: 'blob' })
 }
+
+// 监测方案文档
+export function uploadPatrolDoc(taskId, form) {
+  return request({
+    url: `/rail/patrol/tasks/${taskId}/docs`,
+    method: 'post',
+    data: form,
+    timeout: 120000,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+export function getPatrolDocFile(id) {
+  return request({ url: `/rail/patrol/docs/${id}/file`, method: 'get', responseType: 'blob' })
+}
+export function deletePatrolDoc(id) {
+  return request({ url: `/rail/patrol/docs/${id}`, method: 'delete' })
+}
