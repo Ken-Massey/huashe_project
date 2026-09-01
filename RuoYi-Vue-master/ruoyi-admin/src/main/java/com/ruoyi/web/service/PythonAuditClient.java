@@ -210,9 +210,20 @@ public class PythonAuditClient
 
     public ResponseEntity<byte[]> download(String path)
     {
+        return download(path, null);
+    }
+
+    /** 携带操作者身份头下载（Python 端做行级隔离校验）。 */
+    public ResponseEntity<byte[]> download(String path, Map<String, String> headers)
+    {
         try
         {
-            return client.get().uri(path).retrieve().toEntity(byte[].class);
+            RestClient.RequestHeadersSpec<?> request = client.get().uri(path);
+            if (headers != null && !headers.isEmpty())
+            {
+                request.headers(httpHeaders -> headers.forEach(httpHeaders::add));
+            }
+            return request.retrieve().toEntity(byte[].class);
         }
         catch (RestClientResponseException exception)
         {

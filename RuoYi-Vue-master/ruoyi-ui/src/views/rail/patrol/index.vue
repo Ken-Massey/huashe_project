@@ -88,8 +88,8 @@
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 新建任务 -->
-    <el-dialog title="新建巡查任务" :visible.sync="taskDialogVisible" width="560px">
+    <!-- 新建/编辑任务 -->
+    <el-dialog :title="editingTaskId ? '编辑巡查任务' : '新建巡查任务'" :visible.sync="taskDialogVisible" width="560px">
       <el-form ref="taskFormRef" :model="taskForm" :rules="taskRules" label-width="90px">
         <el-form-item label="任务名称" prop="name"><el-input v-model="taskForm.name" maxlength="120" placeholder="如：新街口站东侧基坑巡查" /></el-form-item>
         <el-form-item label="线路"><el-select v-model="taskForm.line" clearable filterable style="width: 100%"><el-option v-for="item in lineDict" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
@@ -97,12 +97,6 @@
         <el-form-item label="巡查内容"><el-input v-model="taskForm.requirement" type="textarea" :rows="3" maxlength="2000" placeholder="巡查要求、符合性核查要点" /></el-form-item>
         <el-form-item label="指派巡查员"><el-select v-model="taskForm.assigned_user_id" filterable style="width: 100%" @change="onAccountChange"><el-option v-for="u in patrolAccounts" :key="u.userId" :label="u.nickName || u.userName" :value="String(u.userId)" /></el-select></el-form-item>
         <el-form-item label="备注"><el-input v-model="taskForm.remark" maxlength="1000" /></el-form-item>
-        <el-divider content-position="left">监测方案（选填）</el-divider>
-        <el-form-item label="监测频率"><el-input v-model="taskForm.monitor_frequency" type="textarea" :rows="2" maxlength="2000" placeholder="如：每天 2 次 / 每周 1 次" /></el-form-item>
-        <el-form-item label="监测点位"><el-input v-model="taskForm.monitor_points" type="textarea" :rows="2" maxlength="2000" placeholder="点位布设与编号" /></el-form-item>
-        <el-form-item label="预警阈值"><el-input v-model="taskForm.warning_threshold" type="textarea" :rows="2" maxlength="2000" placeholder="累计值/速率报警阈值" /></el-form-item>
-        <el-form-item label="应急预案"><el-input v-model="taskForm.emergency_plan" type="textarea" :rows="2" maxlength="2000" /></el-form-item>
-        <el-form-item label="数据报送要求"><el-input v-model="taskForm.report_requirement" type="textarea" :rows="2" maxlength="2000" /></el-form-item>
       </el-form>
       <span slot="footer"><el-button @click="taskDialogVisible = false">取 消</el-button><el-button type="primary" :loading="taskSaving" @click="submitTask">提 交</el-button></span>
     </el-dialog>
@@ -126,15 +120,8 @@
         <div class="monitor-card">
           <div class="monitor-head">
             <span class="monitor-title">📋 监测方案</span>
-            <el-button v-hasPermi="['rail:patrol:manage','rail:patrol:review']" size="mini" type="primary" plain icon="el-icon-edit" @click="openMonitorEdit">编辑监测方案</el-button>
+            <el-button v-hasPermi="['rail:patrol:manage']" size="mini" type="primary" plain icon="el-icon-edit" @click="openMonitorEdit">编辑监测方案</el-button>
           </div>
-          <el-descriptions :column="2" size="small" border>
-            <el-descriptions-item label="监测频率" :span="2">{{ detail.monitor_frequency || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="监测点位" :span="2">{{ detail.monitor_points || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="预警阈值" :span="2">{{ detail.warning_threshold || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="应急预案" :span="2">{{ detail.emergency_plan || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="数据报送要求" :span="2">{{ detail.report_requirement || '—' }}</el-descriptions-item>
-          </el-descriptions>
           <div class="monitor-opinion">
             <div class="monitor-opinion-label">监测审查意见</div>
             <div class="monitor-opinion-text">{{ detail.review_opinion || '暂无审查意见' }}</div>
@@ -210,6 +197,8 @@
                 </div>
                 <div class="hazard-desc">{{ h.description }}</div>
                 <div v-if="h.rectify_requirement" class="hazard-req">整改要求：{{ h.rectify_requirement }}</div>
+                <div v-if="h.confirmer" class="hazard-audit">确认人：{{ h.confirmer }} · {{ formatTime(h.confirm_time) }}</div>
+                <div v-if="h.submitter" class="hazard-audit">整改提交：{{ h.submitter }} · {{ formatTime(h.submit_time) }}</div>
                 <!-- 嵌套整改记录 -->
                 <div v-if="h.rectifyRecords && h.rectifyRecords.length" class="rectify-list">
                   <div class="rectify-title">整改记录（{{ h.rectifyRecords.length }}）</div>
@@ -230,6 +219,8 @@
                 <div class="hazard-ops">
                   <el-button v-if="h.status === 'pending_confirm'" size="mini" type="primary" plain v-hasPermi="['rail:patrol:review']" @click="openConfirm(h)">确认并下发整改要求</el-button>
                   <el-button v-if="h.status === 'pending_review'" size="mini" type="success" plain v-hasPermi="['rail:patrol:review']" @click="openReview(h)">复核意见</el-button>
+                  <el-button size="mini" type="text" icon="el-icon-edit" v-hasPermi="['rail:patrol:review']" @click="openHazardEdit(h)">编辑</el-button>
+                  <el-button v-if="h.status === 'pending_confirm'" size="mini" type="text" icon="el-icon-delete" class="danger-link" v-hasPermi="['rail:patrol:review']" @click="doDeleteHazard(h)">删除</el-button>
                 </div>
               </div>
             </article>
@@ -344,7 +335,7 @@ export default {
     return {
       activeTab: 'tasks',
       loading: false, detailLoading: false, legacyLoading: false,
-      taskSaving: false, hazardSaving: false, dictSaving: false, shotFiles: [], editingHazardId: null,
+      taskSaving: false, hazardSaving: false, dictSaving: false, shotFiles: [], editingHazardId: null, editingTaskId: null, hazardTaskId: null,
       tasks: [], legacyTasks: [], total: 0, statistics: {},
       lineDict: [], hazardTypeDict: [], riskDict: [], patrolAccounts: [],
       query: { page: 1, size: 20, line: '', status: '', keyword: '' },
@@ -367,21 +358,6 @@ export default {
     photoPreviewList() { return Object.values(this.photoUrls) },
     remainingHazards() {
       return this.detail ? (this.detail.hazards || []).filter(h => h.status !== 'closed').length : 0
-    },
-    taskPhotoOptions() {
-      const opts = []
-      if (!this.detail) return opts
-      this.detail.records.forEach(r => {
-        ;(r.media || []).forEach((m, i) => {
-          if (m.kind === 'photo') {
-            opts.push({
-              media_id: m.media_id,
-              label: `${r.type === 'rectify' ? '[整改]' : '[巡查]'} ${this.formatTime(r.created_at)} · 第${i + 1}张`
-            })
-          }
-        })
-      })
-      return opts
     },
     timeline() {
       if (!this.detail) return []
@@ -430,7 +406,7 @@ export default {
   },
   methods: {
     async refresh() { await Promise.all([this.loadStatistics(), this.loadTasks()]) },
-    async loadStatistics() { this.statistics = await getPatrolStatistics({}) || {} },
+    async loadStatistics() { this.statistics = await getPatrolStatistics({ line: this.query.line || '' }) || {} },
     async loadTasks() {
       this.loading = true
       try { const r = await listPatrolTasks(this.query) || {}; this.tasks = r.items || []; this.total = r.total || 0 }
@@ -490,7 +466,8 @@ export default {
     formatTime(v) { if (!v) return '-'; return String(v).replace('T', ' ').slice(0, 19) },
 
     async openNewTask() {
-      this.taskForm = { name: '', line: '', location_desc: '', requirement: '', assigned_user_id: '', assigned_user_name: '', remark: '', monitor_frequency: '', monitor_points: '', warning_threshold: '', emergency_plan: '', report_requirement: '' }
+      this.taskForm = { name: '', line: '', location_desc: '', requirement: '', assigned_user_id: '', assigned_user_name: '', remark: '' }
+      this.editingTaskId = null
       await this.loadAccounts()
       this.taskDialogVisible = true
     },
@@ -498,13 +475,24 @@ export default {
       this.$refs.taskFormRef.validate(async valid => {
         if (!valid) return
         this.taskSaving = true
-        try { await createPatrolTask(this.taskForm); this.$message.success('任务已创建'); this.taskDialogVisible = false; this.refresh() }
-        finally { this.taskSaving = false }
+        try {
+          if (this.editingTaskId) {
+            await updatePatrolTask(this.editingTaskId, this.taskForm)
+            this.$message.success('任务已更新')
+          } else {
+            await createPatrolTask(this.taskForm)
+            this.$message.success('任务已创建')
+          }
+          this.taskDialogVisible = false
+          this.refresh()
+          if (this.detailVisible && this.editingTaskId) this.reloadDetail()
+        } finally { this.taskSaving = false }
       })
     },
-    openEditTask(task) {
-      this.taskForm = { name: task.name, line: task.line, location_desc: task.location_desc, requirement: task.requirement, assigned_user_id: task.assigned_user_id, assigned_user_name: task.assigned_user_name, remark: task.remark, monitor_frequency: task.monitor_frequency || '', monitor_points: task.monitor_points || '', warning_threshold: task.warning_threshold || '', emergency_plan: task.emergency_plan || '', report_requirement: task.report_requirement || '' }
+    async openEditTask(task) {
+      this.taskForm = { name: task.name, line: task.line, location_desc: task.location_desc, requirement: task.requirement, assigned_user_id: task.assigned_user_id, assigned_user_name: task.assigned_user_name, remark: task.remark }
       this.editingTaskId = task.task_id
+      await this.loadAccounts()
       this.taskDialogVisible = true
     },
     async setStatus(task, status) {
@@ -547,27 +535,6 @@ export default {
       catch (e) { this.$set(this.photoUrls, mediaId, '') }
     },
     mediaUrl(m) { return this.photoUrls[m.media_id] || '' },
-    hazardOnMedia(mediaId) {
-      return (this.detail && this.detail.hazards) ? this.detail.hazards.find(h => h.media_id === mediaId) : null
-    },
-    mediaRefLabel(h) {
-      if (!h) return ''
-      if (h.video_time) return '视频 ' + h.video_time + ' 秒'
-      if (!h.media_id) return ''
-      for (const r of (this.detail ? this.detail.records : [])) {
-        const i = (r.media || []).findIndex(m => m.media_id === h.media_id)
-        if (i >= 0) return `${r.type === 'rectify' ? '[整改]' : '[巡查]'} 第 ${i + 1} 张照片`
-      }
-      return '关联照片'
-    },
-    mediaUrlById(mediaId) {
-      if (!mediaId || !this.detail) return ''
-      for (const r of this.detail.records) {
-        const m = (r.media || []).find(x => x.media_id === mediaId)
-        if (m) return this.mediaUrl(m)
-      }
-      return ''
-    },
     async loadShotUrl(shotId) {
       if (this.shotUrls[shotId] !== undefined) return
       try { const blob = await getPatrolShotFile(shotId); this.$set(this.shotUrls, shotId, URL.createObjectURL(blob)) }
@@ -617,6 +584,9 @@ export default {
           this.$message.success(this.editingHazardId ? '隐患已修改' : '隐患已记录')
           this.hazardDialogVisible = false
           this.reloadDetail()
+        } catch (e) {
+          // 错误已由请求拦截器统一提示；保持对话框开启以便重试
+          console.error('隐患提交失败：', e)
         } finally { this.hazardSaving = false }
       })
     },
@@ -656,6 +626,9 @@ export default {
         this.monitorVisible = false
         this.docFiles = []
         this.reloadDetail()
+      } catch (e) {
+        // 错误已由请求拦截器统一提示；保持对话框开启以便重试
+        console.error('监测方案保存失败：', e)
       } finally {
         this.monitorSaving = false
       }
@@ -758,19 +731,15 @@ export default {
 .section h4 { margin: 0 0 10px; color: #202725; font-size: 15px; }
 .section h4 span { color: #7c8783; font-weight: 400; }
 
-.hazard-list { display: flex; flex-direction: column; gap: 10px; }
-.hazard-card { border: 1px solid #e3e7e6; border-radius: 6px; padding: 12px 14px; }
-.hazard-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .hazard-desc { font-weight: 600; color: #202725; }
 .hazard-meta { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
 .hazard-req { color: #4a5450; font-size: 13px; margin-top: 6px; }
+.hazard-audit { color: #9aa5a1; font-size: 12px; margin-top: 4px; }
 .hazard-ops { margin-top: 8px; }
 
 .record-timeline { display: flex; flex-direction: column; gap: 10px; }
-.record-item { border-left: 3px solid #cfe3db; padding-left: 14px; }
 .timeline-item { border-left: 3px solid #cfe3db; padding-left: 14px; }
 .tl-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.record-head { display: flex; align-items: center; gap: 10px; }
 .record-note { color: #4a5450; margin: 6px 0; }
 .media-grid { display: flex; gap: 10px; flex-wrap: wrap; }
 .media-thumb { width: 120px; height: 90px; border-radius: 4px; }

@@ -196,9 +196,6 @@
 .monitor-card { background: #f8fbfe; border: 1rpx solid #e3edf7; }
 .monitor-head { margin-bottom: 14rpx; }
 .monitor-title { font-size: 28rpx; font-weight: 700; color: #2d5d95; }
-.monitor-field { margin-bottom: 12rpx; }
-.monitor-field-label { display: block; font-size: 22rpx; color: #909399; margin-bottom: 4rpx; }
-.monitor-field-val { font-size: 27rpx; color: #303133; line-height: 1.6; word-break: break-all; }
 .monitor-opinion { margin-top: 14rpx; padding: 16rpx; background: #fefaf0; border: 1rpx dashed #f0d0a0; border-radius: 10rpx; }
 .monitor-opinion-label { font-size: 24rpx; font-weight: 600; color: #e6a23c; margin-bottom: 6rpx; }
 .monitor-opinion-text { font-size: 26rpx; color: #303133; line-height: 1.6; word-break: break-all; }

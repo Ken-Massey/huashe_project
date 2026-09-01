@@ -41,18 +41,6 @@ export function getPatrolStatistics(params) {
 }
 
 // 巡查记录与媒体
-export function createPatrolRecord(taskId, data) {
-  return request({ url: `/rail/patrol/tasks/${taskId}/records`, method: 'post', data })
-}
-export function uploadPatrolMedia(recordId, form) {
-  return request({
-    url: `/rail/patrol/records/${recordId}/media`,
-    method: 'post',
-    data: form,
-    timeout: 120000,
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
-}
 export function getPatrolMediaFile(id) {
   return request({ url: `/rail/patrol/media/${id}/file`, method: 'get', responseType: 'blob' })
 }
@@ -64,9 +52,6 @@ export function createPatrolHazard(taskId, data) {
 export function confirmPatrolHazard(hazardId, data) {
   return request({ url: `/rail/patrol/hazards/${hazardId}/confirm`, method: 'post', data })
 }
-export function submitPatrolHazard(hazardId) {
-  return request({ url: `/rail/patrol/hazards/${hazardId}/submit`, method: 'post' })
-}
 export function reviewPatrolHazard(hazardId, data) {
   return request({ url: `/rail/patrol/hazards/${hazardId}/review`, method: 'post', data })
 }
@@ -76,16 +61,13 @@ export function updatePatrolHazard(hazardId, data) {
 export function deletePatrolHazard(hazardId) {
   return request({ url: `/rail/patrol/hazards/${hazardId}`, method: 'delete' })
 }
-export function deletePatrolShot(shotId) {
-  return request({ url: `/rail/patrol/shots/${shotId}`, method: 'delete' })
-}
 export function uploadPatrolShot(hazardId, form) {
   return request({
     url: `/rail/patrol/hazards/${hazardId}/shots`,
     method: 'post',
     data: form,
     timeout: 120000,
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false }
   })
 }
 export function getPatrolShotFile(id) {
@@ -99,7 +81,7 @@ export function uploadPatrolDoc(taskId, form) {
     method: 'post',
     data: form,
     timeout: 120000,
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false }
   })
 }
 export function getPatrolDocFile(id) {

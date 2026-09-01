@@ -1,4 +1,4 @@
-const { get, post, del, downloadMedia, downloadShot, downloadDoc, uploadMedia } = require('../../utils/request')
+const { get, post, downloadMedia, downloadShot, downloadDoc, uploadMedia } = require('../../utils/request')
 
 const TASK_STATUS = { pending: '待执行', executing: '执行中', completed: '已完成', closed: '已关闭' }
 const HAZARD_STATUS = { pending_confirm: '待确认', pending_rectify: '待整改', rectifying: '整改中', pending_review: '待复核', closed: '已闭环' }
@@ -64,29 +64,29 @@ Page({
 
       // 隐患映射：挂整改记录 + 状态步骤
       const hazardMap = {}
-      ;(task.hazards || []).forEach(h => {
-        h.statusLabel = HAZARD_STATUS[h.status] || h.status
-        h.steps = buildHazardSteps(h.status)
-        h.rectifyRecords = []
-        hazardMap[h.hazard_id] = h
-      })
+        ; (task.hazards || []).forEach(h => {
+          h.statusLabel = HAZARD_STATUS[h.status] || h.status
+          h.steps = buildHazardSteps(h.status)
+          h.rectifyRecords = []
+          hazardMap[h.hazard_id] = h
+        })
 
       // 分离日常巡查记录和整改反馈：整改反馈挂到对应隐患下
       const timeline = []
-      ;(task.records || []).forEach(r => {
-        if (r.type === 'rectify' && r.hazard_id && hazardMap[r.hazard_id]) {
-          hazardMap[r.hazard_id].rectifyRecords.push(r)
-        } else {
-          const hazards = (task.hazards || []).filter(h => h.record_id === r.record_id)
-          timeline.push({ kind: 'record', time: r.created_at || '', data: Object.assign({}, r, { hazards }) })
-        }
-      })
-      // 独立隐患（未关联巡查记录）
-      ;(task.hazards || []).forEach(h => {
-        if (!h.record_id) {
-          timeline.push({ kind: 'hazard', time: h.created_at || '', data: Object.assign({}, h, { hazards: [] }) })
-        }
-      })
+        ; (task.records || []).forEach(r => {
+          if (r.type === 'rectify' && r.hazard_id && hazardMap[r.hazard_id]) {
+            hazardMap[r.hazard_id].rectifyRecords.push(r)
+          } else {
+            const hazards = (task.hazards || []).filter(h => h.record_id === r.record_id)
+            timeline.push({ kind: 'record', time: r.created_at || '', data: Object.assign({}, r, { hazards }) })
+          }
+        })
+        // 独立隐患（未关联巡查记录）
+        ; (task.hazards || []).forEach(h => {
+          if (!h.record_id) {
+            timeline.push({ kind: 'hazard', time: h.created_at || '', data: Object.assign({}, h, { hazards: [] }) })
+          }
+        })
       timeline.sort((a, b) => (b.time || '').localeCompare(a.time || ''))
 
       // 整改记录按时间正序（早→晚），方便查看整改进展
@@ -110,12 +110,12 @@ Page({
 
       // 并行下载照片和截图
       const photoIds = [], shotIds = []
-      ;(task.records || []).forEach(r => {
-        (r.media || []).forEach(m => { if (m.kind === 'photo') photoIds.push(m.media_id) })
-      })
-      ;(task.hazards || []).forEach(h => {
-        (h.shots || []).forEach(s => shotIds.push(s.shot_id))
-      })
+        ; (task.records || []).forEach(r => {
+          (r.media || []).forEach(m => { if (m.kind === 'photo') photoIds.push(m.media_id) })
+        })
+        ; (task.hazards || []).forEach(h => {
+          (h.shots || []).forEach(s => shotIds.push(s.shot_id))
+        })
       const [photoEntries, shotEntries] = await Promise.all([
         Promise.all(photoIds.map(id => downloadMedia(id).then(p => [id, p]).catch(() => [id, '']))),
         Promise.all(shotIds.map(id => downloadShot(id).then(p => [id, p]).catch(() => [id, ''])))
@@ -134,22 +134,6 @@ Page({
   goAddHazard(e) {
     const recordId = e.currentTarget.dataset.record
     wx.navigateTo({ url: '/pages/hazard/hazard?taskId=' + this.taskId + '&recordId=' + recordId })
-  },
-  editHazard(e) {
-    const id = e.currentTarget.dataset.id
-    wx.navigateTo({ url: '/pages/hazard/hazard?taskId=' + this.taskId + '&hazardId=' + id })
-  },
-  deleteHazard(e) {
-    const id = e.currentTarget.dataset.id
-    wx.showModal({
-      title: '删除隐患',
-      content: '确认删除该隐患？',
-      success: async r => {
-        if (!r.confirm) return
-        try { await del('/rail/patrol/hazards/' + id); wx.showToast({ title: '已删除', icon: 'success' }); this.load() }
-        catch (err) { wx.showModal({ title: '删除失败', content: err.message, showCancel: false }) }
-      }
-    })
   },
   uploadRectifyPhotos(e) {
     const id = e.currentTarget.dataset.id
@@ -186,7 +170,7 @@ Page({
   },
   onRectifyNote(e) { this.setData({ 'rectifyUpload.note': e.detail.value }) },
   cancelRectifyUpload() { this.setData({ 'rectifyUpload.visible': false }) },
-  noop() {},
+  noop() { },
   confirmRectifyUpload() {
     const up = this.data.rectifyUpload
     if (!up.files.length) return

@@ -34,28 +34,8 @@
   </view>
 
   <!-- 监测方案 -->
-  <view class="card monitor-card" wx:if="{{ task.monitor_frequency || task.monitor_points || task.warning_threshold || task.emergency_plan || task.report_requirement || task.review_opinion || (task.docs && task.docs.length) }}">
+  <view class="card monitor-card" wx:if="{{ task.review_opinion || (task.docs && task.docs.length) }}">
     <view class="monitor-head"><text class="monitor-title">📋 监测方案</text></view>
-    <view class="monitor-field" wx:if="{{ task.monitor_frequency }}">
-      <text class="monitor-field-label">监测频率</text>
-      <text class="monitor-field-val">{{ task.monitor_frequency }}</text>
-    </view>
-    <view class="monitor-field" wx:if="{{ task.monitor_points }}">
-      <text class="monitor-field-label">监测点位</text>
-      <text class="monitor-field-val">{{ task.monitor_points }}</text>
-    </view>
-    <view class="monitor-field" wx:if="{{ task.warning_threshold }}">
-      <text class="monitor-field-label">预警阈值</text>
-      <text class="monitor-field-val">{{ task.warning_threshold }}</text>
-    </view>
-    <view class="monitor-field" wx:if="{{ task.emergency_plan }}">
-      <text class="monitor-field-label">应急预案</text>
-      <text class="monitor-field-val">{{ task.emergency_plan }}</text>
-    </view>
-    <view class="monitor-field" wx:if="{{ task.report_requirement }}">
-      <text class="monitor-field-label">数据报送要求</text>
-      <text class="monitor-field-val">{{ task.report_requirement }}</text>
-    </view>
     <view class="monitor-opinion" wx:if="{{ task.review_opinion }}">
       <text class="monitor-opinion-label">监测审查意见</text>
       <text class="monitor-opinion-text">{{ task.review_opinion }}</text>

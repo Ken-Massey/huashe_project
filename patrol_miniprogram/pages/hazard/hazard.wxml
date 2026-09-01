@@ -21,10 +21,6 @@
       <input class="input" data-field="rectifyOwner" value="{{ rectifyOwner }}" bindinput="onInput" placeholder="施工方名称（选填）" />
     </view>
     <view class="form-item">
-      <text class="field-label">整改要求</text>
-      <textarea class="textarea" data-field="rectifyRequirement" value="{{ rectifyRequirement }}" bindinput="onInput" placeholder="整改要求（选填）" maxlength="2000" />
-    </view>
-    <view class="form-item">
       <text class="field-label">隐患截图（圈注，选填）</text>
       <view class="shot-grid">
         <view wx:for="{{ shots }}" wx:key="index" class="shot-cell">
@@ -35,5 +31,5 @@
       </view>
     </view>
   </view>
-  <button class="btn-primary submit-btn" disabled="{{ submitting }}" bindtap="submit">{{ submitting ? '保存中…' : (editing ? '保存修改' : '记录隐患') }}</button>
+  <button class="btn-primary submit-btn" disabled="{{ submitting }}" bindtap="submit">{{ submitting ? '保存中…' : '记录隐患' }}</button>
 </view>

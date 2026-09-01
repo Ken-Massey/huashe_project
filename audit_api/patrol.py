@@ -201,6 +201,10 @@ class PatrolRepository:
                     created_by TEXT NOT NULL DEFAULT '',
                     created_by_name TEXT NOT NULL DEFAULT '',
                     created_by_role TEXT NOT NULL DEFAULT 'platform',
+                    confirmer TEXT NOT NULL DEFAULT '',
+                    confirm_time TEXT NOT NULL DEFAULT '',
+                    submitter TEXT NOT NULL DEFAULT '',
+                    submit_time TEXT NOT NULL DEFAULT '',
                     reviewer TEXT NOT NULL DEFAULT '',
                     review_comment TEXT NOT NULL DEFAULT '',
                     review_time TEXT NOT NULL DEFAULT '',
@@ -255,6 +259,16 @@ class PatrolRepository:
                 connection.execute("ALTER TABLE patrol_hazards ADD COLUMN media_id TEXT NOT NULL DEFAULT ''")
             if "video_time" not in hazard_columns:
                 connection.execute("ALTER TABLE patrol_hazards ADD COLUMN video_time TEXT NOT NULL DEFAULT ''")
+            # 存量库迁移：补确认人 / 确认时间列（审计追溯）
+            if "confirmer" not in hazard_columns:
+                connection.execute("ALTER TABLE patrol_hazards ADD COLUMN confirmer TEXT NOT NULL DEFAULT ''")
+            if "confirm_time" not in hazard_columns:
+                connection.execute("ALTER TABLE patrol_hazards ADD COLUMN confirm_time TEXT NOT NULL DEFAULT ''")
+            # 存量库迁移：补整改提交人 / 提交时间列（审计追溯）
+            if "submitter" not in hazard_columns:
+                connection.execute("ALTER TABLE patrol_hazards ADD COLUMN submitter TEXT NOT NULL DEFAULT ''")
+            if "submit_time" not in hazard_columns:
+                connection.execute("ALTER TABLE patrol_hazards ADD COLUMN submit_time TEXT NOT NULL DEFAULT ''")
             # 存量库迁移：为已有 patrol_tasks 补监测方案字段列
             task_columns = {
                 item["name"]
@@ -434,10 +448,12 @@ class PatrolRepository:
 
     def _next_task_no(self, connection: sqlite3.Connection) -> str:
         prefix = "RW" + _today()
-        count = int(connection.execute(
-            "SELECT COUNT(*) FROM patrol_tasks WHERE task_no LIKE ?", (prefix + "%",)
-        ).fetchone()[0])
-        return f"{prefix}{count + 1:04d}"
+        # 用当日最大序号顺延，而非 COUNT：任务被删除后编号不复用、不冲突
+        maximum = connection.execute(
+            "SELECT MAX(CAST(SUBSTR(task_no, -4) AS INTEGER)) FROM patrol_tasks WHERE task_no LIKE ?",
+            (prefix + "%",),
+        ).fetchone()[0]
+        return f"{prefix}{int(maximum or 0) + 1:04d}"
 
     @staticmethod
     def _task(row: sqlite3.Row) -> dict[str, Any]:
@@ -475,7 +491,7 @@ class PatrolRepository:
                     remark, monitor_frequency, monitor_points, warning_threshold,
                     emergency_plan, report_requirement, review_opinion,
                     legacy, deleted, created_at, updated_at
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
                 """,
                 (
                     task_id, task_no, name, line, location_desc, requirement,
@@ -489,7 +505,10 @@ class PatrolRepository:
 
     def get_task(self, task_id: str, actor: dict[str, Any]) -> dict[str, Any]:
         with self._connect() as connection:
-            row = connection.execute("SELECT * FROM patrol_tasks WHERE task_id = ?", (task_id,)).fetchone()
+            # 已软删除的任务对所有人不可见，阻断详情读取与后续全部写入路径
+            row = connection.execute(
+                "SELECT * FROM patrol_tasks WHERE task_id = ? AND deleted = 0", (task_id,)
+            ).fetchone()
             if row is None:
                 raise KeyError("巡查任务不存在。")
             records = connection.execute(
@@ -643,12 +662,13 @@ class PatrolRepository:
             raise ValueError("无权限变更任务状态。")
         if status_value not in TASK_STATUSES:
             raise ValueError("任务状态无效。")
-        if status_value == "completed":
+        if status_value in {"completed", "closed"}:
+            # 完成与关闭均要求无未闭环隐患，防止直接置 closed 绕过校验
             open_hazards = int(current and len([
                 h for h in current.get("hazards", []) if h["status"] != "closed"
             ]))
             if open_hazards:
-                raise ValueError("存在未闭环隐患，任务不能标记完成。")
+                raise ValueError("存在未闭环隐患，任务不能标记完成或关闭。")
         with self._lock, self._connect() as connection:
             connection.execute(
                 "UPDATE patrol_tasks SET status = ?, updated_at = ? WHERE task_id = ?",
@@ -722,6 +742,9 @@ class PatrolRepository:
         task = self.get_task(task_id, actor)
         if not self._visible(task, actor):
             raise KeyError("巡查任务不存在。")
+        # 状态限制：已完成/已关闭的任务不允许再追加巡查记录
+        if task["status"] not in {"pending", "executing"}:
+            raise ValueError("任务已完成或关闭，不能再添加巡查记录。")
         record_type = _text(data.get("type") or "patrol", field="记录类型", required=True, maximum=20)
         if record_type not in RECORD_TYPES:
             raise ValueError("记录类型无效。")
@@ -776,8 +799,12 @@ class PatrolRepository:
 
     def update_record_note(self, record_id: str, note: str | None, actor: dict[str, Any]) -> dict[str, Any]:
         record = self.get_record(record_id)
-        if not actor.get("is_admin") and record.get("created_by") != str(actor.get("user_id") or ""):
+        if not actor.get("is_admin") and not self._is_owner(actor, record.get("created_by") or ""):
             raise ValueError("无权限修改该记录。")
+        # 状态限制：已完成/已关闭的任务不允许再修改记录备注
+        task = self.get_task(record["task_id"], actor)
+        if task["status"] not in {"pending", "executing"}:
+            raise ValueError("任务已完成或关闭，不能再修改巡查记录。")
         note_value = _text(note if note is not None else record.get("note"), field="备注", maximum=1000)
         with self._lock, self._connect() as connection:
             connection.execute(
@@ -832,6 +859,8 @@ class PatrolRepository:
     def submit_rectify_review(self, hazard_id: str, actor: dict[str, Any]) -> dict[str, Any]:
         """巡查员提交整改复核（整改反馈上传完成后调用，隐患 → 待复核）。"""
         hazard = self.get_hazard(hazard_id)
+        # 行级隔离：仅平台管理员或该隐患所属任务可见者可提交复核
+        self.get_task(hazard["task_id"], actor)
         if hazard["status"] != "rectifying":
             raise ValueError("只有整改中的隐患可以提交复核。")
         # 必须有至少一条含整改图片的整改反馈记录（整改证据）
@@ -848,10 +877,16 @@ class PatrolRepository:
             raise ValueError("请先上传整改图片，再提交整改完成。")
         now = _now()
         with self._lock, self._connect() as connection:
-            connection.execute(
-                "UPDATE patrol_hazards SET status = 'pending_review', updated_at = ? WHERE hazard_id = ?",
-                (now, hazard_id),
+            # 条件写入防并发竞态：仅当仍处于整改中才允许转换
+            cursor = connection.execute(
+                """
+                UPDATE patrol_hazards SET status = 'pending_review', submitter = ?, submit_time = ?, updated_at = ?
+                WHERE hazard_id = ? AND status = 'rectifying'
+                """,
+                (actor.get("name") or "", now, now, hazard_id),
             )
+            if cursor.rowcount == 0:
+                raise ValueError("隐患状态已变更，请刷新后重试。")
         return self.get_hazard(hazard_id)
 
     # ---- 隐患 ----
@@ -905,8 +940,11 @@ class PatrolRepository:
     def delete_shot(self, shot_id: str, actor: dict[str, Any]) -> dict[str, Any]:
         shot = self.get_shot(shot_id)
         hazard = self.get_hazard(shot["hazard_id"])
-        if not actor.get("is_admin") and hazard.get("created_by") != str(actor.get("user_id") or ""):
+        if not actor.get("is_admin") and not self._is_owner(actor, hazard.get("created_by") or ""):
             raise ValueError("无权限删除该截图。")
+        # 状态限制：隐患进入复核或闭环后整改证据不可删除（管理员除外），保证审计链完整
+        if not actor.get("is_admin") and hazard["status"] in {"pending_review", "closed"}:
+            raise ValueError("隐患已提交复核或闭环，整改截图不可删除。")
         with self._lock, self._connect() as connection:
             connection.execute("DELETE FROM patrol_hazard_shots WHERE shot_id = ?", (shot_id,))
         Path(shot["file_path"]).unlink(missing_ok=True)
@@ -959,15 +997,28 @@ class PatrolRepository:
         Path(doc["file_path"]).unlink(missing_ok=True)
         return {"doc_id": doc_id, "deleted": True}
 
+    @staticmethod
+    def _is_owner(actor: dict[str, Any], created_by: str) -> bool:
+        """行级归属判定：空身份或空归属不得因两侧同为空串而判通过。"""
+        user_id = str(actor.get("user_id") or "")
+        return bool(user_id) and created_by == user_id
+
     def update_hazard(self, hazard_id: str, data: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
         current = self.get_hazard(hazard_id)
-        if not actor.get("is_admin") and current.get("created_by") != str(actor.get("user_id") or ""):
+        if not actor.get("is_admin") and not self._is_owner(actor, current.get("created_by") or ""):
             raise ValueError("无权限修改该隐患。")
+        # 状态限制：隐患被平台确认进入整改流程后仅管理员可修改，保证闭环数据完整
+        if not actor.get("is_admin") and current["status"] != "pending_confirm":
+            raise ValueError("隐患已被确认，仅平台管理员可以修改。")
         description = _text(data.get("description", current["description"]), field="隐患描述", required=True, maximum=2000)
         hazard_type = _text(data.get("hazard_type", current["hazard_type"]), field="隐患类型", maximum=60)
         risk_level = _text(data.get("risk_level", current["risk_level"]), field="风险等级", maximum=40)
         rectify_owner = _text(data.get("rectify_owner", current["rectify_owner"]), field="整改责任人", maximum=120)
         rectify_requirement = _text(data.get("rectify_requirement", current["rectify_requirement"]), field="整改要求", maximum=2000)
+        if not actor.get("is_admin"):
+            # 平台字段保护：巡查员不得篡改平台下发的整改要求与责任人
+            rectify_owner = current["rectify_owner"]
+            rectify_requirement = current["rectify_requirement"]
         with self._lock, self._connect() as connection:
             connection.execute(
                 """
@@ -981,14 +1032,22 @@ class PatrolRepository:
 
     def delete_hazard(self, hazard_id: str, actor: dict[str, Any]) -> dict[str, Any]:
         current = self.get_hazard(hazard_id)
-        if not actor.get("is_admin") and current.get("created_by") != str(actor.get("user_id") or ""):
+        if not actor.get("is_admin") and not self._is_owner(actor, current.get("created_by") or ""):
             raise ValueError("无权限删除该隐患。")
+        # 状态限制：隐患一旦被确认并进入整改流程后不可删除，保证闭环数据完整
+        if current["status"] != "pending_confirm":
+            raise ValueError("只有待确认状态的隐患可以删除。")
         with self._lock, self._connect() as connection:
             shots = connection.execute(
                 "SELECT file_path FROM patrol_hazard_shots WHERE hazard_id = ?", (hazard_id,)
             ).fetchall()
+            # 条件删除防并发竞态：仅当仍处于待确认状态才允许删除
+            cursor = connection.execute(
+                "DELETE FROM patrol_hazards WHERE hazard_id = ? AND status = 'pending_confirm'", (hazard_id,)
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("隐患状态已变更，请刷新后重试。")
             connection.execute("DELETE FROM patrol_hazard_shots WHERE hazard_id = ?", (hazard_id,))
-            connection.execute("DELETE FROM patrol_hazards WHERE hazard_id = ?", (hazard_id,))
         for shot in shots:
             Path(shot["file_path"]).unlink(missing_ok=True)
         return {"hazard_id": hazard_id, "deleted": True}
@@ -997,10 +1056,18 @@ class PatrolRepository:
         task = self.get_task(task_id, actor)
         if not self._visible(task, actor):
             raise KeyError("巡查任务不存在。")
+        # 状态限制：已完成/已关闭的任务不允许再新增隐患，避免破坏"完成即无未闭环隐患"不变量
+        if task["status"] not in {"pending", "executing"}:
+            raise ValueError("任务已完成或关闭，不能再新增隐患。")
         description = _text(data.get("description"), field="隐患描述", required=True, maximum=2000)
         hazard_type = _text(data.get("hazard_type"), field="隐患类型", maximum=60)
         risk_level = _text(data.get("risk_level"), field="风险等级", maximum=40)
         record_id = _text(data.get("record_id"), field="关联巡查记录", maximum=40)
+        # record_id 归属校验：防止跨任务悬挂引用
+        if record_id:
+            record = self.get_record(record_id)
+            if record["task_id"] != task_id:
+                raise ValueError("关联巡查记录不属于该任务。")
         rectify_owner = _text(data.get("rectify_owner"), field="整改责任人", maximum=120)
         is_admin = actor.get("is_admin")
         # 平台记录 → 直接待整改 + 整改要求；巡查员记录 → 待确认
@@ -1045,10 +1112,11 @@ class PatrolRepository:
         with self._lock, self._connect() as connection:
             connection.execute(
                 """
-                UPDATE patrol_hazards SET rectify_requirement = ?, status = 'pending_rectify', updated_at = ?
+                UPDATE patrol_hazards SET rectify_requirement = ?, status = 'pending_rectify',
+                    confirmer = ?, confirm_time = ?, updated_at = ?
                 WHERE hazard_id = ?
                 """,
-                (rectify_requirement, now, hazard_id),
+                (rectify_requirement, actor.get("name") or "", now, now, hazard_id),
             )
         return self.get_hazard(hazard_id)
 
@@ -1294,8 +1362,15 @@ def list_dicts(dict_type: str = "line", repo: PatrolRepository = Depends(get_rep
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+def _require_admin(actor: dict) -> None:
+    """字典等全局配置的写操作仅允许平台管理员。"""
+    if not actor.get("is_admin"):
+        raise HTTPException(status_code=403, detail="仅平台管理员可维护字典。")
+
+
 @router.post("/dicts", status_code=201)
-def create_dict(payload: PatrolDictCreatePayload, repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+def create_dict(payload: PatrolDictCreatePayload, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    _require_admin(actor)
     try:
         return repo.create_dict(_model_values(payload))
     except ValueError as exc:
@@ -1303,7 +1378,8 @@ def create_dict(payload: PatrolDictCreatePayload, repo: PatrolRepository = Depen
 
 
 @router.post("/dicts/{dict_id}")
-def update_dict(dict_id: str, payload: PatrolDictUpdatePayload, repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+def update_dict(dict_id: str, payload: PatrolDictUpdatePayload, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    _require_admin(actor)
     try:
         return repo.update_dict(dict_id, _model_values(payload))
     except KeyError as exc:
@@ -1313,7 +1389,8 @@ def update_dict(dict_id: str, payload: PatrolDictUpdatePayload, repo: PatrolRepo
 
 
 @router.delete("/dicts/{dict_id}")
-def delete_dict(dict_id: str, repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+def delete_dict(dict_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    _require_admin(actor)
     try:
         return repo.delete_dict(dict_id)
     except KeyError as exc:
@@ -1463,6 +1540,9 @@ async def add_media(
         task = repo.get_task(record["task_id"], actor)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    # 状态限制：已完成/已关闭的任务不允许再上传媒体
+    if task["status"] not in {"pending", "executing"}:
+        raise HTTPException(status_code=422, detail="任务已完成或关闭，不能再上传媒体。")
     suffix = Path(file.filename or (".jpg" if kind == "photo" else ".mp4")).suffix.lower()
     allowed = PHOTO_SUFFIXES if kind == "photo" else VIDEO_SUFFIXES
     if suffix not in allowed:
@@ -1479,6 +1559,7 @@ async def add_media(
         lines = [
             f"任务 {task['task_no']}",
             f"时间 {taken_at or _now()}",
+            f"上报 {actor.get('name') or actor.get('user_id') or ''}".rstrip(),
         ]
         if task.get("line"):
             lines.append(f"线路 {task['line']}")
@@ -1567,8 +1648,12 @@ def review_hazard(hazard_id: str, payload: PatrolHazardReviewPayload, actor: dic
 
 
 @router.get("/media/{media_id}/file")
-def media_file(media_id: str, repo: PatrolRepository = Depends(get_repository)) -> FileResponse:
+def media_file(media_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> FileResponse:
     try:
+        media = repo.get_media(media_id)
+        record = repo.get_record(media["record_id"])
+        # 行级隔离：校验媒体所属任务对当前用户可见
+        repo.get_task(record["task_id"], actor)
         path = repo.media_file_path(media_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1584,10 +1669,14 @@ def media_file(media_id: str, repo: PatrolRepository = Depends(get_repository)) 
 async def add_hazard_shot(
     hazard_id: str,
     file: UploadFile = File(...),
+    actor: dict = Depends(get_actor),
     repo: PatrolRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     try:
-        repo.get_hazard(hazard_id)
+        hazard = repo.get_hazard(hazard_id)
+        # 行级隔离：仅平台管理员或隐患创建者可为该隐患上传整改截图
+        if not actor.get("is_admin") and hazard.get("created_by") != str(actor.get("user_id") or ""):
+            raise HTTPException(status_code=403, detail="无权限上传该隐患的整改截图。")
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     suffix = Path(file.filename or ".jpg").suffix.lower()
@@ -1599,7 +1688,10 @@ async def add_hazard_shot(
     await _save_media(file, source, MAX_PHOTO_BYTES, PHOTO_SUFFIXES)
     shot_id = _id("pshot")
     destination = folder / f"{shot_id}{suffix}"
-    apply_watermark(source, destination, [f"隐患截图 {_now()}"])
+    apply_watermark(source, destination, [
+        f"隐患截图 {_now()}",
+        f"上报 {actor.get('name') or actor.get('user_id') or ''}".rstrip(),
+    ])
     source.unlink(missing_ok=True)
     try:
         return repo.add_hazard_shot(hazard_id, destination, Path(file.filename or destination.name).name)
@@ -1609,8 +1701,12 @@ async def add_hazard_shot(
 
 
 @router.get("/shots/{shot_id}/file")
-def shot_file(shot_id: str, repo: PatrolRepository = Depends(get_repository)) -> FileResponse:
+def shot_file(shot_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> FileResponse:
     try:
+        shot = repo.get_shot(shot_id)
+        hazard = repo.get_hazard(shot["hazard_id"])
+        # 行级隔离：校验截图所属隐患的任务对当前用户可见
+        repo.get_task(hazard["task_id"], actor)
         path = repo.shot_file_path(shot_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1664,8 +1760,11 @@ async def add_task_doc(
 
 
 @router.get("/docs/{doc_id}/file")
-def doc_file(doc_id: str, repo: PatrolRepository = Depends(get_repository)) -> FileResponse:
+def doc_file(doc_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> FileResponse:
     try:
+        doc = repo.get_task_doc(doc_id)
+        # 行级隔离：校验文档所属任务对当前用户可见
+        repo.get_task(doc["task_id"], actor)
         path = repo.doc_file_path(doc_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

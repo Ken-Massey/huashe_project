@@ -37,7 +37,6 @@ function request(path, options = {}) {
 
 function get(path, data) { return request(path, { method: 'GET', data }) }
 function post(path, data) { return request(path, { method: 'POST', data }) }
-function del(path) { return request(path, { method: 'DELETE' }) }
 
 // 账号密码登录小程序（独立接口，免验证码，仅允许小程序登录权限账号）
 function login(username, password) {
@@ -58,8 +57,6 @@ function login(username, password) {
     })
   })
 }
-
-function getUserInfo() { return get('/getInfo') }
 
 // 上传媒体文件到指定记录
 function uploadMedia(recordId, filePath, kind, takenAt, onProgress) {
@@ -153,4 +150,5 @@ function uploadShot(hazardId, filePath, onProgress) {
   })
 }
 
-module.exports = { request, get, post, del, login, getUserInfo, uploadMedia, downloadMedia, downloadShot, downloadDoc, uploadShot, baseURL, getToken }
+module.exports = { request, get, post, login, uploadMedia, downloadMedia, downloadShot, downloadDoc, uploadShot, baseURL, getToken }
+
