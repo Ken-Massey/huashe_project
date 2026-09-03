@@ -11,44 +11,46 @@
         <span><i class="el-icon-collection" /> 案例知识库</span>
         <el-button type="text" icon="el-icon-plus" title="新建文件夹" @click="createFolder" />
       </div>
-      <button
-        :class="['nav-row',{active:filter==='all','drop-target':dragOverFolder==='all'}]"
-        @click="chooseFilter('all')"
-        @dragover.prevent="dragOverFolder='all'"
-        @dragleave="dragOverFolder=''"
-        @drop.prevent.stop="dropToFolder('all',$event)"
-      >
-        <i class="el-icon-collection-tag" /><span>全部案例文件</span><em>{{ cases.length + assets.length }}</em>
-      </button>
-      <div
-        v-for="entry in folderTreeRows"
-        :key="entry.folder.folder_id"
-        :class="['nav-row custom',{active:filter===entry.folder.folder_id,'drop-target':dragOverFolder===entry.folder.folder_id}]"
-        :style="{ paddingLeft: (12 + entry.depth * 18) + 'px' }"
-        @click="chooseFilter(entry.folder.folder_id)"
-        @dragover.prevent="dragOverFolder=entry.folder.folder_id"
-        @dragleave="dragOverFolder=''"
-        @drop.prevent.stop="dropToFolder(entry.folder.folder_id,$event)"
-      >
+      <div class="nav-scroll">
         <button
-          v-if="entry.hasChildren"
-          class="folder-toggle"
-          :title="isFolderExpanded(entry.folder.folder_id) ? '收起子文件夹' : '展开子文件夹'"
-          @click.stop="toggleFolder(entry.folder.folder_id)"
+          :class="['nav-row',{active:filter==='all','drop-target':dragOverFolder==='all'}]"
+          @click="chooseFilter('all')"
+          @dragover.prevent="dragOverFolder='all'"
+          @dragleave="dragOverFolder=''"
+          @drop.prevent.stop="dropToFolder('all',$event)"
         >
-          <i :class="isFolderExpanded(entry.folder.folder_id) ? 'el-icon-arrow-down' : 'el-icon-arrow-right'" />
+          <i class="el-icon-collection-tag" /><span>全部案例文件</span><em>{{ cases.length + assets.length }}</em>
         </button>
-        <span v-else class="folder-toggle-placeholder" />
-        <i class="el-icon-folder-opened" />
-        <span :title="entry.folder.name">{{ entry.folder.name }}</span>
-        <em>{{ entry.folder.total_count || entry.folder.case_count || 0 }}</em>
-        <el-dropdown trigger="click" @command="command => manageFolder(command, entry.folder)">
-          <button class="folder-more" title="管理文件夹" @click.stop><i class="el-icon-more" /></button>
-          <el-dropdown-menu slot="dropdown">
-            <el-dropdown-item command="rename" icon="el-icon-edit">重命名</el-dropdown-item>
-            <el-dropdown-item command="delete" icon="el-icon-delete" divided>删除文件夹</el-dropdown-item>
-          </el-dropdown-menu>
-        </el-dropdown>
+        <div
+          v-for="entry in folderTreeRows"
+          :key="entry.folder.folder_id"
+          :class="['nav-row custom',{active:filter===entry.folder.folder_id,'drop-target':dragOverFolder===entry.folder.folder_id}]"
+          :style="{ paddingLeft: (12 + entry.depth * 18) + 'px' }"
+          @click="chooseFilter(entry.folder.folder_id)"
+          @dragover.prevent="dragOverFolder=entry.folder.folder_id"
+          @dragleave="dragOverFolder=''"
+          @drop.prevent.stop="dropToFolder(entry.folder.folder_id,$event)"
+        >
+          <button
+            v-if="entry.hasChildren"
+            class="folder-toggle"
+            :title="isFolderExpanded(entry.folder.folder_id) ? '收起子文件夹' : '展开子文件夹'"
+            @click.stop="toggleFolder(entry.folder.folder_id)"
+          >
+            <i :class="isFolderExpanded(entry.folder.folder_id) ? 'el-icon-arrow-down' : 'el-icon-arrow-right'" />
+          </button>
+          <span v-else class="folder-toggle-placeholder" />
+          <i class="el-icon-folder-opened" />
+          <span :title="entry.folder.name">{{ entry.folder.name }}</span>
+          <em>{{ entry.folder.total_count || entry.folder.case_count || 0 }}</em>
+          <el-dropdown trigger="click" @command="command => manageFolder(command, entry.folder)">
+            <button class="folder-more" title="管理文件夹" @click.stop><i class="el-icon-more" /></button>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="rename" icon="el-icon-edit">重命名</el-dropdown-item>
+              <el-dropdown-item command="delete" icon="el-icon-delete" divided>删除文件夹</el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+        </div>
       </div>
       <div class="nav-note">新案例按项目类型自动归类，也可手动移动。删除文件夹不会删除案例原文。</div>
     </aside>
@@ -587,10 +589,11 @@ export default {
 .knowledge-shell { height: 100vh; overflow: hidden; background: #fff; }.knowledge-switch { display: flex; height: 64px; align-items: center; gap: 8px; border-bottom: 1px solid #e1e5e8; padding: 0 24px; }.knowledge-switch button { display: flex; height: 36px; align-items: center; gap: 7px; border: 1px solid #dfe4e2; border-radius: 4px; padding: 0 16px; background: #fff; color: #54605d; cursor: pointer; }.knowledge-switch button.active { border-color: #31806c; background: #e6f1ed; color: #276b59; }
 .knowledge-page { display: grid; grid-template-columns: 292px minmax(360px,420px) minmax(560px,1fr); height: calc(100vh - 64px); overflow: hidden; background: #fff; }
 .library-nav,.case-list-pane { border-right: 1px solid #e1e5e8; }
-.library-nav { position: relative; min-width: 0; overflow: auto; padding: 20px 14px 84px; background: #f8faf9; }
+.library-nav { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; padding: 20px 14px 18px; background: #f8faf9; }
 .library-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 0 10px; color: #263f39; font-size: 20px; font-weight: 600; }
 .library-title>span { display: flex; align-items: center; }
 .library-title i { margin-right: 8px; color: #2f7d69; }
+.nav-scroll { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 12px; }
 .nav-row { position: relative; display: grid; width: 100%; min-height: 48px; grid-template-columns: 22px minmax(0,1fr) auto; gap: 8px; align-items: center; border: 0; border-radius: 5px; padding: 0 12px; background: transparent; color: #56636a; text-align: left; cursor: pointer; }
 .nav-row:hover,.nav-row.active { background: #e6f2ee; color: #27725f; }
 .nav-row.drop-target,.case-row.folder-entry.drop-target { outline: 2px solid #3b927a; outline-offset: -2px; background: #dcefe8; color: #236a57; }
@@ -603,7 +606,7 @@ export default {
 .folder-toggle-placeholder { display: block; }
 .folder-more { width: 26px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: #748078; cursor: pointer; opacity: 0; }
 .nav-row:hover .folder-more,.nav-row.active .folder-more { opacity: 1; }
-.nav-note { position: absolute; right: 20px; bottom: 20px; left: 20px; margin: 0; color: #97a09f; font-size: 12px; line-height: 1.6; }
+.nav-note { flex: none; margin: 12px 6px 0; border-top: 1px solid #e6ebea; padding: 12px 4px 0; color: #97a09f; font-size: 12px; line-height: 1.6; }
 .case-list-pane { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }.list-toolbar { display: grid; flex: none; grid-template-columns: minmax(0,1fr) 40px auto; gap: 10px; padding: 20px 18px 14px; }.create-folder-button { width: 40px; padding-right: 0; padding-left: 0; }.list-caption { display: flex; min-height: 43px; flex: none; align-items: center; justify-content: space-between; padding: 6px 20px; border-bottom: 1px solid #e8ebed; color: #68727b; font-size: 13px; }.folder-path { display: flex; min-width: 0; align-items: center; gap: 10px; }.back-button { display: inline-flex; height: 30px; align-items: center; gap: 5px; border: 0; border-radius: 4px; padding: 0 8px; background: #edf4f1; color: #317764; cursor: pointer; }.back-button:hover { background: #dcece6; }.case-list { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }.case-row { display: grid; width: 100%; min-height: 92px; grid-template-columns: 42px minmax(0,1fr) auto; gap: 10px; align-items: center; border: 0; border-bottom: 1px solid #edf0f2; padding: 13px 16px; background: #fff; text-align: left; cursor: pointer; }.case-row:hover,.case-row.selected { background: #f0f6f4; }.case-row[draggable="true"] { user-select: none; }.case-row[draggable="true"]:active { cursor: grabbing; }.folder-entry,.asset-entry { cursor: pointer; }.file-icon { display: flex; width: 36px; height: 42px; align-items: center; justify-content: center; background: #dff0ea; color: #2f7d69; font-size: 19px; }.folder-icon { background: #eef3f1; color: #60756f; }.asset-icon { background: #edf4f2; color: #437b6d; }.row-more { width: 30px; height: 32px; border: 0; border-radius: 4px; background: transparent; color: #7a858d; cursor: pointer; }.row-more:hover { background: #e4ece9; color: #2f7d69; }.case-copy { display: flex; min-width: 0; flex-direction: column; gap: 5px; }.case-copy strong,.case-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.case-copy small { color: #89929a; font-size: 12px; }.empty-list,.empty-detail { padding-top: 130px; text-align: center; color: #929aa3; }.empty-list i,.empty-detail i { font-size: 40px; }
 .case-detail-pane { min-width: 0; min-height: 0; overflow: hidden; }.detail-head { display: flex; min-height: 104px; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e6e9; padding: 18px 28px; }.detail-head>div:first-child { display: flex; min-width: 0; align-items: center; gap: 15px; }.detail-icon { display: flex; width: 52px; height: 60px; flex: none; align-items: center; justify-content: center; background: #dcefe8; color: #2f7d69; font-size: 26px; }.detail-head h2 { overflow: hidden; margin: 0 0 7px; font-size: 20px; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0; }.detail-head p { overflow: hidden; margin: 0; color: #858e96; text-overflow: ellipsis; white-space: nowrap; }.commands { display: flex; gap: 8px; }.detail-tabs { height: calc(100% - 104px); padding: 0 28px; }.detail-tabs ::v-deep .el-tabs__content { height: calc(100% - 55px); overflow: auto; }.feature-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 28px; }.feature-grid>div { display: grid; grid-template-columns: minmax(130px, 42%) 1fr; gap: 12px; border-bottom: 1px solid #edf0f2; padding: 13px 0; }.feature-grid span { overflow-wrap: anywhere; color: #78818a; }.feature-grid strong { overflow-wrap: anywhere; font-weight: 500; white-space: pre-wrap; }.advice-row { display: grid; grid-template-columns: 28px 1fr; gap: 10px; border-bottom: 1px solid #edf0f2; padding: 15px 0; }.advice-row>span { display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; background: #e5f1ed; color: #2f7d69; }.advice-row p { margin: 0; line-height: 1.75; }.case-document-viewer { height: 100%; min-height: 520px; overflow: hidden; background: #f5f6f7; }.case-document-viewer iframe { width: 100%; height: 100%; min-height: 620px; border: 0; background: #fff; }.asset-preview { display: flex; height: calc(100% - 104px); min-height: 0; align-items: center; justify-content: center; overflow: auto; background: #eef1f3; }.asset-preview iframe { width: 100%; height: 100%; border: 0; background: #fff; }.asset-preview img { display: block; max-width: 96%; max-height: 96%; object-fit: contain; }.asset-preview .preview-message { width: 100%; }.document-content { min-height: 100%; margin: 0; padding: 18px; background: #f7f8f9; color: #3f4850; font-family: inherit; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }.preview-message { display: flex; min-height: 420px; flex-direction: column; align-items: center; justify-content: center; color: #8b949c; }.preview-message i { margin-bottom: 12px; font-size: 40px; }.upload-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; margin-top: 16px; }.upload-fields .el-form-item:last-child { grid-column: 1 / -1; }.upload-fields ::v-deep .el-select { width: 100%; }
 .list-caption { gap: 12px; }

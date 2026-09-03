@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.web.service.PythonAuditClient;
 
 /** RuoYi-facing proxy for the intelligent rail protection workflows. */
@@ -558,10 +559,56 @@ public class RailAuditController
     }
 
     @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
+    @GetMapping("/agent/sessions")
+    public Object agentSessions(@RequestParam(name = "limit", defaultValue = "50") Integer limit)
+    {
+        return python.get("/api/v1/agent/sessions", Map.of("limit", limit), actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
+    @PostMapping(value = "/agent/sessions", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Object createAgentSession(@RequestBody Map<String, Object> request)
+    {
+        return python.post("/api/v1/agent/sessions", request, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
+    @GetMapping("/agent/sessions/{sessionId}")
+    public Object agentSession(@PathVariable("sessionId") String sessionId)
+    {
+        return python.get("/api/v1/agent/sessions/" + sessionId, null, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
+    @PostMapping(value = "/agent/sessions/{sessionId}/rename", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Object renameAgentSession(@PathVariable("sessionId") String sessionId,
+            @RequestBody Map<String, Object> request)
+    {
+        return python.post("/api/v1/agent/sessions/" + sessionId + "/rename", request, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
+    @DeleteMapping("/agent/sessions/{sessionId}")
+    public Object deleteAgentSession(@PathVariable("sessionId") String sessionId)
+    {
+        return python.delete("/api/v1/agent/sessions/" + sessionId, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
     @PostMapping(value = "/agent/ask", consumes = MediaType.APPLICATION_JSON_VALUE)
     public Object askAgent(@RequestBody Map<String, Object> request)
     {
-        return python.post("/api/v1/agent/ask", request);
+        return python.post("/api/v1/agent/ask", request, actorHeaders());
+    }
+
+    private Map<String, String> actorHeaders()
+    {
+        Long userId = SecurityUtils.getUserId();
+        String username = SecurityUtils.getUsername();
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("X-Actor-User-Id", userId == null ? "" : String.valueOf(userId));
+        headers.put("X-Actor-Name", username == null ? "" : username);
+        return headers;
     }
 
     private Map<String, String> optional(String name, String value)

@@ -19,7 +19,7 @@ join sys_role_menu rm on rm.role_id = r.role_id
 join sys_menu m on m.menu_id = rm.menu_id
 where u.user_name = @user_name
   and (
-    m.menu_id in (2000, 2001, 2004, 2005, 2006, 2007, 2013, 2018, 2019, 2020, 2021, 2022, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036, 2037)
+    m.menu_id in (2000, 2001, 2004, 2005, 2006, 2013, 2018, 2019, 2020, 2021, 2022, 2024, 2025)
     or m.perms like 'rail:%'
   )
 order by r.role_sort, m.parent_id, m.order_num, m.menu_id;
@@ -28,6 +28,3 @@ order by r.role_sort, m.parent_id, m.order_num, m.menu_id;
 -- menu_id = 2001 且 perms = rail:audit:run
 -- 如果现场符合性巡查仍提示“当前操作没有权限”，重点看结果中是否存在：
 -- menu_id = 2006 且 perms = rail:patrol:list
--- 如果会议协调管理看不到或无权限，重点看结果中是否存在：
--- menu_id = 2007 且 perms = rail:meeting:list
--- menu_id = 2026 且 perms = rail:meeting:query

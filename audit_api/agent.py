@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import threading
 import time
@@ -110,7 +111,9 @@ class AgentService:
         )
         if use_knowledge:
             context = "\n\n".join(
-                f"[{index}] 案例《{item['case_name']}》\n{item['excerpt']}"
+                f"[{index}] 案例《{item['case_name']}》"
+                f"{'，文件名：' + item.get('original_file_name') if item.get('original_file_name') else ''}\n"
+                f"{item['excerpt']}"
                 for index, item in enumerate(sources, start=1)
             )
             system += (
@@ -235,6 +238,25 @@ class AgentService:
         if not isinstance(value, (dict, list)):
             raise RuntimeError("AI规则结果必须是JSON对象或数组。")
         return value
+
+    def summarize_conversation_title(self, question: str, answer: str, mode: str = "general") -> str:
+        """Create a concise subject title after the first question has an answer."""
+        fallback = "知识库工程咨询" if mode == "knowledge" else "工程技术咨询"
+        try:
+            value = self.complete_json(
+                "你负责为轨道工程智能助手的对话生成历史标题。"
+                "只输出JSON对象，格式为{\"title\":\"...\"}。"
+                "标题必须概括本轮咨询主题，使用6至18个汉字；不得照抄提问句，不要使用问号、引号、书名号或‘用户’‘助手’等词。",
+                f"提问：{question[:800]}\n\n回答摘要：{answer[:1200]}",
+                max_tokens=80,
+            )
+            title = str(value.get("title") or "") if isinstance(value, dict) else ""
+            title = re.sub(r"[\r\n\t\"'“”‘’《》?？!！:：]+", "", title).strip()
+            if 3 <= len(title) <= 24:
+                return title
+        except Exception:
+            pass
+        return fallback
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Create semantic vectors for RAG chunks using the configured provider."""

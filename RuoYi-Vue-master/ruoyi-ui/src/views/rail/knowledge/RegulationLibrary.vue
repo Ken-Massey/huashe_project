@@ -5,44 +5,46 @@
         <span><i class="el-icon-notebook-2" /> 技术规程库</span>
         <el-button type="text" icon="el-icon-plus" title="新建文件夹" @click="createFolder" />
       </div>
-      <button
-        :class="['folder-row', { active: selectedFolder === 'all', 'drop-target': dragOverFolder === 'all' }]"
-        @click="selectFolder('all')"
-        @dragover.prevent="dragOverFolder='all'"
-        @dragleave="dragOverFolder=''"
-        @drop.prevent.stop="dropToFolder('all', $event)"
-      >
-        <i class="el-icon-collection-tag" /><span>全部规程</span><em>{{ allRegulations.length }}</em>
-      </button>
-      <div
-        v-for="entry in folderTreeRows"
-        :key="entry.folder.folder_id"
-        :class="['folder-row custom', { active: selectedFolder === entry.folder.folder_id, 'drop-target': dragOverFolder === entry.folder.folder_id }]"
-        :style="{ paddingLeft: (12 + entry.depth * 18) + 'px' }"
-        @click="selectFolder(entry.folder.folder_id)"
-        @dragover.prevent="dragOverFolder=entry.folder.folder_id"
-        @dragleave="dragOverFolder=''"
-        @drop.prevent.stop="dropToFolder(entry.folder.folder_id, $event)"
-      >
+      <div class="folder-scroll">
         <button
-          v-if="entry.hasChildren"
-          class="folder-toggle"
-          :title="isFolderExpanded(entry.folder.folder_id) ? '收起子文件夹' : '展开子文件夹'"
-          @click.stop="toggleFolder(entry.folder.folder_id)"
+          :class="['folder-row', { active: selectedFolder === 'all', 'drop-target': dragOverFolder === 'all' }]"
+          @click="selectFolder('all')"
+          @dragover.prevent="dragOverFolder='all'"
+          @dragleave="dragOverFolder=''"
+          @drop.prevent.stop="dropToFolder('all', $event)"
         >
-          <i :class="isFolderExpanded(entry.folder.folder_id) ? 'el-icon-arrow-down' : 'el-icon-arrow-right'" />
+          <i class="el-icon-collection-tag" /><span>全部规程</span><em>{{ allRegulations.length }}</em>
         </button>
-        <span v-else class="folder-toggle-placeholder" />
-        <i class="el-icon-folder-opened" />
-        <span :title="entry.folder.name">{{ entry.folder.name }}</span>
-        <em>{{ entry.folder.total_count || entry.folder.regulation_count || 0 }}</em>
-        <el-dropdown trigger="click" @command="command => manageFolder(command, entry.folder)">
-          <button class="folder-more" title="管理文件夹" @click.stop><i class="el-icon-more" /></button>
-          <el-dropdown-menu slot="dropdown">
-            <el-dropdown-item command="rename" icon="el-icon-edit">重命名</el-dropdown-item>
-            <el-dropdown-item command="delete" icon="el-icon-delete" divided>删除文件夹</el-dropdown-item>
-          </el-dropdown-menu>
-        </el-dropdown>
+        <div
+          v-for="entry in folderTreeRows"
+          :key="entry.folder.folder_id"
+          :class="['folder-row custom', { active: selectedFolder === entry.folder.folder_id, 'drop-target': dragOverFolder === entry.folder.folder_id }]"
+          :style="{ paddingLeft: (12 + entry.depth * 18) + 'px' }"
+          @click="selectFolder(entry.folder.folder_id)"
+          @dragover.prevent="dragOverFolder=entry.folder.folder_id"
+          @dragleave="dragOverFolder=''"
+          @drop.prevent.stop="dropToFolder(entry.folder.folder_id, $event)"
+        >
+          <button
+            v-if="entry.hasChildren"
+            class="folder-toggle"
+            :title="isFolderExpanded(entry.folder.folder_id) ? '收起子文件夹' : '展开子文件夹'"
+            @click.stop="toggleFolder(entry.folder.folder_id)"
+          >
+            <i :class="isFolderExpanded(entry.folder.folder_id) ? 'el-icon-arrow-down' : 'el-icon-arrow-right'" />
+          </button>
+          <span v-else class="folder-toggle-placeholder" />
+          <i class="el-icon-folder-opened" />
+          <span :title="entry.folder.name">{{ entry.folder.name }}</span>
+          <em>{{ entry.folder.total_count || entry.folder.regulation_count || 0 }}</em>
+          <el-dropdown trigger="click" @command="command => manageFolder(command, entry.folder)">
+            <button class="folder-more" title="管理文件夹" @click.stop><i class="el-icon-more" /></button>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="rename" icon="el-icon-edit">重命名</el-dropdown-item>
+              <el-dropdown-item command="delete" icon="el-icon-delete" divided>删除文件夹</el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+        </div>
       </div>
       <p class="folder-tip">新规程将自动归类，也可手动移动。删除分类不会删除规程原文。</p>
     </aside>
@@ -281,7 +283,7 @@ export default {
           .filter(folder => folders.some(child => child.parent_id === folder.folder_id))
           .map(folder => folder.folder_id)
         if (!this.folderTreeInitialized) {
-          this.expandedFolderIds = parentIds
+          this.expandedFolderIds = []
           this.folderTreeInitialized = true
         } else {
           this.expandedFolderIds = this.expandedFolderIds.filter(folderId => parentIds.includes(folderId))
@@ -515,9 +517,10 @@ export default {
 
 <style scoped>
 .regulation-page { display: grid; height: calc(100vh - 64px); min-height: 0; grid-template-columns: 292px minmax(360px,420px) minmax(560px,1fr); overflow: hidden; background: #fff; }
-.folder-pane { position: relative; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; border-right: 1px solid #e1e5e8; padding: 20px 14px 84px; background: #f8faf9; }
+.folder-pane { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border-right: 1px solid #e1e5e8; padding: 20px 14px 18px; background: #f8faf9; }
 .folder-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 0 10px; color: #263f39; font-size: 20px; font-weight: 600; }
 .folder-title i { margin-right: 8px; color: #2f7d69; }
+.folder-scroll { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 12px; }
 .folder-row { position: relative; display: grid; width: 100%; min-height: 48px; grid-template-columns: 22px minmax(0,1fr) auto; gap: 8px; align-items: center; border: 0; border-radius: 5px; padding: 0 12px; background: transparent; color: #56636a; text-align: left; cursor: pointer; }
 .folder-row:hover,.folder-row.active { background: #e6f2ee; color: #27725f; }
 .folder-row.drop-target,.reg-row.folder-entry.drop-target { outline: 2px solid #3b927a; outline-offset: -2px; background: #dcefe8; color: #236a57; }
@@ -530,7 +533,7 @@ export default {
 .folder-toggle-placeholder { display: block; }
 .folder-more { width: 26px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: #748078; cursor: pointer; opacity: 0; }
 .folder-row:hover .folder-more,.folder-row.active .folder-more { opacity: 1; }
-.folder-tip { position: absolute; right: 20px; bottom: 20px; left: 20px; margin: 0; color: #97a09f; font-size: 12px; line-height: 1.6; }
+.folder-tip { flex: none; margin: 12px 6px 0; border-top: 1px solid #e6ebea; padding: 12px 4px 0; color: #97a09f; font-size: 12px; line-height: 1.6; }
 .reg-list-pane { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border-right: 1px solid #e1e5e8; }
 .toolbar { display: grid; flex: none; grid-template-columns: minmax(0,1fr) 40px auto; gap: 10px; padding: 20px 18px 14px; }
 .create-folder-button { width: 40px; padding-right: 0; padding-left: 0; }

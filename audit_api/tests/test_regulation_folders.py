@@ -1,6 +1,9 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import pytest
+
+from audit_api.knowledge_base import KnowledgeBase
 from audit_api.regulation_rules import RegulationRepository
 
 
@@ -39,6 +42,44 @@ def test_regulation_folder_lifecycle_preserves_documents():
         uncategorized = repository.list_documents(folder_id="__uncategorized__")
         assert uncategorized[0]["regulation_id"] == document_id
         assert repository.get_document(document_id)["folder_id"] is None
+
+
+def test_regulation_folder_names_are_unique_only_within_same_parent():
+    with TemporaryDirectory() as temp:
+        root = Path(temp)
+        repository = RegulationRepository(root / "regulations.sqlite3", root / "files")
+        national = repository.create_folder("国家标准")
+        local = repository.create_folder("地方标准")
+
+        national_child = repository.create_folder("结构保护", national["folder_id"])
+        local_child = repository.create_folder("结构保护", local["folder_id"])
+
+        assert national_child["name"] == local_child["name"]
+        assert national_child["parent_id"] != local_child["parent_id"]
+        with pytest.raises(ValueError, match="同名"):
+            repository.create_folder("结构保护", national["folder_id"])
+        other_child = repository.create_folder("其他", local["folder_id"])
+        with pytest.raises(ValueError, match="同名"):
+            repository.rename_folder(other_child["folder_id"], "结构保护")
+
+
+def test_case_folder_names_are_unique_only_within_same_parent():
+    with TemporaryDirectory() as temp:
+        root = Path(temp)
+        repository = KnowledgeBase(root / "cases.sqlite3", root / "files")
+        reviewed = repository.create_folder("已审核")
+        pending = repository.create_folder("待审核")
+
+        reviewed_child = repository.create_folder("结构保护", reviewed["folder_id"])
+        pending_child = repository.create_folder("结构保护", pending["folder_id"])
+
+        assert reviewed_child["name"] == pending_child["name"]
+        assert reviewed_child["parent_id"] != pending_child["parent_id"]
+        with pytest.raises(ValueError, match="同名"):
+            repository.create_folder("结构保护", reviewed["folder_id"])
+        other_child = repository.create_folder("其他", pending["folder_id"])
+        with pytest.raises(ValueError, match="同名"):
+            repository.rename_folder(other_child["folder_id"], "结构保护")
 
 
 def test_default_folders_and_automatic_classification():

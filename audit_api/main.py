@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .agent import AgentService
+from .agent_conversation import AgentConversationRepository
 from .audit_session import AuditSessionRepository
 from .config import MAX_UPLOAD_BYTES, MAX_WORKERS, RESULT_ROOT, SERVICE_TOKEN, TASK_ROOT, UPLOAD_ROOT
 from .ima_rag import purge_rag_document
@@ -45,6 +46,7 @@ app.include_router(patrol_router)
 tasks = TaskManager(TASK_ROOT, max_workers=MAX_WORKERS)
 knowledge = KnowledgeBase()
 agent = AgentService()
+agent_conversations = AgentConversationRepository()
 regulations = RegulationRepository()
 library_assets = LibraryAssetRepository()
 project_archives = ProjectArchiveRepository()
@@ -74,6 +76,16 @@ class AgentQuestion(BaseModel):
     top_k: int = Field(default=5, ge=1, le=10)
     mode: Literal["general", "knowledge"] = "general"
     history: list[AgentMessage] = Field(default_factory=list)
+    session_id: str | None = Field(default=None, max_length=80)
+
+
+class AgentSessionCreatePayload(BaseModel):
+    title: str = Field(default="", max_length=120)
+    mode: Literal["general", "knowledge"] = "general"
+
+
+class AgentSessionRenamePayload(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
 
 
 class AgentConfigRequest(BaseModel):
@@ -279,6 +291,11 @@ def _model_values(payload: BaseModel) -> dict[str, Any]:
     if hasattr(payload, "model_dump"):
         return payload.model_dump(exclude_unset=True)
     return payload.dict(exclude_unset=True)
+
+
+def _agent_owner_id(user_id: str | None, username: str | None) -> str:
+    value = (user_id or "").strip() or (username or "").strip()
+    return value or "anonymous"
 
 
 def _resolve_archive_context(binding: Any) -> dict[str, Any] | None:
@@ -3520,18 +3537,111 @@ def save_agent_config(request: AgentConfigRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.get("/api/v1/agent/sessions", dependencies=[Depends(verify_service_token)], tags=["agent"])
+def list_agent_sessions(
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    x_actor_user_id: Annotated[str | None, Header()] = None,
+    x_actor_name: Annotated[str | None, Header()] = None,
+) -> list[dict[str, Any]]:
+    return agent_conversations.list(_agent_owner_id(x_actor_user_id, x_actor_name), limit)
+
+
+@app.post("/api/v1/agent/sessions", dependencies=[Depends(verify_service_token)], tags=["agent"])
+def create_agent_session(
+    request: AgentSessionCreatePayload,
+    x_actor_user_id: Annotated[str | None, Header()] = None,
+    x_actor_name: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    return agent_conversations.create(
+        _agent_owner_id(x_actor_user_id, x_actor_name),
+        title=request.title,
+        mode=request.mode,
+    )
+
+
+@app.get("/api/v1/agent/sessions/{session_id}", dependencies=[Depends(verify_service_token)], tags=["agent"])
+def get_agent_session(
+    session_id: str,
+    x_actor_user_id: Annotated[str | None, Header()] = None,
+    x_actor_name: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    try:
+        return agent_conversations.get(_agent_owner_id(x_actor_user_id, x_actor_name), session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="会话不存在。") from exc
+
+
+@app.post("/api/v1/agent/sessions/{session_id}/rename", dependencies=[Depends(verify_service_token)], tags=["agent"])
+def rename_agent_session(
+    session_id: str,
+    request: AgentSessionRenamePayload,
+    x_actor_user_id: Annotated[str | None, Header()] = None,
+    x_actor_name: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    try:
+        return agent_conversations.rename(_agent_owner_id(x_actor_user_id, x_actor_name), session_id, request.title)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="会话不存在。") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/agent/sessions/{session_id}", dependencies=[Depends(verify_service_token)], tags=["agent"])
+def delete_agent_session(
+    session_id: str,
+    x_actor_user_id: Annotated[str | None, Header()] = None,
+    x_actor_name: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    try:
+        return agent_conversations.archive(_agent_owner_id(x_actor_user_id, x_actor_name), session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="会话不存在。") from exc
+
+
 @app.post("/api/v1/agent/ask", dependencies=[Depends(verify_service_token)], tags=["agent"])
-def ask_knowledge_agent(request: AgentQuestion) -> dict[str, Any]:
+def ask_knowledge_agent(
+    request: AgentQuestion,
+    x_actor_user_id: Annotated[str | None, Header()] = None,
+    x_actor_name: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    owner_id = _agent_owner_id(x_actor_user_id, x_actor_name)
+    if request.session_id:
+        try:
+            session = agent_conversations.get(owner_id, request.session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="会话不存在。") from exc
+    else:
+        session = agent_conversations.create(owner_id, mode=request.mode)
+    stored_history = [
+        {"role": item["role"], "content": item["content"]}
+        for item in session.get("messages", [])[-20:]
+        if item.get("role") in {"user", "assistant"} and item.get("content")
+    ]
     use_knowledge = request.mode == "knowledge"
     sources = knowledge.search(request.question, request.top_k) if use_knowledge else []
-    history = [
+    history = stored_history or [
         item.model_dump() if hasattr(item, "model_dump") else item.dict()
         for item in request.history[-20:]
     ]
+    agent_conversations.add_message(owner_id, session["session_id"], "user", request.question, mode=request.mode)
     try:
         result = agent.chat(request.question, history, sources, use_knowledge)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    conversation_title = None
+    if session.get("title") == "新对话":
+        conversation_title = agent.summarize_conversation_title(request.question, result["answer"], request.mode)
+    updated_session = agent_conversations.add_message(
+        owner_id,
+        session["session_id"],
+        "assistant",
+        result["answer"],
+        model=result["model"],
+        sources=sources,
+        usage=result["usage"],
+        mode=request.mode,
+        title=conversation_title,
+    )
     return {
         "question": request.question,
         "answer": result["answer"],
@@ -3541,6 +3651,10 @@ def ask_knowledge_agent(request: AgentQuestion) -> dict[str, Any]:
         "usage": result["usage"],
         "sources": sources,
         "knowledge_stats": knowledge.stats(),
+        "session": {key: updated_session.get(key) for key in (
+            "session_id", "title", "mode", "message_count", "created_at", "updated_at", "last_message_at"
+        )},
+        "messages": updated_session.get("messages", []),
     }
 
 

@@ -95,19 +95,6 @@ export const constantRoutes = [
     ]
   },
   {
-    path: '/rail/meeting',
-    component: Layout,
-    hidden: true,
-    children: [
-      {
-        path: '',
-        component: () => import('@/views/rail/meeting/index'),
-        name: 'RailMeetingStatic',
-        meta: { title: '会议协调管理', noCache: true }
-      }
-    ]
-  },
-  {
     path: '/user',
     component: Layout,
     hidden: true,

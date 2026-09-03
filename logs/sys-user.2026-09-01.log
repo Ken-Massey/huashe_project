@@ -1,0 +1,10 @@
+09:03:02.666 [schedule-pool-2] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+14:08:18.771 [schedule-pool-4] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+14:10:03.533 [Thread-1] INFO  sys-user - [shutdownAsyncManager,31] - ====关闭后台任务任务线程池====
+14:23:26.618 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[user1][Error][该账号无小程序登录权限]
+14:23:36.740 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Error][用户不存在/密码错误]
+14:24:05.503 [schedule-pool-2] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Logout][退出成功]
+14:24:09.201 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+14:24:14.511 [schedule-pool-3] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Error][该账号无小程序登录权限]
+16:57:23.896 [schedule-pool-5] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+17:01:27.958 [schedule-pool-7] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[user1][Success][登录成功]

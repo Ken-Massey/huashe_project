@@ -1,12 +1,13 @@
 {
   "format_version": "case_advice_database_v1",
-  "source_root": "D:\\develop\\huashe\\huashe_project\\audit_api\\runtime\\knowledge\\files",
+  "source_root": "D:\\GitHub\\huashe_project\\audit_api\\runtime\\knowledge\\files",
   "case_count": 62,
   "records": [
     {
       "case_id": "kb_59c1680339214bdf81a08f448c31d645",
       "case_name": "[BHQ]关于356省道（浦口西江路至苏皖省界段）建设工程设计方案征求地铁意见的复函",
       "category": "基坑类",
+      "original_file_name": "[BHQ]关于356省道（浦口西江路至苏皖省界段）建设工程设计方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_59c1680339214bdf81a08f448c31d645",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_59c1680339214bdf81a08f448c31d645\\[BHQ]关于356省道（浦口西江路至苏皖省界段）建设工程设计方案征求地铁意见的复函.doc",
       "features": {
@@ -62,6 +63,7 @@
       "case_id": "kb_dbe0543a6dff4eda8115f6dcd1ee8c5a",
       "case_name": "321  2021-237-2  356省道（浦口西江路至苏皖省界段）建设工程设计方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "321  2021-237-2  356省道（浦口西江路至苏皖省界段）建设工程设计方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_dbe0543a6dff4eda8115f6dcd1ee8c5a",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_dbe0543a6dff4eda8115f6dcd1ee8c5a\\321  2021-237-2  356省道（浦口西江路至苏皖省界段）建设工程设计方案审查表.docx",
       "features": {
@@ -110,6 +112,7 @@
       "case_id": "kb_345f1f601d3e44b098d1038edc1c8a10",
       "case_name": "[BHQ]关于356省道（浦口西江路至苏皖省界段）建设工程（9标涉S3右线段）施工方案征求地铁意见的复函",
       "category": "基坑类",
+      "original_file_name": "[BHQ]关于356省道（浦口西江路至苏皖省界段）建设工程（9标涉S3右线段）施工方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_345f1f601d3e44b098d1038edc1c8a10",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_345f1f601d3e44b098d1038edc1c8a10\\[BHQ]关于356省道（浦口西江路至苏皖省界段）建设工程（9标涉S3右线段）施工方案征求地铁意见的复函.doc",
       "features": {
@@ -179,6 +182,7 @@
       "case_id": "kb_4a794ab77c3e4dca892d6a0d47894afd",
       "case_name": "【专】20251205 S356项目涉地铁S3号线施工方案",
       "category": "基坑类",
+      "original_file_name": "【专】20251205 S356项目涉地铁S3号线施工方案.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_4a794ab77c3e4dca892d6a0d47894afd",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_4a794ab77c3e4dca892d6a0d47894afd\\【专】20251205 S356项目涉地铁S3号线施工方案.pdf",
       "features": {
@@ -240,6 +244,7 @@
       "case_id": "kb_783dc89ecc3649dcab55f468216bc269",
       "case_name": "671  2021-237-4  356省道（浦口西江路至苏皖省界段）建设工程施工方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "671  2021-237-4  356省道（浦口西江路至苏皖省界段）建设工程施工方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_783dc89ecc3649dcab55f468216bc269",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_783dc89ecc3649dcab55f468216bc269\\671  2021-237-4  356省道（浦口西江路至苏皖省界段）建设工程施工方案审查表.docx",
       "features": {
@@ -289,6 +294,7 @@
       "case_id": "kb_59faeb71cb4940888c77f8f5e039f37d",
       "case_name": "涉宁和城际（南京地铁S3线）右线总体施工方案12.5",
       "category": "道路桥梁类",
+      "original_file_name": "涉宁和城际（南京地铁S3线）右线总体施工方案12.5.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_59faeb71cb4940888c77f8f5e039f37d",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_59faeb71cb4940888c77f8f5e039f37d\\涉宁和城际（南京地铁S3线）右线总体施工方案12.5.doc",
       "features": {
@@ -417,6 +423,7 @@
       "case_id": "kb_b3e4b9cf24594f1f9bdfdd8ad1685b87",
       "case_name": "000 金沙江东街初步设计汇总",
       "category": "管线类（明挖）",
+      "original_file_name": "000 金沙江东街初步设计汇总.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_b3e4b9cf24594f1f9bdfdd8ad1685b87",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_b3e4b9cf24594f1f9bdfdd8ad1685b87\\000 金沙江东街初步设计汇总.pdf",
       "features": {
@@ -507,6 +514,7 @@
       "case_id": "kb_6a7f7ee50d70492b8aa879cf63e6f39a",
       "case_name": "【住专】20250612 金沙江东街东延建设项目施工方案",
       "category": "管线类（明挖）",
+      "original_file_name": "【住专】20250612 金沙江东街东延建设项目施工方案.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_6a7f7ee50d70492b8aa879cf63e6f39a",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_6a7f7ee50d70492b8aa879cf63e6f39a\\【住专】20250612 金沙江东街东延建设项目施工方案.pdf",
       "features": {
@@ -557,6 +565,7 @@
       "case_id": "kb_98546bbc52e748bea91b142b22a16bc9",
       "case_name": "轨道交通设施保护专项施工方案（金沙江东街东延工程）11.05",
       "category": "管线类（明挖）",
+      "original_file_name": "轨道交通设施保护专项施工方案（金沙江东街东延工程）11.05.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_98546bbc52e748bea91b142b22a16bc9",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_98546bbc52e748bea91b142b22a16bc9\\轨道交通设施保护专项施工方案（金沙江东街东延工程）11.05.pdf",
       "features": {
@@ -626,6 +635,7 @@
       "case_id": "kb_bc0ed0e98ae74eefaa8a18241a75b196",
       "case_name": "【专】20250905南京市秦淮东河一期工程S122保通道路设计方案专家意见",
       "category": "道路桥梁类",
+      "original_file_name": "【专】20250905南京市秦淮东河一期工程S122保通道路设计方案专家意见.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_bc0ed0e98ae74eefaa8a18241a75b196",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_bc0ed0e98ae74eefaa8a18241a75b196\\【专】20250905南京市秦淮东河一期工程S122保通道路设计方案专家意见.pdf",
       "features": {
@@ -677,6 +687,7 @@
       "case_id": "kb_cb74e81b11ba4d31914b5d0eb8a02d6b",
       "case_name": "宁杭公路路改桥保通路汇总",
       "category": "道路桥梁类",
+      "original_file_name": "宁杭公路路改桥保通路汇总.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_cb74e81b11ba4d31914b5d0eb8a02d6b",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_cb74e81b11ba4d31914b5d0eb8a02d6b\\宁杭公路路改桥保通路汇总.pdf",
       "features": {
@@ -738,6 +749,7 @@
       "case_id": "kb_11431f426e0841b595bdf87491803fe8",
       "case_name": "【专】20251125 南京市秦淮东河一期工程S122节点路改桥保通道路施工专家意见",
       "category": "道路桥梁类",
+      "original_file_name": "【专】20251125 南京市秦淮东河一期工程S122节点路改桥保通道路施工专家意见.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_11431f426e0841b595bdf87491803fe8",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_11431f426e0841b595bdf87491803fe8\\【专】20251125 南京市秦淮东河一期工程S122节点路改桥保通道路施工专家意见.pdf",
       "features": {
@@ -810,6 +822,7 @@
       "case_id": "kb_4c36142a41fe40fb9963b7c82c89d1da",
       "case_name": "【专】 20250530 阿里巴巴北侧地块环境整治工程设计方案地铁专项评审会专家意见+签到表",
       "category": "高填、深挖类",
+      "original_file_name": "【专】 20250530 阿里巴巴北侧地块环境整治工程设计方案地铁专项评审会专家意见+签到表.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_4c36142a41fe40fb9963b7c82c89d1da",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_4c36142a41fe40fb9963b7c82c89d1da\\【专】 20250530 阿里巴巴北侧地块环境整治工程设计方案地铁专项评审会专家意见+签到表.pdf",
       "features": {
@@ -858,6 +871,7 @@
       "case_id": "kb_9a443b06a808426ca0a490d18724f5a5",
       "case_name": "280 2025-207 阿里北侧地块环境整治工程设计方案审查表 ",
       "category": "高填、深挖类",
+      "original_file_name": "280 2025-207 阿里北侧地块环境整治工程设计方案审查表 .docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_9a443b06a808426ca0a490d18724f5a5",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_9a443b06a808426ca0a490d18724f5a5\\280 2025-207 阿里北侧地块环境整治工程设计方案审查表 .docx",
       "features": {
@@ -909,6 +923,7 @@
       "case_id": "kb_8ef7806e070c474f90c4a8c85b745735",
       "case_name": "阿里北侧地块环境整治工程涉南京地铁7号线嘉陵江东街站-永初路站区间安全性影响预评估报告(正式版)  ",
       "category": "高填、深挖类",
+      "original_file_name": "阿里北侧地块环境整治工程涉南京地铁7号线嘉陵江东街站-永初路站区间安全性影响预评估报告(正式版)  .pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_8ef7806e070c474f90c4a8c85b745735",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_8ef7806e070c474f90c4a8c85b745735\\阿里北侧地块环境整治工程涉南京地铁7号线嘉陵江东街站-永初路站区间安全性影响预评估报告(正式版)  .pdf",
       "features": {
@@ -966,6 +981,7 @@
       "case_id": "kb_5ebff8f40559407fbd40d298c53c4b7d",
       "case_name": "关于阿里北侧地块环境整治工程设计方案征求地铁意见的复函",
       "category": "高填、深挖类",
+      "original_file_name": "关于阿里北侧地块环境整治工程设计方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_5ebff8f40559407fbd40d298c53c4b7d",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_5ebff8f40559407fbd40d298c53c4b7d\\关于阿里北侧地块环境整治工程设计方案征求地铁意见的复函.doc",
       "features": {
@@ -1022,6 +1038,7 @@
       "case_id": "kb_a6003037d11744b29f4caa99780698f2",
       "case_name": "涉铁7号线施工专项保护方案250905",
       "category": "管线类（明挖）",
+      "original_file_name": "涉铁7号线施工专项保护方案250905.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_a6003037d11744b29f4caa99780698f2",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_a6003037d11744b29f4caa99780698f2\\涉铁7号线施工专项保护方案250905.docx",
       "features": {
@@ -1083,6 +1100,7 @@
       "case_id": "kb_3e19a5d11a2249aba786ca8d4c80af0b",
       "case_name": "[BHQ]关于江心洲揽江街水域疏浚和环境整治工程规划方案征求地铁意见的复函",
       "category": "高填、深挖类",
+      "original_file_name": "[BHQ]关于江心洲揽江街水域疏浚和环境整治工程规划方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_3e19a5d11a2249aba786ca8d4c80af0b",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_3e19a5d11a2249aba786ca8d4c80af0b\\[BHQ]关于江心洲揽江街水域疏浚和环境整治工程规划方案征求地铁意见的复函.doc",
       "features": {
@@ -1133,6 +1151,7 @@
       "case_id": "kb_41a4cbdb986e46dc9e902246db2b278e",
       "case_name": "374  2025-271  江心洲揽江街水域疏浚和环境整治工程规划方案审查表",
       "category": "高填、深挖类",
+      "original_file_name": "374  2025-271  江心洲揽江街水域疏浚和环境整治工程规划方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_41a4cbdb986e46dc9e902246db2b278e",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_41a4cbdb986e46dc9e902246db2b278e\\374  2025-271  江心洲揽江街水域疏浚和环境整治工程规划方案审查表.docx",
       "features": {
@@ -1182,6 +1201,7 @@
       "case_id": "kb_ba1d4daba028469aa77aa01e3bd66db6",
       "case_name": "天元东路（竹山路-莱茵达路）顶管施工专项方案(3)",
       "category": "管线类（非开挖）",
+      "original_file_name": "天元东路（竹山路-莱茵达路）顶管施工专项方案(3).doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_ba1d4daba028469aa77aa01e3bd66db6",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_ba1d4daba028469aa77aa01e3bd66db6\\天元东路（竹山路-莱茵达路）顶管施工专项方案(3).doc",
       "features": {
@@ -1290,6 +1310,7 @@
       "case_id": "kb_0f385f368e03446488240fa938b12139",
       "case_name": "【专】20250425市卫中心污水管网项目设计方案",
       "category": "管线类（明挖）",
+      "original_file_name": "【专】20250425市卫中心污水管网项目设计方案.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_0f385f368e03446488240fa938b12139",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_0f385f368e03446488240fa938b12139\\【专】20250425市卫中心污水管网项目设计方案.pdf",
       "features": {
@@ -1350,6 +1371,7 @@
       "case_id": "kb_c84f19019caf45f98379471e7380bf19",
       "case_name": "204  2025-153  市卫中心污水管网项目方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "204  2025-153  市卫中心污水管网项目方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_c84f19019caf45f98379471e7380bf19",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_c84f19019caf45f98379471e7380bf19\\204  2025-153  市卫中心污水管网项目方案审查表.docx",
       "features": {
@@ -1423,6 +1445,7 @@
       "case_id": "kb_5cfeccc9d02b4c29bcf43a55b04c6bf2",
       "case_name": "关于市卫中心污水管网项目设计方案征求地铁意见的复函",
       "category": "管线类（明挖）",
+      "original_file_name": "关于市卫中心污水管网项目设计方案征求地铁意见的复函.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_5cfeccc9d02b4c29bcf43a55b04c6bf2",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_5cfeccc9d02b4c29bcf43a55b04c6bf2\\关于市卫中心污水管网项目设计方案征求地铁意见的复函.docx",
       "features": {
@@ -1475,6 +1498,7 @@
       "case_id": "kb_231482895c484e7882f5f4177bac17ef",
       "case_name": "市卫中心污水管顶管穿越S6安全评估报告（结论已盖）",
       "category": "管线类（非开挖）",
+      "original_file_name": "市卫中心污水管顶管穿越S6安全评估报告（结论已盖）.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_231482895c484e7882f5f4177bac17ef",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_231482895c484e7882f5f4177bac17ef\\市卫中心污水管顶管穿越S6安全评估报告（结论已盖）.pdf",
       "features": {
@@ -1585,6 +1609,7 @@
       "case_id": "kb_806adabdfe8b42ddb8365776ab8a358c",
       "case_name": "【专】20251128市卫中心污水管网项目施工方案专家意见",
       "category": "管线类（明挖）",
+      "original_file_name": "【专】20251128市卫中心污水管网项目施工方案专家意见.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_806adabdfe8b42ddb8365776ab8a358c",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_806adabdfe8b42ddb8365776ab8a358c\\【专】20251128市卫中心污水管网项目施工方案专家意见.pdf",
       "features": {
@@ -1646,6 +1671,7 @@
       "case_id": "kb_e96746c62f6b4be3912877d269a1bdcf",
       "case_name": "557  2025-153-4  市卫中心污水管网项目方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "557  2025-153-4  市卫中心污水管网项目方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_e96746c62f6b4be3912877d269a1bdcf",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_e96746c62f6b4be3912877d269a1bdcf\\557  2025-153-4  市卫中心污水管网项目方案审查表.docx",
       "features": {
@@ -1705,6 +1731,7 @@
       "case_id": "kb_234f25e1504c4c26b2d7152c8b2380c6",
       "case_name": "关于市卫中心污水管网项目施工方案征求地铁意见的复函",
       "category": "管线类（明挖）",
+      "original_file_name": "关于市卫中心污水管网项目施工方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_234f25e1504c4c26b2d7152c8b2380c6",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_234f25e1504c4c26b2d7152c8b2380c6\\关于市卫中心污水管网项目施工方案征求地铁意见的复函.doc",
       "features": {
@@ -1757,6 +1784,7 @@
       "case_id": "kb_21e39987ef664a21949fbde5bd2042eb",
       "case_name": "01 中和路-报地铁说明2",
       "category": "管线类（明挖）",
+      "original_file_name": "01 中和路-报地铁说明2.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_21e39987ef664a21949fbde5bd2042eb",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_21e39987ef664a21949fbde5bd2042eb\\01 中和路-报地铁说明2.docx",
       "features": {
@@ -1866,6 +1894,7 @@
       "case_id": "kb_88559189876f41c0a18cce4676f16ab6",
       "case_name": "[BHQ]关于中和路改造项目地铁保护监测方案征求地铁意见的复函",
       "category": "管线类（明挖）",
+      "original_file_name": "[BHQ]关于中和路改造项目地铁保护监测方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_88559189876f41c0a18cce4676f16ab6",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_88559189876f41c0a18cce4676f16ab6\\[BHQ]关于中和路改造项目地铁保护监测方案征求地铁意见的复函.doc",
       "features": {
@@ -1924,6 +1953,7 @@
       "case_id": "kb_5ee1cc850e1c4dfba1d1894f6640eab9",
       "case_name": "【专】20250814 中和路改造项目监测方案",
       "category": "管线类（明挖）",
+      "original_file_name": "【专】20250814 中和路改造项目监测方案.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_5ee1cc850e1c4dfba1d1894f6640eab9",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_5ee1cc850e1c4dfba1d1894f6640eab9\\【专】20250814 中和路改造项目监测方案.pdf",
       "features": {
@@ -2015,6 +2045,7 @@
       "case_id": "kb_332d0ea392ea418aa5808b17692ab896",
       "case_name": "487  2025-031-5  中和路改造项目监测方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "487  2025-031-5  中和路改造项目监测方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_332d0ea392ea418aa5808b17692ab896",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_332d0ea392ea418aa5808b17692ab896\\487  2025-031-5  中和路改造项目监测方案审查表.docx",
       "features": {
@@ -2066,6 +2097,7 @@
       "case_id": "kb_4c9bdd58af90421ca5171e8e82efe63c",
       "case_name": "中和路改造工程涉地铁段施工方案 （润来）(2)",
       "category": "管线类（明挖）",
+      "original_file_name": "中和路改造工程涉地铁段施工方案 （润来）(2).docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_4c9bdd58af90421ca5171e8e82efe63c",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_4c9bdd58af90421ca5171e8e82efe63c\\中和路改造工程涉地铁段施工方案 （润来）(2).docx",
       "features": {
@@ -2277,6 +2309,7 @@
       "case_id": "kb_ad5c04dff06140cea28ace11e0888f4a",
       "case_name": "关于南京东善桥~科学园220kV 线路工程穿越地铁段项目规划方案征求地铁意见的复函",
       "category": "道路桥梁类",
+      "original_file_name": "关于南京东善桥~科学园220kV 线路工程穿越地铁段项目规划方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_ad5c04dff06140cea28ace11e0888f4a",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_ad5c04dff06140cea28ace11e0888f4a\\关于南京东善桥~科学园220kV 线路工程穿越地铁段项目规划方案征求地铁意见的复函.doc",
       "features": {
@@ -2334,6 +2367,7 @@
       "case_id": "kb_6af1aa6dfc8443a49c4f64dc3207b1a4",
       "case_name": "南京东善桥~科学园220KV线路工程涉地铁安全影响评估项目  预评估报告（正式文件）",
       "category": "道路桥梁类",
+      "original_file_name": "南京东善桥~科学园220KV线路工程涉地铁安全影响评估项目  预评估报告（正式文件）.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_6af1aa6dfc8443a49c4f64dc3207b1a4",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_6af1aa6dfc8443a49c4f64dc3207b1a4\\南京东善桥~科学园220KV线路工程涉地铁安全影响评估项目  预评估报告（正式文件）.pdf",
       "features": {
@@ -2386,6 +2420,7 @@
       "case_id": "kb_cc076cab78354f86a448ee3ade9771e0",
       "case_name": "附件：南京东善桥~科学园220kV 线路工程下穿地铁专项施工方案",
       "category": "道路桥梁类",
+      "original_file_name": "附件：南京东善桥~科学园220kV 线路工程下穿地铁专项施工方案.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_cc076cab78354f86a448ee3ade9771e0",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_cc076cab78354f86a448ee3ade9771e0\\附件：南京东善桥~科学园220kV 线路工程下穿地铁专项施工方案.pdf",
       "features": {
@@ -2458,6 +2493,7 @@
       "case_id": "kb_215e8c1f52d74808be387c09b34860be",
       "case_name": "020 2025-013 220千伏秦滨线13#-23#塔杆线迁移项目规划方案",
       "category": "管线类（明挖）",
+      "original_file_name": "020 2025-013 220千伏秦滨线13#-23#塔杆线迁移项目规划方案.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_215e8c1f52d74808be387c09b34860be",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_215e8c1f52d74808be387c09b34860be\\020 2025-013 220千伏秦滨线13#-23#塔杆线迁移项目规划方案.docx",
       "features": {
@@ -2512,6 +2548,7 @@
       "case_id": "kb_571caef8b04f4550bae6d45402ffb608",
       "case_name": "关于220千伏秦滨线13#-23#塔杆线迁移项目规划方案征求地铁意见的复函",
       "category": "管线类（明挖）",
+      "original_file_name": "关于220千伏秦滨线13#-23#塔杆线迁移项目规划方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_571caef8b04f4550bae6d45402ffb608",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_571caef8b04f4550bae6d45402ffb608\\关于220千伏秦滨线13#-23#塔杆线迁移项目规划方案征求地铁意见的复函.doc",
       "features": {
@@ -2565,6 +2602,7 @@
       "case_id": "kb_7bd3527f7e764424ad62593c26c51998",
       "case_name": "220千伏秦滨线13#-23#塔杆线迁移项目涉 地铁7号线安全评价2025.7.5(含专家意见)",
       "category": "管线类（明挖）",
+      "original_file_name": "220千伏秦滨线13#-23#塔杆线迁移项目涉 地铁7号线安全评价2025.7.5(含专家意见).pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_7bd3527f7e764424ad62593c26c51998",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_7bd3527f7e764424ad62593c26c51998\\220千伏秦滨线13#-23#塔杆线迁移项目涉 地铁7号线安全评价2025.7.5(含专家意见).pdf",
       "features": {
@@ -2635,6 +2673,7 @@
       "case_id": "kb_fa6355278d5442cdb1e3c1da78febd55",
       "case_name": "220kV秦滨线涉地铁7号线专项施工方案",
       "category": "管线类（明挖）",
+      "original_file_name": "220kV秦滨线涉地铁7号线专项施工方案.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_fa6355278d5442cdb1e3c1da78febd55",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_fa6355278d5442cdb1e3c1da78febd55\\220kV秦滨线涉地铁7号线专项施工方案.docx",
       "features": {
@@ -2719,6 +2758,7 @@
       "case_id": "kb_38c001769cc34310a52ed5bd1ccaf82d",
       "case_name": "[BHQ]关于NO.2023G59项目基坑工程设计方案征求地铁意见的复函",
       "category": "基坑类",
+      "original_file_name": "[BHQ]关于NO.2023G59项目基坑工程设计方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_38c001769cc34310a52ed5bd1ccaf82d",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_38c001769cc34310a52ed5bd1ccaf82d\\[BHQ]关于NO.2023G59项目基坑工程设计方案征求地铁意见的复函.doc",
       "features": {
@@ -2775,6 +2815,7 @@
       "case_id": "kb_dbed382b7ab3401ebf4efb08a058ba6a",
       "case_name": "【专】20250122 NO.2023G59项目基坑工程设计方案",
       "category": "基坑类",
+      "original_file_name": "【专】20250122 NO.2023G59项目基坑工程设计方案.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_dbed382b7ab3401ebf4efb08a058ba6a",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_dbed382b7ab3401ebf4efb08a058ba6a\\【专】20250122 NO.2023G59项目基坑工程设计方案.pdf",
       "features": {
@@ -2823,6 +2864,7 @@
       "case_id": "kb_6fffbaccea1f43d2a472948bc415c209",
       "case_name": "019  2024-427-2  NO.2023G59项目基坑工程设计方案审查表",
       "category": "基坑类",
+      "original_file_name": "019  2024-427-2  NO.2023G59项目基坑工程设计方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_6fffbaccea1f43d2a472948bc415c209",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_6fffbaccea1f43d2a472948bc415c209\\019  2024-427-2  NO.2023G59项目基坑工程设计方案审查表.docx",
       "features": {
@@ -2881,6 +2923,7 @@
       "case_id": "kb_81eb3c18f20d481689fcf5b327fe5ea3",
       "case_name": "计算书",
       "category": "管线类（明挖）",
+      "original_file_name": "计算书.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_81eb3c18f20d481689fcf5b327fe5ea3",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_81eb3c18f20d481689fcf5b327fe5ea3\\计算书.pdf",
       "features": {
@@ -2945,6 +2988,7 @@
       "case_id": "kb_81056e296e714e1e812280b86fa5728e",
       "case_name": "[BHQ]关于滨湖社区卫生服务中心及基层社区中心项目设计方案征求地铁意见的复函",
       "category": "基坑类",
+      "original_file_name": "[BHQ]关于滨湖社区卫生服务中心及基层社区中心项目设计方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_81056e296e714e1e812280b86fa5728e",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_81056e296e714e1e812280b86fa5728e\\[BHQ]关于滨湖社区卫生服务中心及基层社区中心项目设计方案征求地铁意见的复函.doc",
       "features": {
@@ -2999,6 +3043,7 @@
       "case_id": "kb_19682f084cdc4687864ac4f56cfa40c6",
       "case_name": "【专】20241206 滨湖社区卫生服务中心及基层社区中心项目设计方案",
       "category": "基坑类",
+      "original_file_name": "【专】20241206 滨湖社区卫生服务中心及基层社区中心项目设计方案.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_19682f084cdc4687864ac4f56cfa40c6",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_19682f084cdc4687864ac4f56cfa40c6\\【专】20241206 滨湖社区卫生服务中心及基层社区中心项目设计方案.pdf",
       "features": {
@@ -3050,6 +3095,7 @@
       "case_id": "kb_7ac22a94e6af4393ba2fa62a71cee589",
       "case_name": "894  2024-111-2  滨湖社区卫生服务中心及北圩路社区综合服务中心项目设计方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "894  2024-111-2  滨湖社区卫生服务中心及北圩路社区综合服务中心项目设计方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_7ac22a94e6af4393ba2fa62a71cee589",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_7ac22a94e6af4393ba2fa62a71cee589\\894  2024-111-2  滨湖社区卫生服务中心及北圩路社区综合服务中心项目设计方案审查表.docx",
       "features": {
@@ -3104,6 +3150,7 @@
       "case_id": "kb_57d56b52174341b0bb1ba5c742879174",
       "case_name": "滨湖社区综合说明+计算书",
       "category": "管线类（明挖）",
+      "original_file_name": "滨湖社区综合说明+计算书.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_57d56b52174341b0bb1ba5c742879174",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_57d56b52174341b0bb1ba5c742879174\\滨湖社区综合说明+计算书.pdf",
       "features": {
@@ -3347,6 +3394,7 @@
       "case_id": "kb_e1e2fe27d78c494d8be023167712ca6d",
       "case_name": "【专】20250108滨湖社区卫生服务中心及基层社区中心项目桩基和支护施工方案",
       "category": "基坑类",
+      "original_file_name": "【专】20250108滨湖社区卫生服务中心及基层社区中心项目桩基和支护施工方案.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_e1e2fe27d78c494d8be023167712ca6d",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_e1e2fe27d78c494d8be023167712ca6d\\【专】20250108滨湖社区卫生服务中心及基层社区中心项目桩基和支护施工方案.pdf",
       "features": {
@@ -3418,6 +3466,7 @@
       "case_id": "kb_1e03b5dd285c4eea9c8c2271cb6af668",
       "case_name": "006  2024-111-5  滨湖社区卫生服务中心及北圩路社区综合服务中心项目桩基支护施工方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "006  2024-111-5  滨湖社区卫生服务中心及北圩路社区综合服务中心项目桩基支护施工方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_1e03b5dd285c4eea9c8c2271cb6af668",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_1e03b5dd285c4eea9c8c2271cb6af668\\006  2024-111-5  滨湖社区卫生服务中心及北圩路社区综合服务中心项目桩基支护施工方案审查表.docx",
       "features": {
@@ -3474,6 +3523,7 @@
       "case_id": "kb_ae1c8a138b1b4acd8a68c09de2cb09d1",
       "case_name": "基坑支护、降水施工方案",
       "category": "基坑类",
+      "original_file_name": "基坑支护、降水施工方案.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_ae1c8a138b1b4acd8a68c09de2cb09d1",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_ae1c8a138b1b4acd8a68c09de2cb09d1\\基坑支护、降水施工方案.doc",
       "features": {
@@ -3570,6 +3620,7 @@
       "case_id": "kb_1a0168009c444abfaf0d42eb15022bb8",
       "case_name": "【专】20250828普联项目施工方案专家意见",
       "category": "基坑类",
+      "original_file_name": "【专】20250828普联项目施工方案专家意见.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_1a0168009c444abfaf0d42eb15022bb8",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_1a0168009c444abfaf0d42eb15022bb8\\【专】20250828普联项目施工方案专家意见.pdf",
       "features": {
@@ -3647,6 +3698,7 @@
       "case_id": "kb_5459afe74e0c4b2eb875f1e656959759",
       "case_name": "516  2024-548-4 普联南京研发中心（NO.宁2023Y07地块）项目工程方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "516  2024-548-4 普联南京研发中心（NO.宁2023Y07地块）项目工程方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_5459afe74e0c4b2eb875f1e656959759",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_5459afe74e0c4b2eb875f1e656959759\\516  2024-548-4 普联南京研发中心（NO.宁2023Y07地块）项目工程方案审查表.docx",
       "features": {
@@ -3716,6 +3768,7 @@
       "case_id": "kb_007bde46521d4341a76232d318d6ed56",
       "case_name": "关于普联南京研发中心（NO.宁2023Y07地块）项目基坑工程施工方案征求地铁意见的复函",
       "category": "基坑类",
+      "original_file_name": "关于普联南京研发中心（NO.宁2023Y07地块）项目基坑工程施工方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_007bde46521d4341a76232d318d6ed56",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_007bde46521d4341a76232d318d6ed56\\关于普联南京研发中心（NO.宁2023Y07地块）项目基坑工程施工方案征求地铁意见的复函.doc",
       "features": {
@@ -3772,6 +3825,7 @@
       "case_id": "kb_4ad4f9d0388f473d9709d26124a5644d",
       "case_name": "【专】20250523普联南京研发中心（NO.宁2023Y07地块）项目基坑支护及桩基工程设计方案专家意见",
       "category": "基坑类",
+      "original_file_name": "【专】20250523普联南京研发中心（NO.宁2023Y07地块）项目基坑支护及桩基工程设计方案专家意见.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_4ad4f9d0388f473d9709d26124a5644d",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_4ad4f9d0388f473d9709d26124a5644d\\【专】20250523普联南京研发中心（NO.宁2023Y07地块）项目基坑支护及桩基工程设计方案专家意见.pdf",
       "features": {
@@ -3834,6 +3888,7 @@
       "case_id": "kb_1d650286ab464c389af00824401e1600",
       "case_name": "277  2024-548-2 普联南京研发中心（NO.宁2023Y07地块）项目工程方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "277  2024-548-2 普联南京研发中心（NO.宁2023Y07地块）项目工程方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_1d650286ab464c389af00824401e1600",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_1d650286ab464c389af00824401e1600\\277  2024-548-2 普联南京研发中心（NO.宁2023Y07地块）项目工程方案审查表.docx",
       "features": {
@@ -3902,6 +3957,7 @@
       "case_id": "kb_66baf120bda543a9acd133898197abec",
       "case_name": "安评报告",
       "category": "管线类（明挖）",
+      "original_file_name": "安评报告.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_66baf120bda543a9acd133898197abec",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_66baf120bda543a9acd133898197abec\\安评报告.pdf",
       "features": {
@@ -4042,6 +4098,7 @@
       "case_id": "kb_eb66373868214489889ebe9b61594822",
       "case_name": "关于普联南京研发中心（NO.宁2023Y07地块）项目基坑支护及桩基工程设计方案征求地铁意见的复函",
       "category": "基坑类",
+      "original_file_name": "关于普联南京研发中心（NO.宁2023Y07地块）项目基坑支护及桩基工程设计方案征求地铁意见的复函.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_eb66373868214489889ebe9b61594822",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_eb66373868214489889ebe9b61594822\\关于普联南京研发中心（NO.宁2023Y07地块）项目基坑支护及桩基工程设计方案征求地铁意见的复函.docx",
       "features": {
@@ -4097,6 +4154,7 @@
       "case_id": "kb_b83cc442aa574875808df4d5c39cdde6",
       "case_name": "计算书",
       "category": "管线类（明挖）",
+      "original_file_name": "计算书.pdf",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_b83cc442aa574875808df4d5c39cdde6",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_b83cc442aa574875808df4d5c39cdde6\\计算书.pdf",
       "features": {
@@ -4295,6 +4353,7 @@
       "case_id": "kb_9e2762ac651d47da990ac730c8013c42",
       "case_name": "[BHQ]关于南大地下通道无障碍改造工程规划方案征求地铁意见的复函",
       "category": "基坑类",
+      "original_file_name": "[BHQ]关于南大地下通道无障碍改造工程规划方案征求地铁意见的复函.doc",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_9e2762ac651d47da990ac730c8013c42",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_9e2762ac651d47da990ac730c8013c42\\[BHQ]关于南大地下通道无障碍改造工程规划方案征求地铁意见的复函.doc",
       "features": {
@@ -4349,6 +4408,7 @@
       "case_id": "kb_2f6760f710554d2da6a3a4fd9ee61224",
       "case_name": "038  2025-029  南大地下通道无障碍改造工程规划方案审查表",
       "category": "管线类（明挖）",
+      "original_file_name": "038  2025-029  南大地下通道无障碍改造工程规划方案审查表.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_2f6760f710554d2da6a3a4fd9ee61224",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_2f6760f710554d2da6a3a4fd9ee61224\\038  2025-029  南大地下通道无障碍改造工程规划方案审查表.docx",
       "features": {
@@ -4404,6 +4464,7 @@
       "case_id": "kb_1fbe7fe3cb1f47328b749d84214037bf",
       "case_name": "南大地下通道无障碍改造工程-方案征求意见文本",
       "category": "管线类（明挖）",
+      "original_file_name": "南大地下通道无障碍改造工程-方案征求意见文本.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_1fbe7fe3cb1f47328b749d84214037bf",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_1fbe7fe3cb1f47328b749d84214037bf\\南大地下通道无障碍改造工程-方案征求意见文本.docx",
       "features": {
@@ -4497,6 +4558,7 @@
       "case_id": "kb_6916dd9003db4b94996a6456db21c5c2",
       "case_name": "英发睿智创新园一期红线外地铁保护施工方案调整2026.1.15",
       "category": "管线类（明挖）",
+      "original_file_name": "英发睿智创新园一期红线外地铁保护施工方案调整2026.1.15.docx",
       "case_folder": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_6916dd9003db4b94996a6456db21c5c2",
       "report_file": "D:\\桌面\\华设项目\\audit_api\\runtime\\knowledge\\files\\kb_6916dd9003db4b94996a6456db21c5c2\\英发睿智创新园一期红线外地铁保护施工方案调整2026.1.15.docx",
       "features": {

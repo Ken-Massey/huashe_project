@@ -32,6 +32,7 @@ from .mineru_parser import (
     mineru_cache_available,
     mineru_cloud_available,
 )
+from .regulation_rules import extract_regulation
 from .reply_writer import generate_formal_reply_content
 
 
@@ -58,37 +59,87 @@ def _first_number(text: str, patterns: list[str]) -> float | None:
     return None
 
 
+def _smart_document_text(source_file: Path) -> tuple[str, dict[str, Any]]:
+    suffix = source_file.suffix.lower()
+    if suffix in {".pdf", ".docx", ".txt", ".md"}:
+        try:
+            text, rows, method = extract_regulation(source_file)
+            page_count = None
+            if suffix == ".pdf":
+                try:
+                    page_count = len(PdfReader(str(source_file), strict=False).pages)
+                except Exception:
+                    page_count = None
+            return text, {
+                "page_count": page_count,
+                "extraction_method": method,
+                "row_count": len(rows),
+                "text_length": len(text),
+            }
+        except Exception as exc:
+            if suffix != ".pdf":
+                raise
+            extraction = extract_pdf(source_file, max_pages=30)
+            text = extraction.get("full_text", "")
+            return text, {
+                "page_count": extraction.get("source_page_count"),
+                "extraction_method": f"legacy_fallback_after_{type(exc).__name__}",
+                "text_length": len(text or ""),
+            }
+    raise ValueError(f"不支持的资料格式：{suffix}")
+
+
 def _letter_plain_text(source_file: Path) -> tuple[str, dict[str, Any]]:
     suffix = source_file.suffix.lower()
-    if suffix == ".pdf":
-        extraction = extract_pdf(source_file, max_pages=20)
-        return extraction.get("full_text", ""), {
-            "page_count": extraction.get("source_page_count"),
-            "extraction_method": extraction.get("extraction_method"),
-        }
-    if suffix == ".docx":
-        from docx import Document
+    if suffix in {".pdf", ".docx", ".txt", ".md"}:
+        return _smart_document_text(source_file)
+    raise ValueError(f"不支持的资料格式：{suffix}")
 
-        document = Document(str(source_file))
-        paragraphs = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
-        for table in document.tables:
-            for row in table.rows:
-                cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                if cells:
-                    paragraphs.append(" | ".join(cells))
-        return "\n".join(paragraphs), {
-            "page_count": None,
-            "extraction_method": "docx",
-        }
-    if suffix == ".txt":
-        return source_file.read_text(encoding="utf-8-sig", errors="replace"), {
-            "page_count": None,
-            "extraction_method": "txt",
-        }
-    raise ValueError(f"不支持的函件格式：{suffix}")
+
+def _infer_document_type(filename: str, text: str) -> tuple[str, float, str]:
+    name = re.sub(r"\s+", "", filename)
+    body = re.sub(r"\s+", "", text[:12000])
+    sample = f"{name}\n{body}"
+    rules: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
+        ("safety_assessment_report", ("安全性影响", "安全影响", "安全评估", "安全评价", "预评估报告", "专项评估报告"), ("评估结论", "影响等级", "结构安全性影响")),
+        ("construction_scheme", ("施工方案", "专项施工", "施工组织设计", "支护施工", "降水施工", "桩基和支护"), ("施工工序", "施工方法", "施工部署", "应急措施")),
+        ("design_scheme", ("设计方案", "方案设计", "初步设计", "施工图设计", "设计文件"), ("设计说明", "总平面图", "基坑支护设计", "结构设计")),
+        ("monitoring_scheme", ("监测方案", "监测设计"), ("监测频率", "报警值", "监测点")),
+        ("regulation", ("规范", "规程", "标准", "技术标准", "管理办法", "保护条例"), ("条文", "强制性条文", "控制值", "限值")),
+        ("letter", ("征求意见函", "征求意见的函", "报审函", "申请函", "请示", "备案函"), ("贵司", "贵单位", "特此致函", "请予审核")),
+    ]
+    scored: list[tuple[str, int, list[str]]] = []
+    for doc_type, name_terms, body_terms in rules:
+        hits: list[str] = []
+        score = 0
+        for term in name_terms:
+            if term in name:
+                hits.append(f"文件名:{term}")
+                score += 4
+        for term in body_terms:
+            if term in body:
+                hits.append(f"正文:{term}")
+                score += 1
+        for term in name_terms:
+            if term in body:
+                hits.append(f"正文:{term}")
+                score += 1
+        if score:
+            scored.append((doc_type, score, hits))
+    if not scored:
+        return "case_material", 0.55, "未发现明确文件类型特征"
+    doc_type, score, hits = max(scored, key=lambda item: item[1])
+    return doc_type, min(0.99, 0.55 + score * 0.06), "、".join(hits[:4])
 
 
 def _classify_project_document(filename: str, text: str) -> tuple[str, float, str]:
+    document_type, confidence, reason = _infer_document_type(filename, text)
+    if document_type == "letter":
+        return "letter", confidence, reason
+    if document_type == "regulation":
+        return "attachment", confidence, reason
+    if document_type in {"safety_assessment_report", "design_scheme", "construction_scheme", "monitoring_scheme"}:
+        return "case", confidence, reason
     sample = f"{filename}\n{text[:12000]}"
     letter_terms = (
         "征求地铁意见", "征求意见的函", "征求意见函", "申请备案", "报审函",
@@ -114,6 +165,30 @@ def _classify_project_document(filename: str, text: str) -> tuple[str, float, st
     return "case", 0.55, "未发现明确函件特征，按项目材料默认作为案例/方案"
 
 
+def _first_text_match(text: str, patterns: list[str]) -> str | None:
+    for pattern in patterns:
+        match = re.search(pattern, text, re.I | re.S)
+        if match:
+            return re.sub(r"\s+", "", match.group(1)).strip("，。；;、 ")
+    return None
+
+
+def _infer_project_type(compact: str) -> str | None:
+    for keyword, value in (
+        ("基坑", "基坑"),
+        ("桩基", "桩基"),
+        ("管线", "管线"),
+        ("道路", "道路"),
+        ("桥梁", "桥梁"),
+        ("高压线", "电力"),
+        ("电力杆线", "电力"),
+        ("涉地铁", "涉铁工程"),
+    ):
+        if keyword in compact:
+            return value
+    return None
+
+
 def recognize_letter(source_file: Path) -> dict[str, Any]:
     """Classify a project document and extract conservative, form-ready values."""
     raw_text, metadata = _letter_plain_text(source_file)
@@ -122,6 +197,7 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     head = "\n".join(lines[:35])
     filename = source_file.stem
+    document_type, type_confidence, type_reason = _infer_document_type(source_file.name, text)
 
     project_match = re.search(
         r"关于[《“\"]?(.{2,120}?(?:工程|项目))[》”\"]?(?:规划|设计|施工|方案|征求|报审|的函|函)",
@@ -145,12 +221,17 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
         (value for value in ("出让", "规划", "设计", "施工") if value in filename or value in head),
         None,
     )
+    if not project_stage:
+        if document_type == "design_scheme":
+            project_stage = "设计"
+        elif document_type == "construction_scheme":
+            project_stage = "施工"
     relationship = None
-    if re.search(r"交叉|上跨|下穿|穿越", compact):
+    if re.search(r"交叉|上跨|下穿|穿越|临近穿越", compact):
         relationship = "交叉"
     elif re.search(r"两侧|双侧", compact):
         relationship = "双侧"
-    elif re.search(r"单侧|一侧|邻近|侧穿|侧邻", compact):
+    elif re.search(r"单侧|一侧|邻近|临近|毗邻|侧穿|侧邻|近接", compact):
         relationship = "单侧"
 
     structure_method = None
@@ -165,9 +246,13 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
             structure_method = value
             break
 
-    metro_line_match = re.search(r"((?:地铁|轨道交通)?\s*\d+\s*号线)", text)
+    metro_line_match = re.search(r"((?:地铁|轨道交通|南京地铁)?\s*(?:S\d+|\d+|[一二三四五六七八九十]+)\s*号线)", text)
     metro_line_name = re.sub(r"\s+", "", metro_line_match.group(1)) if metro_line_match else ""
-    metro_line_name = re.sub(r"^(?:地铁|轨道交通)", "", metro_line_name)
+    metro_line_name = re.sub(r"^(?:地铁|轨道交通|南京地铁)", "", metro_line_name)
+    metro_section_name = _first_text_match(text, [
+        r"((?:[\u4e00-\u9fffA-Za-z0-9]+站)\s*[~～至-]\s*(?:[\u4e00-\u9fffA-Za-z0-9]+站)(?:区间|区间隧道)?)",
+        r"((?:区间|隧道)[^。\n]{0,40}(?:左线|右线|上下行|上行|下行)?)",
+    ])
 
     protection_zone_location = None
     if "特别保护区" in compact:
@@ -179,8 +264,17 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
 
     support_components = [
         value for keyword, value in (
+            ("钻孔灌注桩", "钻孔灌注桩"),
             ("围护桩", "围护桩"),
             ("地下连续墙", "地下连续墙"),
+            ("地连墙", "地下连续墙"),
+            ("SMW", "SMW工法桩"),
+            ("三轴搅拌桩", "三轴搅拌桩"),
+            ("止水帷幕", "止水帷幕"),
+            ("内支撑", "内支撑"),
+            ("钢支撑", "钢支撑"),
+            ("混凝土支撑", "混凝土支撑"),
+            ("放坡", "放坡"),
             ("非挤土工程桩", "非挤土工程桩"),
             ("挤土工程桩", "挤土工程桩"),
             ("锚杆", "锚杆"),
@@ -196,35 +290,38 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
     fields = {
         "project_name": project_name or None,
         "applicant": applicant or None,
-        "project_type": "基坑" if "基坑" in compact else None,
+        "project_type": _infer_project_type(compact),
         "project_stage": project_stage,
         "relative_relationship": relationship,
         "other_involvements": other_involvements or None,
         "metro_line_name": metro_line_name or None,
+        "metro_section_name": metro_section_name,
         "structure_method": structure_method,
         "structure_condition": "较差" if re.search(r"病害|渗漏|裂缝|破损", compact) else None,
         "buried_depth_m": _first_number(text, [
-            r"(?:结构|隧道|区间)[^。\n]{0,20}埋深(?:约|为)?\s*(\d+(?:\.\d+)?)\s*m",
-            r"埋深(?:约|为)?\s*(\d+(?:\.\d+)?)\s*m",
+            r"(?:结构|隧道|区间)[^。\n]{0,30}(?:埋深|覆土厚度|隧顶覆土)(?:约|约为|为|厚度为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
+            r"(?:埋深|覆土厚度|隧顶覆土)(?:约|约为|为|厚度为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
         ]),
         "outer_diameter_or_width_m": _first_number(text, [
-            r"(?:盾构外径|隧道外径|结构宽度|外径)(?:约|为)?\s*(\d+(?:\.\d+)?)\s*m",
-            r"直径(?:约|为)?\s*(\d+(?:\.\d+)?)\s*m",
+            r"(?:盾构外径|隧道外径|结构宽度|外径)(?:约|约为|为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
+            r"直径(?:约|约为|为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
         ]),
         "pit_depth_m": _first_number(text, [
-            r"基坑[^。\n]{0,24}(?:开挖深度|深度|挖深|深)(?:约|为)?\s*(\d+(?:\.\d+)?)\s*m",
+            r"基坑[^。\n]{0,40}(?:开挖深度|深度|挖深|坑深|深)(?:约|约为|为|最大约为|最大为|最深约为|最深为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
+            r"(?:开挖深度|挖深|坑深)(?:约|约为|为|最大约为|最大为|最深约为|最深为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
         ]),
         "pit_length_m": _first_number(text, [
-            r"基坑[^。\n]{0,30}(?:长度|长)(?:约|为)?\s*(\d+(?:\.\d+)?)\s*m",
+            r"基坑[^。\n]{0,40}(?:长度|长)(?:约|约为|为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
         ]),
         "minimum_horizontal_clearance_m": _first_number(text, [
-            r"(?:最小水平净距|水平净距|水平距离|最小净距)(?:约|为)?\s*(\d+(?:\.\d+)?)\s*m",
+            r"(?:最小水平净距|水平净距|水平距离|最小净距|最近距离|最小距离)(?:约|约为|为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
+            r"(?:距|距离)[^。\n]{0,30}(?:地铁|隧道|结构|区间)[^。\n]{0,30}(?:约|约为|为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
         ]),
         "minimum_vertical_clearance_m": _first_number(text, [
-            r"(?:最小竖向净距|竖向净距|竖向距离)(?:约|为)?\s*(\d+(?:\.\d+)?)\s*m",
+            r"(?:最小竖向净距|竖向净距|竖向距离)(?:约|约为|为)?\s*(\d+(?:\.\d+)?)\s*(?:m|米)",
         ]),
         "dewatering_method": next(
-            (value for value in ("轻型井点降水", "管井降水", "井点降水", "止水帷幕") if value in compact),
+            (value for value in ("轻型井点降水", "喷射井点降水", "深井井点降水", "管井降水", "井点降水", "集水明排", "明沟排水", "疏干井降水", "止水帷幕") if value in compact),
             None,
         ),
         "terrain_zone": "漫滩" if "漫滩" in compact else None,
@@ -240,6 +337,9 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
         "document_role": document_role,
         "role_confidence": round(role_confidence, 2),
         "role_reason": role_reason,
+        "document_type": document_type,
+        "document_type_confidence": round(type_confidence, 2),
+        "document_type_reason": type_reason,
         "recognized_count": len(recognized),
         "fields": recognized,
         "metadata": metadata,

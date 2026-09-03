@@ -143,7 +143,15 @@ def _pdf_rows_need_ocr(rows: list[dict[str, Any]]) -> bool:
         for row in rows
         if row.get("content_type") == "paragraph" and row.get("text")
     ]
-    if sum(len(text) for text in paragraphs) < 100:
+    total_chars = sum(len(text) for text in paragraphs)
+    if total_chars < 100:
+        return True
+    joined = "".join(paragraphs)
+    chinese_chars = len(re.findall(r"[\u4e00-\u9fff]", joined))
+    garbled_chars = len(re.findall(r"[\ufffd□�]", joined))
+    if total_chars >= 300 and chinese_chars / max(1, total_chars) < 0.08:
+        return True
+    if garbled_chars / max(1, total_chars) > 0.02:
         return True
     if len(paragraphs) < 3:
         return False
@@ -651,7 +659,7 @@ class RegulationRepository:
                 );
                 CREATE TABLE IF NOT EXISTS regulation_folder (
                     folder_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    name TEXT NOT NULL COLLATE NOCASE,
                     system_key TEXT UNIQUE,
                     parent_id TEXT,
                     sort_order INTEGER NOT NULL DEFAULT 0,
@@ -716,11 +724,47 @@ class RegulationRepository:
                 )
             if "parent_id" not in folder_columns:
                 connection.execute("ALTER TABLE regulation_folder ADD COLUMN parent_id TEXT")
+            self._migrate_folder_unique_scope(connection)
             connection.execute("CREATE INDEX IF NOT EXISTS idx_regulation_folder ON regulation(folder_id)")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_regulation_folder_parent "
                 "ON regulation_folder(parent_id)"
             )
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_regulation_folder_parent_name "
+                "ON regulation_folder(COALESCE(parent_id,''), name COLLATE NOCASE)"
+            )
+
+    def _migrate_folder_unique_scope(self, connection: sqlite3.Connection) -> None:
+        indexes = connection.execute("PRAGMA index_list(regulation_folder)").fetchall()
+        for index in indexes:
+            if not int(index["unique"]):
+                continue
+            index_columns = connection.execute(f"PRAGMA index_info({index['name']})").fetchall()
+            if [row["name"] for row in index_columns] != ["name"]:
+                continue
+            connection.executescript(
+                """
+                DROP TABLE IF EXISTS regulation_folder_new;
+                CREATE TABLE regulation_folder_new (
+                    folder_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL COLLATE NOCASE,
+                    system_key TEXT UNIQUE,
+                    parent_id TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO regulation_folder_new(
+                    folder_id,name,system_key,parent_id,sort_order,created_at,updated_at
+                )
+                SELECT folder_id,name,system_key,parent_id,sort_order,created_at,updated_at
+                  FROM regulation_folder;
+                DROP TABLE regulation_folder;
+                ALTER TABLE regulation_folder_new RENAME TO regulation_folder;
+                """
+            )
+            break
 
     def _initialize_default_folders(self) -> None:
         """Create the built-in taxonomy once while still allowing later deletion."""
@@ -733,7 +777,7 @@ class RegulationRepository:
             now = _now()
             for sort_order, (system_key, name) in enumerate(DEFAULT_REGULATION_FOLDERS):
                 existing = connection.execute(
-                    "SELECT folder_id FROM regulation_folder WHERE name=? COLLATE NOCASE",
+                    "SELECT folder_id FROM regulation_folder WHERE name=? COLLATE NOCASE AND parent_id IS NULL",
                     (name,),
                 ).fetchone()
                 if existing:
@@ -1108,7 +1152,7 @@ class RegulationRepository:
         return self.get_folder(folder_id)
 
     def rename_folder(self, folder_id: str, name: str) -> dict[str, Any]:
-        self.get_folder(folder_id)
+        current = self.get_folder(folder_id)
         clean_name = re.sub(r"\s+", " ", name).strip()
         if not clean_name:
             raise ValueError("文件夹名称不能为空。")
@@ -1116,6 +1160,13 @@ class RegulationRepository:
             raise ValueError("文件夹名称不能超过60个字符。")
         try:
             with self._connect() as connection:
+                duplicate = connection.execute(
+                    """SELECT folder_id FROM regulation_folder
+                       WHERE parent_id IS ? AND name=? COLLATE NOCASE AND folder_id<>?""",
+                    (current.get("parent_id"), clean_name, folder_id),
+                ).fetchone()
+                if duplicate:
+                    raise sqlite3.IntegrityError("duplicate folder name under the same parent")
                 connection.execute(
                     "UPDATE regulation_folder SET name=?, updated_at=? WHERE folder_id=?",
                     (clean_name, _now(), folder_id),

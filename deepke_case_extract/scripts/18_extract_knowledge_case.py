@@ -24,6 +24,18 @@ def load_builder():
 builder = load_builder()
 
 
+def _smart_text(path):
+    from audit_api.regulation_rules import extract_regulation
+
+    text, rows, method = extract_regulation(path)
+    paragraphs = [
+        {"page": row.get("page"), "text": str(row.get("text") or "").strip()}
+        for row in rows
+        if str(row.get("text") or "").strip()
+    ]
+    return text, paragraphs, method
+
+
 def _fallback_text(path):
     from stage1_reply_system.history.text_extract import extract_document
 
@@ -43,7 +55,11 @@ def extract_case(path, case_id, case_name=None, category=None, text_output=None)
     if suffix == ".doc":
         text, paragraphs, method = _fallback_text(source)
     else:
-        text, paragraphs = builder.document_text(source)
+        try:
+            text, paragraphs, method = _smart_text(source)
+        except Exception:
+            text, paragraphs = builder.document_text(source)
+            method = "case_builder"
         if len(text.strip()) < 100 and suffix == ".pdf":
             text, paragraphs, method = _fallback_text(source)
 

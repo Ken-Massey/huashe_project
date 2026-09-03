@@ -10,11 +10,12 @@ from unittest.mock import patch
 from docx import Document
 
 from audit_api.agent import AgentService
+from audit_api.agent_conversation import AgentConversationRepository
 from audit_api.dynamic_audit import run_dynamic_regulation_audit
 from audit_api.knowledge_base import KnowledgeBase
 from audit_api.regulation_rules import RegulationRepository, RuleEngine, SafeExpression, extract_regulation
 from audit_api.main import _artifact_files, app
-from audit_api.services import _classify_project_document, _prepare_stage1_input
+from audit_api.services import _classify_project_document, _infer_document_type, _prepare_stage1_input, recognize_letter
 from audit_api.task_manager import TaskManager
 from deepke_case_extract.pipelines import run_audit_one_plan, run_match_new_case_advice
 
@@ -32,6 +33,46 @@ class ApiDefinitionTests(unittest.TestCase):
 
         self.assertEqual(letter_role, "letter")
         self.assertEqual(case_role, "case")
+
+    def test_document_type_prefers_filename_keywords(self):
+        document_type, confidence, reason = _infer_document_type(
+            "滨湖社区综合服务中心项目基坑工程涉地铁2号线结构安全性影响预评估报告.pdf",
+            "工程概况 本项目基坑邻近地铁区间。",
+        )
+        self.assertEqual(document_type, "safety_assessment_report")
+        self.assertGreaterEqual(confidence, 0.8)
+        self.assertIn("文件名", reason)
+
+        construction_type, _, _ = _infer_document_type(
+            "滨湖社区卫生服务中心及基层社区中心项目桩基和支护施工方案.pdf",
+            "本方案明确施工部署、施工工序及应急措施。",
+        )
+        self.assertEqual(construction_type, "construction_scheme")
+
+    def test_recognize_letter_extracts_engineering_fields_from_plain_text(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "滨湖社区卫生服务中心项目基坑安全性影响预评估报告.txt"
+            source.write_text(
+                "工程概况\n"
+                "本项目基坑位于地铁2号线云锦路站~莫愁湖站区间隧道北侧，"
+                "基坑开挖深度约为6.7m，采用钻孔灌注桩、三轴搅拌桩止水帷幕，"
+                "支护结构与地铁结构边线最小水平距离约为20.1m，降水方式为管井降水，"
+                "对应地铁结构埋深约为14.5m。",
+                encoding="utf-8",
+            )
+
+            result = recognize_letter(source)
+
+        self.assertEqual(result["document_type"], "safety_assessment_report")
+        self.assertEqual(result["document_role"], "case")
+        fields = result["fields"]
+        self.assertEqual(fields["project_type"], "基坑")
+        self.assertEqual(fields["metro_line_name"], "2号线")
+        self.assertIn("云锦路站~莫愁湖站", fields["metro_section_name"])
+        self.assertEqual(fields["pit_depth_m"], 6.7)
+        self.assertEqual(fields["minimum_horizontal_clearance_m"], 20.1)
+        self.assertEqual(fields["dewatering_method"], "管井降水")
+        self.assertIn("钻孔灌注桩", fields["support_components"])
 
     def test_explicit_artifact_files_hide_internal_task_outputs(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -91,6 +132,9 @@ class ApiDefinitionTests(unittest.TestCase):
             "/api/v1/knowledge/rules/{rule_id}/test",
             "/api/v1/knowledge/rules/{rule_id}/publish",
             "/api/v1/agent/config",
+            "/api/v1/agent/sessions",
+            "/api/v1/agent/sessions/{session_id}",
+            "/api/v1/agent/sessions/{session_id}/rename",
             "/api/v1/agent/ask",
             "/api/v1/project-archives/projects",
             "/api/v1/project-archives/projects/{project_id}",
@@ -233,7 +277,30 @@ class AgentServiceTests(unittest.TestCase):
             with patch("audit_api.agent.urllib.request.urlopen", return_value=FakeResponse()) as mocked:
                 result = service.complete_json("only json", "return findings", max_tokens=20)
         self.assertEqual(result["findings"][0]["title"], "净距不足")
-        self.assertEqual(mocked.call_count, 1)
+            self.assertEqual(mocked.call_count, 1)
+
+
+class AgentConversationRepositoryTests(unittest.TestCase):
+    def test_session_messages_are_persisted_and_user_scoped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            repository = AgentConversationRepository(Path(folder) / "agent_chat.sqlite3")
+            session = repository.create("user-a", mode="knowledge")
+            repository.add_message("user-a", session["session_id"], "user", "查询基坑降水要求", mode="knowledge")
+            repository.add_message(
+                "user-a",
+                session["session_id"],
+                "assistant",
+                "应核实降水对地铁结构的影响。",
+                model="Qwen/Qwen3.5-35B-A3B",
+                sources=[{"case_name": "测试案例", "excerpt": "降水控制"}],
+                title="基坑降水安全控制",
+            )
+
+            loaded = repository.get("user-a", session["session_id"])
+            self.assertEqual(loaded["message_count"], 2)
+            self.assertEqual(loaded["title"], "基坑降水安全控制")
+            self.assertEqual(loaded["messages"][1]["sources"][0]["case_name"], "测试案例")
+            self.assertEqual(repository.list("user-b"), [])
 
 
 class TaskManagerTests(unittest.TestCase):
@@ -291,6 +358,7 @@ class KnowledgeBaseTests(unittest.TestCase):
             exported = json.loads(match_database.read_text(encoding="utf-8"))
             self.assertEqual(exported["case_count"], 1)
             self.assertEqual(exported["records"][0]["case_id"], item["case_id"])
+            self.assertEqual(exported["records"][0]["original_file_name"], "测试基坑案例.docx")
 
             knowledge.set_active(item["case_id"], False)
             exported = json.loads(match_database.read_text(encoding="utf-8"))
@@ -300,6 +368,8 @@ class KnowledgeBaseTests(unittest.TestCase):
             matches = knowledge.search("基坑变形监测", 3)
             self.assertEqual(matches[0]["case_id"], item["case_id"])
             self.assertIn("变形监测", matches[0]["excerpt"])
+            self.assertEqual(knowledge.search("测试基坑案例.docx", 3)[0]["case_id"], item["case_id"])
+            self.assertEqual(knowledge.search("测试基坑案例", 3)[0]["case_id"], item["case_id"])
 
 
 class StageTwoAdapterTests(unittest.TestCase):

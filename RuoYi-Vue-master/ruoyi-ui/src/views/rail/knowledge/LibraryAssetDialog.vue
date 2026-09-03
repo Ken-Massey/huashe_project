@@ -21,7 +21,14 @@
     </p>
     <div v-if="files.length" class="selected-files">
       <div v-for="file in files" :key="file.name + file.size">
-        <i class="el-icon-document" /><span>{{ file.name }}</span>
+        <i class="el-icon-document" />
+        <span :title="file.name">{{ file.name }}</span>
+        <el-input
+          v-model.trim="fileNames[fileKey(file)]"
+          size="mini"
+          clearable
+          placeholder="显示名称"
+        />
         <button title="移除" @click="remove(file)"><i class="el-icon-close" /></button>
       </div>
     </div>
@@ -44,7 +51,7 @@
     </div>
     <div slot="footer">
       <el-button @click="open=false">取消</el-button>
-      <el-button type="primary" :loading="uploading" :disabled="!files.length" @click="submit">
+      <el-button type="primary" :loading="uploading" :disabled="!files.length || hasMissingDisplayName" @click="submit">
         上传 {{ files.length ? `(${files.length})` : '' }}
       </el-button>
     </div>
@@ -72,6 +79,7 @@ export default {
   data() {
     return {
       files: [],
+      fileNames: {},
       folderId: '',
       uploading: false,
       processingText: '',
@@ -114,19 +122,43 @@ export default {
     },
     selectedFolderId() {
       return this.folderId || ''
+    },
+    hasMissingDisplayName() {
+      return this.files.some(file => !this.displayName(file))
     }
   },
   watch: {
     value(value) {
       if (value) this.applyDefaultFolder()
+    },
+    files: {
+      handler(files) {
+        const next = {}
+        ;(files || []).forEach(file => {
+          const key = this.fileKey(file)
+          next[key] = this.fileNames[key] || this.defaultDisplayName(file)
+        })
+        this.fileNames = next
+      },
+      deep: false
     }
   },
   methods: {
+    fileKey(file) {
+      return `${file.name || ''}_${file.size || 0}_${file.lastModified || 0}`
+    },
+    defaultDisplayName(file) {
+      return String(file.name || '').replace(/\.[^.]+$/, '') || '未命名文件'
+    },
+    displayName(file) {
+      return (this.fileNames[this.fileKey(file)] || this.defaultDisplayName(file)).trim()
+    },
     remove(file) {
       if (this.$refs.picker) this.$refs.picker.removeRaw(file)
     },
     reset() {
       this.files = []
+      this.fileNames = {}
       this.folderId = ''
       this.uploading = false
       this.processingText = ''
@@ -158,6 +190,7 @@ export default {
     async recognizeRegulation(file) {
       const body = new FormData()
       body.append('file', file)
+      body.append('title', this.displayName(file))
       if (this.selectedFolderId) body.append('folder_id', this.selectedFolderId)
       const result = await importRegulation(body)
       await this.waitForTask(result.task_id)
@@ -165,6 +198,7 @@ export default {
     async recognizeCase(file) {
       const body = new FormData()
       body.append('file', file)
+      body.append('case_name', this.displayName(file))
       if (this.selectedFolderId) body.append('folder_id', this.selectedFolderId)
       const result = await importKnowledge(body)
       await this.waitForTask(result.task_id)
@@ -173,10 +207,15 @@ export default {
       const body = new FormData()
       body.append('file', file)
       body.append('library_type', this.libraryType)
+      body.append('display_name', this.displayName(file))
       if (this.selectedFolderId) body.append('folder_id', this.selectedFolderId)
       await uploadLibraryAsset(body)
     },
     async submit() {
+      if (this.hasMissingDisplayName) {
+        this.$message.warning('请填写每个文件的文件名称')
+        return
+      }
       this.uploading = true
       let recognized = 0
       let preserved = 0
@@ -195,7 +234,10 @@ export default {
               recognized += 1
               continue
             } catch (error) {
-              // Parsing failure should not prevent the original document entering the library.
+              if (this.libraryType === 'regulation') {
+                throw new Error(`${file.name} 解析规程失败：${error.message || '请检查文件是否可复制文字，或补充MinerU/OCR配置后重试'}`)
+              }
+              // 案例库允许保留原文件；技术规程必须完成正文入库后才能参与检索和启用。
             }
           }
           await this.preserveOriginal(file)
@@ -220,7 +262,7 @@ export default {
 
 <style scoped>
 .selected-files { max-height: 180px; margin-top: 14px; overflow: auto; border: 1px solid #e6eaed; }
-.selected-files>div { display: grid; grid-template-columns: 22px minmax(0,1fr) 30px; align-items: center; padding: 9px 12px; border-bottom: 1px solid #eef1f3; }
+.selected-files>div { display: grid; grid-template-columns: 22px minmax(0,1.1fr) minmax(160px,1fr) 30px; gap: 8px; align-items: center; padding: 9px 12px; border-bottom: 1px solid #eef1f3; }
 .selected-files>div:last-child { border-bottom: 0; }
 .selected-files span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .selected-files button { border: 0; background: transparent; color: #87919a; cursor: pointer; }

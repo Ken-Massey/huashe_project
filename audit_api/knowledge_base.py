@@ -182,7 +182,7 @@ class KnowledgeBase:
                 """
                 CREATE TABLE IF NOT EXISTS kb_case_folder (
                     folder_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    name TEXT NOT NULL COLLATE NOCASE,
                     system_key TEXT UNIQUE,
                     parent_id TEXT,
                     sort_order INTEGER NOT NULL DEFAULT 0,
@@ -204,12 +204,48 @@ class KnowledgeBase:
             folder_columns = {row["name"] for row in connection.execute("PRAGMA table_info(kb_case_folder)")}
             if "parent_id" not in folder_columns:
                 connection.execute("ALTER TABLE kb_case_folder ADD COLUMN parent_id TEXT")
+            self._migrate_folder_unique_scope(connection)
             connection.execute("CREATE INDEX IF NOT EXISTS idx_kb_case_active ON kb_case(active, status)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_kb_case_sha256 ON kb_case(sha256)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_kb_case_folder ON kb_case(folder_id)")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_kb_case_folder_parent ON kb_case_folder(parent_id)"
             )
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_kb_case_folder_parent_name "
+                "ON kb_case_folder(COALESCE(parent_id,''), name COLLATE NOCASE)"
+            )
+
+    def _migrate_folder_unique_scope(self, connection: sqlite3.Connection) -> None:
+        indexes = connection.execute("PRAGMA index_list(kb_case_folder)").fetchall()
+        for index in indexes:
+            if not int(index["unique"]):
+                continue
+            index_columns = connection.execute(f"PRAGMA index_info({index['name']})").fetchall()
+            if [row["name"] for row in index_columns] != ["name"]:
+                continue
+            connection.executescript(
+                """
+                DROP TABLE IF EXISTS kb_case_folder_new;
+                CREATE TABLE kb_case_folder_new (
+                    folder_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL COLLATE NOCASE,
+                    system_key TEXT UNIQUE,
+                    parent_id TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO kb_case_folder_new(
+                    folder_id,name,system_key,parent_id,sort_order,created_at,updated_at
+                )
+                SELECT folder_id,name,system_key,parent_id,sort_order,created_at,updated_at
+                  FROM kb_case_folder;
+                DROP TABLE kb_case_folder;
+                ALTER TABLE kb_case_folder_new RENAME TO kb_case_folder;
+                """
+            )
+            break
 
     def _initialize_default_folders(self) -> None:
         with self.lock, self._connect() as connection:
@@ -221,7 +257,7 @@ class KnowledgeBase:
             now = _now()
             for sort_order, (system_key, name) in enumerate(DEFAULT_CASE_FOLDERS):
                 existing = connection.execute(
-                    "SELECT folder_id FROM kb_case_folder WHERE name=? COLLATE NOCASE",
+                    "SELECT folder_id FROM kb_case_folder WHERE name=? COLLATE NOCASE AND parent_id IS NULL",
                     (name,),
                 ).fetchone()
                 if existing:
@@ -321,7 +357,7 @@ class KnowledgeBase:
         return self.get_folder(folder_id)
 
     def rename_folder(self, folder_id: str, name: str) -> dict[str, Any]:
-        self.get_folder(folder_id)
+        current = self.get_folder(folder_id)
         clean_name = re.sub(r"\s+", " ", name).strip()
         if not clean_name:
             raise ValueError("案例文件夹名称不能为空。")
@@ -329,6 +365,13 @@ class KnowledgeBase:
             raise ValueError("案例文件夹名称不能超过60个字符。")
         try:
             with self.lock, self._connect() as connection:
+                duplicate = connection.execute(
+                    """SELECT folder_id FROM kb_case_folder
+                       WHERE parent_id IS ? AND name=? COLLATE NOCASE AND folder_id<>?""",
+                    (current.get("parent_id"), clean_name, folder_id),
+                ).fetchone()
+                if duplicate:
+                    raise sqlite3.IntegrityError("duplicate folder name under the same parent")
                 connection.execute(
                     "UPDATE kb_case_folder SET name=?,updated_at=? WHERE folder_id=?",
                     (clean_name, _now(), folder_id),
@@ -623,6 +666,7 @@ class KnowledgeBase:
                     "case_id": item["case_id"],
                     "case_name": item["case_name"],
                     "category": item.get("category"),
+                    "original_file_name": item.get("original_file_name"),
                     "case_folder": str(Path(source).parent) if source else None,
                     "report_file": source,
                     "features": item["features"],
@@ -678,13 +722,17 @@ class KnowledgeBase:
                 text = Path(text_file).read_text(encoding="utf-8", errors="replace")[:2_000_000]
             fallback = "\n".join([
                 item.get("case_name") or "",
+                item.get("original_file_name") or "",
                 item.get("category") or "",
                 *_text_values(item.get("features") or {}),
                 *_text_values(item.get("advices") or []),
             ])
             corpus = f"{text}\n{fallback}"
             corpus_lower = corpus.lower()
-            title_lower = (item.get("case_name") or "").lower()
+            title_lower = " ".join([
+                item.get("case_name") or "",
+                item.get("original_file_name") or "",
+            ]).lower()
             matched_terms = sum(1 for term in terms if term in corpus_lower)
             score = matched_terms * 100 + sum(
                 (corpus_lower.count(term) + 4 * title_lower.count(term)) * len(term) for term in terms
@@ -707,7 +755,7 @@ class KnowledgeBase:
                 "case_name": item["case_name"],
                 "category": item.get("category"),
                 "score": score,
-                "excerpt": excerpt,
+                "excerpt": excerpt or f"文件名称：{item['case_name']}；原始文件：{item.get('original_file_name') or ''}",
                 "original_file_name": item.get("original_file_name"),
             })
         return sorted(results, key=lambda item: item["score"], reverse=True)[:limit]

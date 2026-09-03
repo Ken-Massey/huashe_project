@@ -139,6 +139,7 @@ def rank_cases(query_features, database, top_k=5):
                 "score": score,
                 "case_id": record.get("case_id"),
                 "case_name": record.get("case_name"),
+                "original_file_name": record.get("original_file_name"),
                 "category": record.get("category"),
                 "case_folder": record.get("case_folder"),
                 "report_file": record.get("report_file"),
@@ -169,6 +170,7 @@ def write_markdown(path, query_features, matches):
         lines.extend(
             [
                 f"- 案例名称：{best.get('case_name')}",
+                f"- 文件名称：{best.get('original_file_name') or best.get('case_name')}",
                 f"- 案例类别：{best.get('category')}",
                 f"- 相似度：{best.get('score')}",
                 f"- 案例文件夹：`{best.get('case_folder')}`",

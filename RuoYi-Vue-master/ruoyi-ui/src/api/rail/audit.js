@@ -67,6 +67,11 @@ export function publishRegulationRule(id) { return request({ url: `/rail/knowled
 export function askAgent(data) { return request({ url: '/rail/agent/ask', method: 'post', data, timeout: 180000 }) }
 export function getAgentConfig() { return request({ url: '/rail/agent/config', method: 'get' }) }
 export function saveAgentConfig(data) { return request({ url: '/rail/agent/config', method: 'post', data }) }
+export function listAgentSessions(limit = 50) { return request({ url: '/rail/agent/sessions', method: 'get', params: { limit } }) }
+export function createAgentSession(data = {}) { return request({ url: '/rail/agent/sessions', method: 'post', data }) }
+export function getAgentSession(id) { return request({ url: `/rail/agent/sessions/${id}`, method: 'get' }) }
+export function renameAgentSession(id, title) { return request({ url: `/rail/agent/sessions/${id}/rename`, method: 'post', data: { title } }) }
+export function deleteAgentSession(id) { return request({ url: `/rail/agent/sessions/${id}`, method: 'delete' }) }
 
 export function createAuditSession(data) { return request({ url: '/rail/audit-sessions', method: 'post', data }) }
 export function getAuditSession(id) { return request({ url: `/rail/audit-sessions/${id}`, method: 'get' }) }

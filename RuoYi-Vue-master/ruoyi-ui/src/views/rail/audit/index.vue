@@ -81,6 +81,15 @@
             </div>
             <el-tag v-if="record.file === letterFile" size="mini" type="success">主函件</el-tag>
             <el-tag v-if="record.file === caseFile" size="mini">主案例</el-tag>
+            <el-radio
+              v-if="record.role === 'case'"
+              v-model="mainCaseDocumentId"
+              class="main-case-radio"
+              size="mini"
+              :label="record.id"
+              @click.native.stop
+              @change="mainCaseChanged(record)"
+            >作为主案例</el-radio>
             <el-select v-model="record.role" size="mini" class="role-select" @click.native.stop @change="documentRoleChanged(record)">
               <el-option label="函件" value="letter" />
               <el-option label="案例/方案" value="case" />
@@ -606,9 +615,9 @@
                   <el-tag
                     size="mini"
                     effect="plain"
-                    :type="record.role === 'letter' ? 'success' : (record.role === 'case' ? '' : 'info')"
-                  >
-                    {{ record.role === 'letter' ? '函件' : (record.role === 'case' ? '案例' : '附件') }}
+                      :type="record.role === 'letter' ? 'success' : (record.role === 'case' ? '' : 'info')"
+                    >
+                    {{ record.role === 'letter' ? '函件' : (isMainCaseRecord(record) ? '主案例' : (record.role === 'case' ? '案例' : '附件')) }}
                   </el-tag>
                   <el-button
                     class="composer-file-remove"
@@ -770,7 +779,7 @@ export default {
   components: { FileDropZone },
   data() {
     return {
-      activeTab: 'project', documents: [], recognizing: false, documentSequence: 0,
+      activeTab: 'project', documents: [], recognizing: false, documentSequence: 0, mainCaseDocumentId: '',
       auditTaskId: '', auditResult: null, replyResult: null, auditSubmitting: false, replySubmitting: false,
       auditSession: null, reviewItems: [], chatMessages: [], chatInstruction: '', chatSubmitting: false,
       expandedSnapshotIds: {},
@@ -882,7 +891,11 @@ export default {
       return `已带入上一阶段“${this.inheritedFormSource.stage_name || '已审核阶段'}”的参数，可修改后重新审核。`
     },
     letterRecord() { return this.documents.find(item => item.role === 'letter' && this.isUploadableDocument(item)) || null },
-    caseRecord() { return this.documents.find(item => item.role === 'case' && this.isUploadableDocument(item)) || null },
+    caseRecord() {
+      const cases = this.documents.filter(item => item.role === 'case' && this.isUploadableDocument(item))
+      if (!cases.length) return null
+      return cases.find(item => item.id === this.mainCaseDocumentId) || cases[0]
+    },
     letterFile() { return this.letterRecord && this.letterRecord.file },
     caseFile() { return this.caseRecord && this.caseRecord.file },
     hasAnyFile() { return this.documents.some(item => this.isUploadableDocument(item)) },
@@ -1225,6 +1238,7 @@ export default {
       }
     },
     openDataDialog() {
+      this.ensureMainCaseSelection()
       this.refreshConflictSelections()
       this.dataDialogMissing = this.collectMissingAuditFields()
       this.dataDialogVisible = true
@@ -1753,6 +1767,7 @@ export default {
         },
         restored: true,
         role,
+        isMainCase: Boolean(item.is_main_case || item.isMainCase),
         status: item.status || 'done',
         message: item.message || '项目档案中的历史文件记录；如需重新审核请重新选择文件',
         confidence: item.confidence || null,
@@ -1801,7 +1816,8 @@ export default {
         name: item.file && item.file.name,
         size: item.file && item.file.size,
         lastModified: item.file && item.file.lastModified,
-        role: item.role
+        role: item.role,
+        isMainCase: item.id === this.mainCaseDocumentId
       }))
       return JSON.stringify({
         form: this.normalizedFormPayload(),
@@ -1809,6 +1825,7 @@ export default {
         customStageName: this.customStageName,
         landUseSelection: this.landUseSelection,
         selectedNearbyProjectIds: this.selectedNearbyProjectIds,
+        mainCaseDocumentId: this.mainCaseDocumentId,
         documents
       })
     },
@@ -1824,6 +1841,7 @@ export default {
         size: item.file && item.file.size,
         type: item.file && item.file.type,
         role: item.role,
+        isMainCase: item.id === this.mainCaseDocumentId,
         status: item.status,
         message: item.message,
         confidence: item.confidence,
@@ -1853,6 +1871,7 @@ export default {
           workflowSnapshots: this.workflowSnapshots,
           baselineAuditSignature: this.baselineAuditSignature,
           conflictSelections: this.conflictSelections,
+          mainCaseDocumentId: this.mainCaseDocumentId,
           documentSummaries
         }))
       } catch (error) {}
@@ -1885,6 +1904,7 @@ export default {
         this.workflowLogs = draft.workflowLogs || []
         this.workflowSnapshots = draft.workflowSnapshots || []
         this.conflictSelections = draft.conflictSelections || {}
+        this.mainCaseDocumentId = draft.mainCaseDocumentId || ''
         this.chatMessages = this.auditSession
           ? this.ensureSnapshotMessages({ ...this.auditSession, items: this.reviewItems, messages: draft.chatMessages || [] }, this.auditResult || {}, draft.chatMessages || [])
           : (draft.chatMessages || [])
@@ -1894,12 +1914,16 @@ export default {
           file: { name: item.name, size: item.size, type: item.type, lastModified: 0 },
           restored: true,
           role: item.role,
+          isMainCase: Boolean(item.isMainCase),
           status: item.status || 'done',
           message: item.message || '上次上传的文件记录；如需重新审核请重新选择文件',
           confidence: item.confidence,
           fields: item.fields || {},
           textPreview: item.textPreview || ''
         }))
+        const restoredMainCase = this.documents.find(item => item.isMainCase || item.id === this.mainCaseDocumentId)
+        if (restoredMainCase) this.mainCaseDocumentId = restoredMainCase.id
+        this.ensureMainCaseSelection()
         this.documentSequence = this.documents.length
         if (this.auditSession) this.$nextTick(() => this.refreshWorkflowInfo())
       } catch (error) {
@@ -2195,11 +2219,34 @@ export default {
       })
       return payload
     },
+    isMainCaseRecord(record) {
+      return Boolean(record && record.role === 'case' && record.id === this.mainCaseDocumentId)
+    },
+    mainCaseChanged(record) {
+      if (!record || record.role !== 'case') {
+        this.ensureMainCaseSelection()
+        return
+      }
+      this.mainCaseDocumentId = record.id
+      if (typeof this.markAuditInputChanged === 'function') this.markAuditInputChanged()
+      this.saveAuditDraft()
+    },
+    ensureMainCaseSelection() {
+      const caseRecords = (this.documents || []).filter(item => item.role === 'case' && this.isUploadableDocument(item))
+      if (!caseRecords.length) {
+        this.mainCaseDocumentId = ''
+        return
+      }
+      if (!caseRecords.some(item => item.id === this.mainCaseDocumentId)) {
+        this.mainCaseDocumentId = caseRecords[0].id
+      }
+    },
     uploadedDocumentPayload() {
       return this.documents.map(item => ({
         name: item.file && item.file.name,
         role: item.role,
         is_primary: item.file === this.caseFile || item.file === this.letterFile,
+        is_main_case: this.isMainCaseRecord(item),
         fields: item.fields || {},
         text_excerpt: item.textPreview || ''
       }))
@@ -2253,6 +2300,7 @@ export default {
         return
       }
       this.documents.push(...additions)
+      this.ensureMainCaseSelection()
       this.updateLetterExcerpt()
       if (typeof this.markAuditInputChanged === 'function') this.markAuditInputChanged()
       this.saveAuditDraft()
@@ -2272,6 +2320,7 @@ export default {
         body.append('file', record.file)
         const result = await recognizeReplyLetter(body)
         record.role = result.document_role || this.fallbackRole(record.file)
+        this.ensureMainCaseSelection()
         record.fields = result.fields || {}
         record.textPreview = result.text_preview || ''
         record.confidence = result.role_confidence
@@ -2292,8 +2341,12 @@ export default {
       return { letter: '函件', case: '案例/方案', attachment: '补充附件' }[role] || '项目资料'
     },
     documentRoleChanged(record) {
+      if (record.role !== 'case' && record.id === this.mainCaseDocumentId) {
+        this.mainCaseDocumentId = ''
+      }
       record.message = `已人工设为${this.roleLabel(record.role)}`
       if (record.role === 'letter') this.applyRecognizedFields(record.fields || {})
+      this.ensureMainCaseSelection()
       this.refreshConflictSelections()
       this.updateLetterExcerpt()
       this.saveAuditDraft()
@@ -2303,6 +2356,8 @@ export default {
         this.$refs.documentsPicker.removeRaw(record.file)
       }
       this.documents = this.documents.filter(item => item.id !== record.id)
+      if (record.id === this.mainCaseDocumentId) this.mainCaseDocumentId = ''
+      this.ensureMainCaseSelection()
       this.updateLetterExcerpt()
       if (typeof this.markAuditInputChanged === 'function') this.markAuditInputChanged()
       this.saveAuditDraft()
@@ -2498,6 +2553,7 @@ export default {
       }
       if (this.hasOnlyRestoredDocuments) return this.$message.warning('已恢复的是上次文件记录；如需重新审核，请重新选择原始文件')
       if (!this.hasAnyFile) return this.$message.warning('请至少上传函件或案例文件')
+      this.ensureMainCaseSelection()
       if (!this.letterFile && !this.caseFile) return this.$message.warning('请将至少一个文件设为函件或案例/方案')
       if (!await this.prepareArchiveBindingForAudit()) return
       if (!this.validateLetterInputs()) return
@@ -3423,6 +3479,7 @@ export default {
       sessionStorage.removeItem(AUDIT_DRAFT_KEY)
       this.form = defaultForm()
       this.documents = []
+      this.mainCaseDocumentId = ''
       this.auditTaskId = ''
       this.auditResult = null
       this.replyResult = null
@@ -3515,12 +3572,12 @@ export default {
 .conflict-source-list { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; color: #8a8f94; font-size: 12px; line-height: 1.45; }
 .conflict-source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .document-list { margin-top: 12px; border: 1px solid #e5eaed; }
-.document-row { display: grid; grid-template-columns: 24px minmax(0,1fr) auto auto 132px 28px; align-items: center; gap: 10px; min-height: 58px; padding: 8px 12px; border-bottom: 1px solid #edf0f2; }
+.document-row { display: grid; grid-template-columns: 24px minmax(0,1fr) auto auto auto 132px 28px; align-items: center; gap: 10px; min-height: 58px; padding: 8px 12px; border-bottom: 1px solid #edf0f2; }
 .document-row.previewable-document { cursor: pointer; }
 .document-row.previewable-document:hover .document-name strong { color: #1677ff; }
 .document-row:last-child { border-bottom: 0; }.document-row > i { color: #2f7d69; font-size: 18px; }
 .document-row > .el-icon-warning-outline { color: #d99b32; }.document-name { min-width: 0; }.document-name strong,.document-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.document-name small { margin-top: 5px; color: #879199; }.role-select { width: 132px; }.document-remove { color: #8a949c; }
+.document-name small { margin-top: 5px; color: #879199; }.main-case-radio { margin-right: 0; white-space: nowrap; }.role-select { width: 132px; }.document-remove { color: #8a949c; }
 .parameter-form { padding-top: 6px; }.parameter-form ::v-deep .el-select,.parameter-form ::v-deep .el-input-number { width: 100%; }
 .project-name-input { width: 100%; }
 .custom-stage-input { margin-top: 8px; }
@@ -3646,7 +3703,7 @@ export default {
 .opinion-block,.match-block { margin-top: 18px; padding: 17px; border-left: 3px solid #4d7485; background: #f4f7f9; }.opinion-block h4 { margin: 0 0 12px; }.opinion-block p,.match-block p { display: grid; grid-template-columns: 26px 1fr; gap: 8px; line-height: 1.7; }
 .opinion-block p span,.match-block p span { color: #2f7d69; font-weight: 600; }.match-block > div { display: flex; flex-direction: column; gap: 5px; }.match-block > .el-tag { float: right; margin-top: -34px; }
 @media (max-width: 1100px) { .decision-grid { grid-template-columns: repeat(2,1fr); } }
-@media (max-width: 760px) { .document-row { grid-template-columns: 22px minmax(0,1fr) 118px 24px; }.document-row > .el-tag { display: none; }.role-select { width: 118px; }.location-input-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .document-row { grid-template-columns: 22px minmax(0,1fr) 118px 24px; }.document-row > .el-tag,.main-case-radio { display: none; }.role-select { width: 118px; }.location-input-grid { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .review-brief { align-items: stretch; flex-direction: column; }.brief-actions { display: grid; grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .command-bar,.result-actions,.workflow-panel { align-items: stretch; flex-direction: column; }.command-bar > div,.result-actions > div,.workflow-panel-actions { display: grid; grid-template-columns: 1fr; }.decision-grid { grid-template-columns: 1fr; }.chat-composer { border-radius: 22px; padding: 12px; }.review-item-head { grid-template-columns: 30px minmax(0,1fr); }.review-actions { grid-column: 2; } }
 </style>
