@@ -88,6 +88,11 @@
     </block>
 
     <view class="form-item">
+      <text class="field-label">本次上传名称（选填）</text>
+      <input class="input" data-field="recordTitle" value="{{ recordTitle }}" bindinput="onInput" placeholder="如：第2次现场巡查-K10+499核查" maxlength="60" />
+    </view>
+
+    <view class="form-item">
       <text class="field-label">备注</text>
       <textarea class="textarea" value="{{ note }}" bindinput="onNote" placeholder="现场情况说明（选填）" maxlength="1000" />
     </view>

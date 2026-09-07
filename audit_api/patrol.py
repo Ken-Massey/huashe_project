@@ -26,7 +26,13 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Uploa
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from .config import PATROL_DB, PATROL_DEV_TOKEN, PATROL_UPLOAD_ROOT, SERVICE_TOKEN
+from .config import (
+    PATROL_DB,
+    PATROL_DEV_TOKEN,
+    PATROL_UPLOAD_ROOT,
+    PROJECT_ARCHIVE_DB,
+    SERVICE_TOKEN,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +47,10 @@ MAX_PHOTOS_PER_RECORD = 9
 MAX_VIDEOS_PER_RECORD = 2
 MAX_PHOTO_BYTES = 20 * 1024 * 1024
 MAX_VIDEO_BYTES = 50 * 1024 * 1024
+# 审核意见 → 现场核查（Step①）
+OPINION_STATUSES = {"pending_photo", "photo_taken", "done", "returned"}
+MAX_OPINION_PHOTOS = 9
+MAX_OPINION_PHOTO_BYTES = 20 * 1024 * 1024
 # 监测方案文档
 DOC_PDF_SUFFIXES = {".pdf"}
 DOC_WORD_SUFFIXES = {".doc", ".docx"}
@@ -136,6 +146,93 @@ def _workflow_patrol_opinion(data: dict[str, Any]) -> str:
     return _limit_text("；".join(lines) or "终审通过。请结合审核结论开展现场符合性巡查。", 1900)
 
 
+# ---------------------------------------------------------------------------
+# 审核意见 → 现场核查：从项目档案收集意见（解耦：只读项目档案 SQLite）
+# ---------------------------------------------------------------------------
+
+def _opinion_result_items(result_data: Any) -> list[tuple[str, str, str]]:
+    """宽容提取审核结果里的逐条意见，返回 [(title, risk, content)]（去重、过滤已符合项）。"""
+    payload = result_data if isinstance(result_data, dict) else {}
+    items: list[Any] = []
+    for key in ("review_items", "items", "opinions"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            items.extend(item for item in value if isinstance(item, dict))
+    if not items:
+        risk_report = ((payload.get("dynamic_regulation_audit") or {}).get("risk_report") or {})
+        items = [item for item in (risk_report.get("findings") or []) if isinstance(item, dict)]
+    if not items:
+        details = payload.get("audit_details") or {}
+        items = [item for item in (details.get("non_compliant_items") or []) if isinstance(item, dict)]
+
+    seen: set[str] = set()
+    out: list[tuple[str, str, str]] = []
+    for item in items:
+        judgement = str(item.get("judgement") or item.get("status") or "")
+        if judgement == "compliant":
+            continue
+        title = str(item.get("title") or item.get("topic") or item.get("name") or "").strip()
+        risk = str(item.get("risk_level") or item.get("severity") or "").strip()
+        body = str(item.get("conclusion") or item.get("analysis") or item.get("result")
+                   or item.get("recommendation") or item.get("opinion") or "").strip()
+        recommendation = str(item.get("recommendation") or item.get("opinion") or "").strip()
+        if recommendation and recommendation not in body:
+            body = f"{body}；{recommendation}" if body else recommendation
+        content = _limit_text(body or title, 1600)
+        key = f"{title}\u0000{content}"[:400]
+        if not content or key in seen:
+            continue
+        seen.add(key)
+        out.append((_limit_text(title, 160), _limit_text(risk, 20), content))
+    return out
+
+
+def _collect_project_opinions(project_id: str) -> list[dict[str, Any]]:
+    """读取项目档案库中该项目已成功审核的 audit_records，提取逐条意见（带阶段上下文）。"""
+    db = Path(PROJECT_ARCHIVE_DB)
+    if not db.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        connection = sqlite3.connect(db, timeout=10)
+        try:
+            connection.row_factory = sqlite3.Row
+            records = connection.execute(
+                """
+                SELECT ar.stage_id, ar.result_json, ps.name AS stage_name
+                FROM audit_records ar
+                JOIN project_stages ps ON ps.stage_id = ar.stage_id
+                WHERE ar.project_id = ? AND ar.status = 'success'
+                ORDER BY ar.completed_at, ps.stage_order
+                """,
+                (project_id,),
+            ).fetchall()
+            for record in records:
+                result_data: dict[str, Any] = {}
+                raw = record["result_json"]
+                if isinstance(raw, str) and raw.strip():
+                    try:
+                        result_data = json.loads(raw)
+                    except json.JSONDecodeError:
+                        result_data = {}
+                for index, (title, risk, content) in enumerate(
+                    _opinion_result_items(result_data), start=1
+                ):
+                    rows.append({
+                        "stage_id": record["stage_id"] or "",
+                        "stage_name": record["stage_name"] or "",
+                        "opinion_no": index,
+                        "title": title,
+                        "risk_level": risk,
+                        "content": content,
+                    })
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        LOGGER.exception("读取项目档案意见失败：%s", project_id)
+    return rows
+
+
 class PatrolRepository:
     """巡查任务、巡查记录、媒体、隐患与字典的持久化存储。"""
 
@@ -176,6 +273,8 @@ class PatrolRepository:
                 CREATE TABLE IF NOT EXISTS patrol_tasks (
                     task_id TEXT PRIMARY KEY,
                     task_no TEXT NOT NULL UNIQUE,
+                    task_type TEXT NOT NULL DEFAULT 'construction'
+                        CHECK(task_type IN ('pre_construction','construction')),
                     source_workflow_id TEXT NOT NULL DEFAULT '',
                     source_project_id TEXT NOT NULL DEFAULT '',
                     source_project_name TEXT NOT NULL DEFAULT '',
@@ -208,6 +307,7 @@ class PatrolRepository:
                     type TEXT NOT NULL DEFAULT 'patrol'
                         CHECK(type IN ('patrol','rectify')),
                     hazard_id TEXT NOT NULL DEFAULT '',
+                    title TEXT NOT NULL DEFAULT '',
                     longitude REAL,
                     latitude REAL,
                     accuracy REAL,
@@ -224,6 +324,7 @@ class PatrolRepository:
                     kind TEXT NOT NULL CHECK(kind IN ('photo','video')),
                     file_name TEXT NOT NULL DEFAULT '',
                     file_path TEXT NOT NULL DEFAULT '',
+                    caption TEXT NOT NULL DEFAULT '',
                     taken_at TEXT NOT NULL DEFAULT '',
                     sort INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
@@ -359,6 +460,9 @@ class PatrolRepository:
                 item["name"]
                 for item in connection.execute("PRAGMA table_info(patrol_tasks)").fetchall()
             }
+            # 存量库迁移：为已有 patrol_tasks 补“任务类别”列（默认施工巡查）
+            if "task_type" not in task_columns:
+                connection.execute("ALTER TABLE patrol_tasks ADD COLUMN task_type TEXT NOT NULL DEFAULT 'construction'")
             for column in (
                 "monitor_frequency", "monitor_points", "warning_threshold",
                 "emergency_plan", "report_requirement", "review_opinion",
@@ -379,6 +483,20 @@ class PatrolRepository:
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_patrol_tasks_source_project "
                 "ON patrol_tasks(source_project_id) WHERE source_project_id <> ''"
             )
+            # 存量库迁移：为已有 patrol_media 补照片名称(caption)列
+            media_columns = {
+                item["name"]
+                for item in connection.execute("PRAGMA table_info(patrol_media)").fetchall()
+            }
+            if "caption" not in media_columns:
+                connection.execute("ALTER TABLE patrol_media ADD COLUMN caption TEXT NOT NULL DEFAULT ''")
+            # 存量库迁移：为已有 patrol_records 补“本次上传名称”列
+            record_columns = {
+                item["name"]
+                for item in connection.execute("PRAGMA table_info(patrol_records)").fetchall()
+            }
+            if "title" not in record_columns:
+                connection.execute("ALTER TABLE patrol_records ADD COLUMN title TEXT NOT NULL DEFAULT ''")
         self._seed_default_dicts()
         self._migrate_legacy_events()
 
@@ -569,7 +687,9 @@ class PatrolRepository:
         data: dict[str, Any],
         actor: dict[str, Any],
         *,
+        task_type: str = "construction",
         source_workflow_id: str = "",
+        source_project_id: str = "",
     ) -> dict[str, Any]:
         task_id, now = _id("ptask"), _now()
         name = _text(data.get("name"), field="任务名称", required=True, maximum=120)
@@ -587,20 +707,27 @@ class PatrolRepository:
         review_opinion = _text(data.get("review_opinion"), field="监测审查意见", maximum=2000)
         dispatcher = _text(actor.get("name") or actor.get("user_id"), field="派发人", maximum=60)
         source_workflow_id = _text(source_workflow_id, field="审核流程", maximum=80)
+        source_project_id = _text(source_project_id, field="项目档案", maximum=80)
+        source_project_name = _text(data.get("source_project_name") or name, field="项目名称", maximum=120)
+        task_type = _text(task_type, field="任务类别", maximum=20)
+        if task_type not in {"pre_construction", "construction"}:
+            raise ValueError("任务类别无效。")
         with self._lock, self._connect() as connection:
             task_no = self._next_task_no(connection)
             connection.execute(
                 """
                 INSERT INTO patrol_tasks(
-                    task_id, task_no, source_workflow_id, name, line, location_desc, requirement,
+                    task_id, task_no, task_type, source_workflow_id, source_project_id, source_project_name,
+                    name, line, location_desc, requirement,
                     assigned_user_id, assigned_user_name, status, dispatcher, dispatch_time,
                     remark, monitor_frequency, monitor_points, warning_threshold,
                     emergency_plan, report_requirement, review_opinion,
                     legacy, deleted, created_at, updated_at
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
                 """,
                 (
-                    task_id, task_no, source_workflow_id, name, line, location_desc, requirement,
+                    task_id, task_no, task_type, source_workflow_id, source_project_id, source_project_name,
+                    name, line, location_desc, requirement,
                     assigned_user_id, assigned_user_name, dispatcher, now, remark,
                     monitor_frequency, monitor_points, warning_threshold,
                     emergency_plan, report_requirement, review_opinion,
@@ -610,9 +737,24 @@ class PatrolRepository:
         return self.get_task(task_id, actor)
 
     def create_workflow_task(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Create one patrol task from a final-approved audit workflow, idempotently."""
-        workflow_id = _text(data.get("workflow_id"), field="审核流程", required=True, maximum=80)
+        """终审通过后按“项目”建/复用一个巡查任务，并把项目档案中记录的意见同步进任务。
+
+        幂等：patrol_tasks.source_project_id（项目级唯一）；无 project_id 时退回按流程(source_workflow_id)幂等。
+        """
         system_actor = {"user_id": "workflow", "name": "审核流转系统", "is_admin": True}
+        project_id = _text(data.get("project_id"), field="项目档案", maximum=80)
+        if project_id:
+            task, created = self.ensure_project_task(
+                project_id,
+                project_name=data.get("project_name") or data.get("projectName") or "",
+                workflow_id=data.get("workflow_id") or "",
+                initiator_id=data.get("initiator_id"),
+                initiator_name=data.get("initiator_name"),
+            )
+            added = self.sync_project_opinions(task["task_id"], project_id)
+            return {"created": created, "opinions_added": added, "task": self.get_task(task["task_id"], system_actor)}
+
+        workflow_id = _text(data.get("workflow_id"), field="审核流程", required=True, maximum=80)
         with self._connect() as connection:
             existing = connection.execute(
                 "SELECT task_id FROM patrol_tasks WHERE source_workflow_id = ? AND deleted = 0",
@@ -635,7 +777,7 @@ class PatrolRepository:
             "review_opinion": _limit_text(final_opinion, 2000),
         }
         try:
-            task = self.create_task(task_data, system_actor, source_workflow_id=workflow_id)
+            task = self.create_task(task_data, system_actor, task_type="pre_construction", source_workflow_id=workflow_id)
             return {"created": True, "task": task}
         except sqlite3.IntegrityError:
             with self._connect() as connection:
@@ -646,6 +788,247 @@ class PatrolRepository:
             if existing is None:
                 raise
             return {"created": False, "task": self.get_task(existing["task_id"], system_actor)}
+
+    # ---- 审核意见 → 现场核查（Step①）----
+
+    def ensure_project_task(
+        self,
+        project_id: str,
+        *,
+        project_name: str = "",
+        workflow_id: str = "",
+        initiator_id: Any = "",
+        initiator_name: Any = "",
+    ) -> tuple[dict[str, Any], bool]:
+        """按项目找/建唯一巡查任务（source_project_id 唯一索引）。返回 (task, created)。"""
+        system_actor = {"user_id": "workflow", "name": "审核流转系统", "is_admin": True}
+        with self._connect() as connection:
+            existing = connection.execute(
+                "SELECT task_id FROM patrol_tasks WHERE source_project_id = ? AND deleted = 0",
+                (project_id,),
+            ).fetchone()
+        if existing is not None:
+            return self.get_task(existing["task_id"], system_actor), False
+        name = _text(project_name, field="项目名称", required=True, maximum=120)
+        task_data = {
+            "name": name,
+            "source_project_name": name,
+            "requirement": "请按项目档案中记录的审核意见逐项开展现场符合性巡查：实地核实每条意见所涉情况，拍摄现场照片并对照说明。",
+            "assigned_user_id": str(initiator_id or ""),
+            "assigned_user_name": str(initiator_name or ""),
+            "remark": f"来源：项目档案（{project_id}）。",
+        }
+        try:
+            task = self.create_task(
+                task_data, system_actor, task_type="pre_construction",
+                source_workflow_id=_text(workflow_id, field="审核流程", maximum=80),
+                source_project_id=project_id,
+            )
+            return task, True
+        except sqlite3.IntegrityError:
+            # 并发兜底：项目任务已被其它调用建立
+            with self._connect() as connection:
+                existing = connection.execute(
+                    "SELECT task_id FROM patrol_tasks WHERE source_project_id = ? AND deleted = 0",
+                    (project_id,),
+                ).fetchone()
+            if existing is None:
+                raise
+            return self.get_task(existing["task_id"], system_actor), False
+
+    def sync_project_opinions(self, task_id: str, project_id: str) -> int:
+        """把项目档案中该项目已审核记录的意见幂等合并进任务（只新增不改旧）。返回新增条数。"""
+        items = _collect_project_opinions(project_id)
+        now = _now()
+        added = 0
+        with self._lock, self._connect() as connection:
+            for index, item in enumerate(items):
+                opinion_id = _id("popi")
+                inserted = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO patrol_task_opinions(
+                        opinion_id, task_id, project_id, stage_id, stage_name,
+                        opinion_no, title, risk_level, opinion_content, sort,
+                        status, created_at, updated_at
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_photo', ?, ?)
+                    """,
+                    (
+                        opinion_id, task_id, project_id,
+                        item.get("stage_id", ""), item.get("stage_name", ""),
+                        item.get("opinion_no", index + 1), item.get("title", ""),
+                        item.get("risk_level", ""), item.get("content", ""),
+                        index + 1, now, now,
+                    ),
+                )
+                added += 1 if inserted.rowcount else 0
+        return added
+
+    def get_opinion(self, opinion_id: str) -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM patrol_task_opinions WHERE opinion_id = ?", (opinion_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError("核查意见不存在。")
+        return dict(row)
+
+    def _load_opinion_photos(self, opinion_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        photo_map: dict[str, list[dict[str, Any]]] = {}
+        if not opinion_ids:
+            return photo_map
+        with self._connect() as connection:
+            placeholders = ",".join("?" for _ in opinion_ids)
+            rows = connection.execute(
+                f"SELECT * FROM patrol_opinion_photos WHERE opinion_id IN ({placeholders}) "
+                "ORDER BY sort, created_at",
+                opinion_ids,
+            ).fetchall()
+        for row in rows:
+            photo_map.setdefault(row["opinion_id"], []).append(dict(row))
+        return photo_map
+
+    def list_task_opinions(self, task_id: str, actor: dict[str, Any]) -> list[dict[str, Any]]:
+        """列出任务下的核查意见（含照片），并对项目类任务做一次幂等同步。"""
+        task = self.get_task(task_id, actor)
+        project_id = task.get("source_project_id") or ""
+        if project_id:
+            self.sync_project_opinions(task_id, project_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM patrol_task_opinions WHERE task_id = ? "
+                "ORDER BY sort, created_at, opinion_id",
+                (task_id,),
+            ).fetchall()
+        opinions = [dict(row) for row in rows]
+        photo_map = self._load_opinion_photos([o["opinion_id"] for o in opinions])
+        for opinion in opinions:
+            opinion["photos"] = photo_map.get(opinion["opinion_id"], [])
+        return opinions
+
+    def opinion_photo_path(self, photo_id: str) -> Path:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM patrol_opinion_photos WHERE photo_id = ?", (photo_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError("意见照片不存在。")
+        path = Path(row["file_path"]).resolve()
+        if not path.exists() or not path.is_file():
+            raise KeyError("意见照片文件缺失。")
+        return path
+
+    def add_opinion_photo(
+        self, opinion_id: str, stored_path: str | Path, file_name: str, taken_at: str, actor: dict[str, Any]
+    ) -> dict[str, Any]:
+        opinion = self.get_opinion(opinion_id)
+        self.get_task(opinion["task_id"], actor)  # 行级隔离
+        if opinion["status"] == "done":
+            raise ValueError("该意见已完成，照片已锁定，不能再上传。")
+        now = _now()
+        with self._lock, self._connect() as connection:
+            count = int(connection.execute(
+                "SELECT COUNT(*) FROM patrol_opinion_photos WHERE opinion_id = ?", (opinion_id,)
+            ).fetchone()[0])
+            if count >= MAX_OPINION_PHOTOS:
+                raise ValueError(f"每条意见最多{MAX_OPINION_PHOTOS}张现场照片。")
+            photo_id = _id("pphoto")
+            connection.execute(
+                """
+                INSERT INTO patrol_opinion_photos(
+                    photo_id, opinion_id, file_name, file_path, taken_at, sort, uploader, created_at
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (photo_id, opinion_id, file_name, str(stored_path), taken_at, count + 1,
+                 actor.get("name") or actor.get("user_id") or "", now),
+            )
+            connection.execute(
+                "UPDATE patrol_task_opinions SET updated_at = ? WHERE opinion_id = ?", (now, opinion_id)
+            )
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM patrol_opinion_photos WHERE photo_id = ?", (photo_id,)
+            ).fetchone()
+        return dict(row)
+
+    def delete_opinion_photo(self, photo_id: str, actor: dict[str, Any]) -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM patrol_opinion_photos WHERE photo_id = ?", (photo_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError("意见照片不存在。")
+        opinion = self.get_opinion(row["opinion_id"])
+        task = self.get_task(opinion["task_id"], actor)
+        if opinion["status"] == "done":
+            raise ValueError("该意见已完成，照片已锁定，不能删除。")
+        if not actor.get("is_admin") and str(actor.get("user_id") or "") != str(task.get("assigned_user_id") or ""):
+            raise ValueError("无权限删除该照片。")
+        with self._lock, self._connect() as connection:
+            connection.execute("DELETE FROM patrol_opinion_photos WHERE photo_id = ?", (photo_id,))
+            connection.execute(
+                "UPDATE patrol_task_opinions SET updated_at = ? WHERE opinion_id = ?",
+                (_now(), opinion["opinion_id"]),
+            )
+        Path(row["file_path"]).unlink(missing_ok=True)
+        return {"photo_id": photo_id, "deleted": True}
+
+    def submit_opinion(self, opinion_id: str, actor: dict[str, Any]) -> dict[str, Any]:
+        opinion = self.get_opinion(opinion_id)
+        self.get_task(opinion["task_id"], actor)
+        if opinion["status"] == "done":
+            raise ValueError("该意见已完成，无需再提交。")
+        with self._connect() as connection:
+            count = int(connection.execute(
+                "SELECT COUNT(*) FROM patrol_opinion_photos WHERE opinion_id = ?", (opinion_id,)
+            ).fetchone()[0])
+        if count <= 0:
+            raise ValueError("请先上传现场照片再提交。")
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "UPDATE patrol_task_opinions SET status = 'photo_taken', updated_at = ? "
+                "WHERE opinion_id = ?",
+                (_now(), opinion_id),
+            )
+        return self.get_opinion(opinion_id)
+
+    def update_opinion_check(self, opinion_id: str, comment: str, actor: dict[str, Any]) -> dict[str, Any]:
+        if not actor.get("is_admin"):
+            raise ValueError("无权限编辑核查意见。")
+        opinion = self.get_opinion(opinion_id)
+        self.get_task(opinion["task_id"], actor)
+        comment_value = _text(comment, field="核查意见", maximum=2000)
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "UPDATE patrol_task_opinions SET check_opinion = ?, updated_at = ? WHERE opinion_id = ?",
+                (comment_value, _now(), opinion_id),
+            )
+        return self.get_opinion(opinion_id)
+
+    def review_opinion(self, opinion_id: str, data: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
+        if not actor.get("is_admin"):
+            raise ValueError("无权限复核现场核查结果。")
+        opinion = self.get_opinion(opinion_id)
+        self.get_task(opinion["task_id"], actor)
+        result = _text(data.get("result"), field="核查结论", required=True, maximum=20)
+        if result not in {"pass", "return"}:
+            raise ValueError("核查结论无效。")
+        comment = _text(data.get("comment"), field="核查说明", maximum=2000)
+        now = _now()
+        name = actor.get("name") or actor.get("user_id") or ""
+        if result == "pass":
+            new_status, return_reason = "done", ""
+        else:
+            new_status, return_reason = "returned", comment
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE patrol_task_opinions SET status = ?, return_reason = ?,
+                    check_opinion = ?, check_by = ?, check_time = ?, updated_at = ?
+                WHERE opinion_id = ?
+                """,
+                (new_status, return_reason, comment, name, now, now, opinion_id),
+            )
+        return self.get_opinion(opinion_id)
 
     def get_task(self, task_id: str, actor: dict[str, Any]) -> dict[str, Any]:
         with self._connect() as connection:
@@ -697,6 +1080,18 @@ class PatrolRepository:
                 "SELECT * FROM patrol_task_docs WHERE task_id = ? ORDER BY created_at, doc_id", (task_id,)
             ).fetchall()
         task["docs"] = [dict(doc) for doc in doc_rows]
+        with self._connect() as connection:
+            opinion_rows = connection.execute(
+                "SELECT * FROM patrol_task_opinions WHERE task_id = ? "
+                "ORDER BY sort, created_at, opinion_id",
+                (task_id,),
+            ).fetchall()
+        opinions = [dict(opinion) for opinion in opinion_rows]
+        if opinions:
+            photo_map = self._load_opinion_photos([o["opinion_id"] for o in opinions])
+            for opinion in opinions:
+                opinion["photos"] = photo_map.get(opinion["opinion_id"], [])
+        task["opinions"] = opinions
         return task
 
     def list_tasks(
@@ -707,6 +1102,7 @@ class PatrolRepository:
         size: int = 20,
         line: str = "",
         status_value: str = "",
+        task_type_value: str = "",
         assigned_user_id: str = "",
         date_from: str = "",
         date_to: str = "",
@@ -733,6 +1129,9 @@ class PatrolRepository:
         if status_value in TASK_STATUSES:
             clauses.append("status = ?")
             params.append(status_value)
+        if task_type_value in {"pre_construction", "construction"}:
+            clauses.append("task_type = ?")
+            params.append(task_type_value)
         if keyword.strip():
             clauses.append("(name LIKE ? OR task_no LIKE ?)")
             params.extend([f"%{keyword.strip()}%", f"%{keyword.strip()}%"])
@@ -903,18 +1302,19 @@ class PatrolRepository:
         longitude = _optional_float(data.get("longitude"), field="经度", minimum=-180, maximum=180)
         latitude = _optional_float(data.get("latitude"), field="纬度", minimum=-90, maximum=90)
         accuracy = _optional_float(data.get("accuracy"), field="定位精度", minimum=0, maximum=100000)
+        title = _text(data.get("title"), field="本次上传名称", maximum=120)
         note = _text(data.get("note"), field="备注", maximum=1000)
         record_id, now = _id("prec"), _now()
         with self._lock, self._connect() as connection:
             connection.execute(
                 """
                 INSERT INTO patrol_records(
-                    record_id, task_id, type, hazard_id, longitude, latitude, accuracy,
+                    record_id, task_id, type, hazard_id, title, longitude, latitude, accuracy,
                     note, created_by, created_by_name, created_at
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    record_id, task_id, record_type, hazard_id, longitude, latitude, accuracy,
+                    record_id, task_id, record_type, hazard_id, title, longitude, latitude, accuracy,
                     note, actor.get("user_id") or "", actor.get("name") or "", now,
                 ),
             )
@@ -941,22 +1341,27 @@ class PatrolRepository:
         record["media"] = [dict(item) for item in media]
         return record
 
-    def update_record_note(self, record_id: str, note: str | None, actor: dict[str, Any]) -> dict[str, Any]:
+    def update_record_fields(self, record_id: str, note: str | None = None, title: str | None = None, actor: dict[str, Any] | None = None) -> dict[str, Any]:
         record = self.get_record(record_id)
+        if actor is None:
+            actor = {}
         if not actor.get("is_admin") and not self._is_owner(actor, record.get("created_by") or ""):
             raise ValueError("无权限修改该记录。")
-        # 状态限制：已完成/已关闭的任务不允许再修改记录备注
+        # 状态限制：已完成/已关闭的任务不允许再修改记录
         task = self.get_task(record["task_id"], actor)
         if task["status"] not in {"pending", "executing"}:
             raise ValueError("任务已完成或关闭，不能再修改巡查记录。")
         note_value = _text(note if note is not None else record.get("note"), field="备注", maximum=1000)
+        title_value = _text(title if title is not None else record.get("title"), field="本次上传名称", maximum=120)
         with self._lock, self._connect() as connection:
             connection.execute(
-                "UPDATE patrol_records SET note = ? WHERE record_id = ?", (note_value, record_id)
+                "UPDATE patrol_records SET note = ?, title = ? WHERE record_id = ?",
+                (note_value, title_value, record_id),
             )
         return self.get_record(record_id)
 
-    def add_media(self, record_id: str, kind: str, stored_path: str | Path, file_name: str, taken_at: str = "") -> dict[str, Any]:
+    def add_media(self, record_id: str, kind: str, stored_path: str | Path, file_name: str,
+                  taken_at: str = "", caption: str = "") -> dict[str, Any]:
         if kind not in MEDIA_KINDS:
             raise ValueError("媒体类型无效。")
         record = self.get_record(record_id)
@@ -977,12 +1382,15 @@ class PatrolRepository:
                 raise ValueError(f"每条记录最多{MAX_VIDEOS_PER_RECORD}个视频。")
             sort = photo_count + video_count + 1
             media_id = _id("pmed")
+            caption_value = _text(caption, field="照片名称", maximum=200)
             connection.execute(
                 """
-                INSERT INTO patrol_media(media_id, record_id, kind, file_name, file_path, taken_at, sort, created_at)
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO patrol_media(media_id, record_id, kind, file_name, file_path,
+                                         caption, taken_at, sort, created_at)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (media_id, record_id, kind, file_name, str(stored_path), taken_at, sort, now),
+                (media_id, record_id, kind, file_name, str(stored_path),
+                 caption_value, taken_at, sort, now),
             )
         return self.get_media(media_id)
 
@@ -1436,6 +1844,7 @@ class PatrolTaskCreatePayload(BaseModel):
 
 class PatrolWorkflowTaskPayload(BaseModel):
     workflow_id: str = Field(min_length=1, max_length=80)
+    project_id: str = Field(default="", max_length=80)
     project_name: str = Field(min_length=1, max_length=120)
     initiator_id: str | int | None = None
     initiator_name: str = Field(default="", max_length=60)
@@ -1466,6 +1875,7 @@ class PatrolTaskStatusPayload(BaseModel):
 class PatrolRecordCreatePayload(BaseModel):
     type: Literal["patrol", "rectify"]
     hazard_id: str = Field(default="", max_length=40)
+    title: str = Field(default="", max_length=120)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     accuracy: float | None = Field(default=None, ge=0, le=100000)
@@ -1474,6 +1884,7 @@ class PatrolRecordCreatePayload(BaseModel):
 
 class PatrolRecordUpdatePayload(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
+    title: str | None = Field(default=None, max_length=120)
 
 
 class PatrolHazardCreatePayload(BaseModel):
@@ -1500,6 +1911,15 @@ class PatrolHazardConfirmPayload(BaseModel):
 class PatrolHazardReviewPayload(BaseModel):
     result: Literal["closed", "reject"]
     comment: str = Field(default="", max_length=2000)
+
+
+class PatrolOpinionReviewPayload(BaseModel):
+    result: Literal["pass", "return"]
+    comment: str = Field(default="", max_length=2000)
+
+
+class PatrolOpinionCheckPayload(BaseModel):
+    comment: str = Field(max_length=2000)
 
 
 def _model_values(payload: BaseModel) -> dict[str, Any]:
@@ -1576,6 +1996,7 @@ def list_tasks(
     size: int = 20,
     line: str = "",
     status: str = "",
+    task_type: str = "",
     assigned_user_id: str = "",
     date_from: str = "",
     date_to: str = "",
@@ -1585,7 +2006,7 @@ def list_tasks(
 ) -> dict[str, Any]:
     return repo.list_tasks(
         actor,
-        page=page, size=size, line=line, status_value=status,
+        page=page, size=size, line=line, status_value=status, task_type_value=task_type,
         assigned_user_id=assigned_user_id, date_from=date_from, date_to=date_to, keyword=keyword,
     )
 
@@ -1662,7 +2083,7 @@ def create_record(task_id: str, payload: PatrolRecordCreatePayload, actor: dict 
 @router.post("/records/{record_id}")
 def update_record(record_id: str, payload: PatrolRecordUpdatePayload, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
     try:
-        return repo.update_record_note(record_id, payload.note, actor)
+        return repo.update_record_fields(record_id, note=payload.note, title=payload.title, actor=actor)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -1694,6 +2115,7 @@ async def add_media(
     file: UploadFile = File(...),
     kind: str = Form("photo"),
     taken_at: str = Form(""),
+    caption: str = Form(""),
     actor: dict = Depends(get_actor),
     repo: PatrolRepository = Depends(get_repository),
 ) -> dict[str, Any]:
@@ -1736,7 +2158,7 @@ async def add_media(
         destination = source
 
     try:
-        return repo.add_media(record_id, kind, destination, Path(file.filename or destination.name).name, taken_at)
+        return repo.add_media(record_id, kind, destination, Path(file.filename or destination.name).name, taken_at, caption)
     except ValueError as exc:
         destination.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -1941,6 +2363,132 @@ def doc_file(doc_id: str, actor: dict = Depends(get_actor), repo: PatrolReposito
 def delete_task_doc(doc_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
     try:
         return repo.delete_task_doc(doc_id, actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---- 审核意见 → 现场核查（Step①）----
+
+@router.get("/tasks/{task_id}/opinions")
+def list_task_opinions(task_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> list[dict[str, Any]]:
+    try:
+        return repo.list_task_opinions(task_id, actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/tasks/{task_id}/opinions/sync")
+def sync_task_opinions(task_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    """把项目档案中该项目意见同步进任务（幂等，供平台手动触发）。"""
+    try:
+        task = repo.get_task(task_id, actor)
+        project_id = task.get("source_project_id") or ""
+        if not project_id:
+            raise ValueError("该任务未关联项目档案，无需同步。")
+        added = repo.sync_project_opinions(task_id, project_id)
+        return {"added": added, "total": len(repo.list_task_opinions(task_id, actor))}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/opinions/{opinion_id}/photos", status_code=201)
+async def add_opinion_photo(
+    opinion_id: str,
+    file: UploadFile = File(...),
+    taken_at: str = Form(""),
+    actor: dict = Depends(get_actor),
+    repo: PatrolRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    try:
+        opinion = repo.get_opinion(opinion_id)
+        repo.get_task(opinion["task_id"], actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    suffix = Path(file.filename or ".jpg").suffix.lower()
+    if suffix not in PHOTO_SUFFIXES:
+        raise HTTPException(status_code=415, detail="仅支持图片文件。")
+    folder = repo.upload_root / "opinions" / opinion_id
+    folder.mkdir(parents=True, exist_ok=True)
+    source = folder / f"{uuid.uuid4().hex}{suffix}"
+    await _save_media(file, source, MAX_OPINION_PHOTO_BYTES, PHOTO_SUFFIXES)
+    photo_id = _id("pphoto")
+    destination = folder / f"{photo_id}{suffix}"
+    try:
+        lines = [f"现场核查 {_now()}", (actor.get("name") or actor.get("user_id") or "")]
+        apply_watermark(source, destination, lines)
+        source.unlink(missing_ok=True)
+        return repo.add_opinion_photo(
+            opinion_id, destination, Path(file.filename or destination.name).name, taken_at, actor
+        )
+    except ValueError as exc:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/opinion-photos/{photo_id}/file")
+def opinion_photo_file(photo_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> FileResponse:
+    try:
+        with repo._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM patrol_opinion_photos WHERE photo_id = ?", (photo_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError("意见照片不存在。")
+        opinion = repo.get_opinion(row["opinion_id"])
+        repo.get_task(opinion["task_id"], actor)  # 行级隔离
+        path = repo.opinion_photo_path(photo_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    media_type = {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+        ".webp": "image/webp", ".bmp": "image/bmp",
+    }.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, media_type=media_type, filename=path.name)
+
+
+@router.delete("/opinion-photos/{photo_id}")
+def delete_opinion_photo(photo_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    try:
+        return repo.delete_opinion_photo(photo_id, actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/opinions/{opinion_id}/submit")
+def submit_opinion(opinion_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    """巡查员：已有现场照片后提交，意见进入「已拍照（待核查）」。"""
+    try:
+        return repo.submit_opinion(opinion_id, actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/opinions/{opinion_id}/review")
+def review_opinion(opinion_id: str, payload: PatrolOpinionReviewPayload, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    """平台：通过=完成 / 退回重拍（照片保留）。"""
+    try:
+        return repo.review_opinion(opinion_id, _model_values(payload), actor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/opinions/{opinion_id}/check")
+def update_opinion_check(opinion_id: str, payload: PatrolOpinionCheckPayload, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
+    """平台：编辑该意见项的核查意见（不改状态，供导出前维护）。"""
+    try:
+        return repo.update_opinion_check(opinion_id, payload.comment, actor)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

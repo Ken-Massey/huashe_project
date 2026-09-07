@@ -1,4 +1,4 @@
-const { get, post, downloadMedia, downloadShot, downloadDoc, uploadMedia } = require('../../utils/request')
+const { get, post, del, downloadMedia, downloadShot, downloadDoc, uploadMedia, uploadOpinionPhoto, downloadOpinionPhoto } = require('../../utils/request')
 
 const TASK_STATUS = { pending: '待执行', executing: '执行中', completed: '已完成', closed: '已关闭' }
 const HAZARD_STATUS = { pending_confirm: '待确认', pending_rectify: '待整改', rectifying: '整改中', pending_review: '待复核', closed: '已闭环' }
@@ -49,7 +49,7 @@ function buildHazardSteps(status) {
 
 Page({
   data: {
-    task: null, groups: [], photoPaths: {}, shotPaths: {}, loading: false,
+    task: null, groups: [], photoPaths: {}, shotPaths: {}, opinionPaths: {}, loading: false, openMap: {}, opOpen: {}, opOpenAll: false,
     rectifyUpload: { visible: false, hazardId: '', recordId: '', files: [], note: '' }
   },
   onLoad(options) { this.taskId = options.id },
@@ -62,14 +62,35 @@ Page({
       this.hazards = task.hazards || []
       this.records = task.records || []
 
-      // 隐患映射：挂整改记录 + 状态步骤
+      // 隐患映射：挂整改记录 + 状态步骤 + 摘要
       const hazardMap = {}
         ; (task.hazards || []).forEach(h => {
           h.statusLabel = HAZARD_STATUS[h.status] || h.status
           h.steps = buildHazardSteps(h.status)
           h.rectifyRecords = []
+          const desc = (h.description || '').replace(/\s+/g, ' ').trim()
+          h.descShort = desc.length > 42 ? desc.slice(0, 42) + '…' : desc
           hazardMap[h.hazard_id] = h
         })
+
+      // 审核意见：状态文案 + 汇总统计
+      const opStat = { done: 0, pending_photo: 0, photo_taken: 0, returned: 0, lastTime: '-' }
+      let opLast = ''
+      ; (task.opinions || []).forEach(o => {
+        o.statusLabel = { pending_photo: '待拍照', photo_taken: '已拍照·待核查', done: '已完成', returned: '退回重拍' }[o.status] || o.status
+        if (opStat[o.status] !== undefined) opStat[o.status]++
+        const tm = String(o.check_time || o.updated_at || o.created_at || '')
+        if (tm > opLast) opLast = tm
+      })
+      if (opLast) opStat.lastTime = opLast.replace('T', ' ').slice(5, 16)
+      task.opStat = opStat
+
+      // 第 N 批编号：日常巡查记录按时间顺序递增
+      let patrolSeq = 0
+      const batchNoMap = {}
+      ; (task.records || []).forEach(r => {
+        if (r.type === 'patrol') { patrolSeq++; batchNoMap[r.record_id] = patrolSeq }
+      })
 
       // 分离日常巡查记录和整改反馈：整改反馈挂到对应隐患下
       const timeline = []
@@ -78,7 +99,10 @@ Page({
             hazardMap[r.hazard_id].rectifyRecords.push(r)
           } else {
             const hazards = (task.hazards || []).filter(h => h.record_id === r.record_id)
-            timeline.push({ kind: 'record', time: r.created_at || '', data: Object.assign({}, r, { hazards }) })
+            timeline.push({
+              kind: 'record', time: r.created_at || '',
+              data: Object.assign({}, r, { hazards, batchNo: batchNoMap[r.record_id] || 0 })
+            })
           }
         })
         // 独立隐患（未关联巡查记录）
@@ -106,7 +130,7 @@ Page({
         group.items.push(item)
       })
 
-      this.setData({ task, groups })
+      this.setData({ task, groups, openMap: {}, opOpenAll: false })
 
       // 并行下载照片和截图
       const photoIds = [], shotIds = []
@@ -116,14 +140,18 @@ Page({
         ; (task.hazards || []).forEach(h => {
           (h.shots || []).forEach(s => shotIds.push(s.shot_id))
         })
-      const [photoEntries, shotEntries] = await Promise.all([
+      const opinionIds = []
+      ; (task.opinions || []).forEach(o => (o.photos || []).forEach(p => opinionIds.push(p.photo_id)))
+      const [photoEntries, shotEntries, opEntries] = await Promise.all([
         Promise.all(photoIds.map(id => downloadMedia(id).then(p => [id, p]).catch(() => [id, '']))),
-        Promise.all(shotIds.map(id => downloadShot(id).then(p => [id, p]).catch(() => [id, ''])))
+        Promise.all(shotIds.map(id => downloadShot(id).then(p => [id, p]).catch(() => [id, '']))),
+        Promise.all(opinionIds.map(id => downloadOpinionPhoto(id).then(p => [id, p]).catch(() => [id, ''])))
       ])
-      const photoPaths = {}, shotPaths = {}
+      const photoPaths = {}, shotPaths = {}, opinionPaths = {}
       photoEntries.forEach(([id, p]) => { if (p) photoPaths[id] = p })
       shotEntries.forEach(([id, p]) => { if (p) shotPaths[id] = p })
-      this.setData({ photoPaths, shotPaths })
+      opEntries.forEach(([id, p]) => { if (p) opinionPaths[id] = p })
+      this.setData({ photoPaths, shotPaths, opinionPaths })
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' })
     } finally {
@@ -134,6 +162,28 @@ Page({
   goAddHazard(e) {
     const recordId = e.currentTarget.dataset.record
     wx.navigateTo({ url: '/pages/hazard/hazard?taskId=' + this.taskId + '&recordId=' + recordId })
+  },
+  toggleHazard(e) {
+    const id = e.currentTarget.dataset.id
+    const map = Object.assign({}, this.data.openMap)
+    map[id] = !map[id]
+    this.setData({ openMap: map })
+  },
+  editHazard(e) {
+    const id = e.currentTarget.dataset.id
+    wx.navigateTo({ url: '/pages/hazard/hazard?taskId=' + this.taskId + '&hazardId=' + id })
+  },
+  deleteHazard(e) {
+    const id = e.currentTarget.dataset.id
+    wx.showModal({
+      title: '删除隐患',
+      content: '确认删除该隐患？',
+      success: async r => {
+        if (!r.confirm) return
+        try { await del('/rail/patrol/hazards/' + id); wx.showToast({ title: '已删除', icon: 'success' }); this.load() }
+        catch (err) { wx.showModal({ title: '删除失败', content: err.message, showCancel: false }) }
+      }
+    })
   },
   uploadRectifyPhotos(e) {
     const id = e.currentTarget.dataset.id
@@ -236,6 +286,56 @@ Page({
   previewShot(e) {
     const id = e.currentTarget.dataset.id
     wx.previewImage({ current: this.data.shotPaths[id], urls: Object.values(this.data.shotPaths) })
+  },
+  toggleOp(e) {
+    const id = e.currentTarget.dataset.id
+    const map = Object.assign({}, this.data.opOpen)
+    map[id] = !map[id]
+    this.setData({ opOpen: map })
+  },
+  toggleOpAll() { this.setData({ opOpenAll: !this.data.opOpenAll }) },
+  previewOpPhoto(e) {
+    const id = e.currentTarget.dataset.id
+    wx.previewImage({ current: this.data.opinionPaths[id], urls: Object.values(this.data.opinionPaths) })
+  },
+  addOpPhotos(e) {
+    const id = e.currentTarget.dataset.id
+    wx.chooseMedia({
+      count: 9, mediaType: ['image'], sourceType: ['camera', 'album'], sizeType: ['compressed'],
+      success: async res => {
+        const files = (res.tempFiles || []).map(f => f.tempFilePath)
+        if (!files.length) return
+        wx.showLoading({ title: '上传中…' })
+        try {
+          for (let i = 0; i < files.length; i++) await uploadOpinionPhoto(id, files[i])
+          wx.hideLoading(); wx.showToast({ title: '上传成功', icon: 'success' }); this.load()
+        } catch (err) { wx.hideLoading(); wx.showModal({ title: '上传失败', content: err.message, showCancel: false }) }
+      }
+    })
+  },
+  delOpPhoto(e) {
+    const id = e.currentTarget.dataset.id
+    wx.showModal({
+      title: '删除照片',
+      content: '确认删除该现场照片？',
+      success: async r => {
+        if (!r.confirm) return
+        try { await del('/rail/patrol/opinion-photos/' + id); wx.showToast({ title: '已删除', icon: 'success' }); this.load() }
+        catch (err) { wx.showModal({ title: '删除失败', content: err.message, showCancel: false }) }
+      }
+    })
+  },
+  submitOpOne(e) {
+    const id = e.currentTarget.dataset.id
+    wx.showModal({
+      title: '提交核查',
+      content: '确认现场照片已拍好并提交平台核查？',
+      success: async r => {
+        if (!r.confirm) return
+        try { await post('/rail/patrol/opinions/' + id + '/submit'); wx.showToast({ title: '已提交', icon: 'success' }); this.load() }
+        catch (err) { wx.showModal({ title: '提交失败', content: err.message, showCancel: false }) }
+      }
+    })
   },
   async playVideo(e) {
     const id = e.currentTarget.dataset.id

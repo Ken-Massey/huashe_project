@@ -59,14 +59,14 @@ function login(username, password) {
 }
 
 // 上传媒体文件到指定记录
-function uploadMedia(recordId, filePath, kind, takenAt, onProgress) {
+function uploadMedia(recordId, filePath, kind, takenAt, onProgress, caption) {
   return new Promise((resolve, reject) => {
     const task = wx.uploadFile({
       url: baseURL + '/rail/patrol/records/' + recordId + '/media',
       filePath,
       name: 'file',
       header: { Authorization: 'Bearer ' + getToken() },
-      formData: { kind, taken_at: takenAt || '' },
+      formData: { kind, taken_at: takenAt || '', caption: caption || '' },
       success(res) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try { resolve(JSON.parse(res.data)) } catch (e) { resolve(res.data) }
@@ -127,6 +127,37 @@ function downloadDoc(docId) {
   })
 }
 
+// ---- 审核意见现场核查 ----
+function uploadOpinionPhoto(opinionId, filePath) {
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: baseURL + '/rail/patrol/opinions/' + opinionId + '/photos',
+      filePath,
+      name: 'file',
+      header: { Authorization: 'Bearer ' + getToken() },
+      success(res) {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(res.data)) } catch (e) { resolve(res.data) }
+        } else reject(new Error('上传失败（' + res.statusCode + '）'))
+      },
+      fail(err) { reject(new Error((err && err.errMsg) || '上传失败')) }
+    })
+  })
+}
+function downloadOpinionPhoto(photoId) {
+  return new Promise((resolve, reject) => {
+    wx.downloadFile({
+      url: baseURL + '/rail/patrol/opinion-photos/' + photoId + '/file',
+      header: { Authorization: 'Bearer ' + getToken() },
+      success(res) {
+        if (res.statusCode === 200) resolve(res.tempFilePath)
+        else reject(new Error('加载失败（' + res.statusCode + '）'))
+      },
+      fail(err) { reject(new Error((err && err.errMsg) || '加载失败')) }
+    })
+  })
+}
+
 // 上传隐患圈注截图
 function uploadShot(hazardId, filePath, onProgress) {
   return new Promise((resolve, reject) => {
@@ -150,5 +181,9 @@ function uploadShot(hazardId, filePath, onProgress) {
   })
 }
 
-module.exports = { request, get, post, login, uploadMedia, downloadMedia, downloadShot, downloadDoc, uploadShot, baseURL, getToken }
+function del(path) { return request(path, { method: 'DELETE' }) }
+
+function getUserInfo() { return get('/getInfo') }
+
+module.exports = { request, get, post, del, login, getUserInfo, uploadMedia, downloadMedia, downloadShot, downloadDoc, uploadShot, uploadOpinionPhoto, downloadOpinionPhoto, baseURL, getToken }
 

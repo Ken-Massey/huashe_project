@@ -19,7 +19,10 @@
   <view class="card">
     <view class="head-row">
       <text class="task-no">{{ task.task_no }}</text>
-      <text class="tag {{ task.status === 'pending' ? 'tag-pending' : (task.status === 'completed' ? 'tag-compliant' : 'tag-archived') }}">{{ task.statusLabel }}</text>
+      <view class="task-top-tags">
+        <text class="tag tag-archived" wx:if="{{ task.task_type === 'pre_construction' }}">施工前核查</text>
+        <text class="tag {{ task.status === 'pending' ? 'tag-pending' : (task.status === 'completed' ? 'tag-compliant' : 'tag-archived') }}">{{ task.statusLabel }}</text>
+      </view>
     </view>
     <view class="task-name">{{ task.name }}</view>
     <view class="info-row"><text class="info-label">线路</text><text>{{ task.line || '-' }}</text></view>
@@ -51,6 +54,46 @@
     </view>
   </view>
 
+  <!-- 审核意见现场核查（整体折叠：收起显示 意见数/状态计数/更新时间） -->
+  <view class="card" wx:if="{{ task.opinions && task.opinions.length }}">
+    <view class="op-bar" data-id="all" bindtap="toggleOpAll">
+      <text class="op-bar-title">📋 审核意见现场核查（{{ task.opinions.length }}）</text>
+      <view class="op-bar-meta">
+        <text class="tag op-st-done">完成{{ task.opStat.done }}</text>
+        <text class="tag op-st-photo_taken">待核查{{ task.opStat.photo_taken }}</text>
+        <text class="tag op-st-pending_photo">待拍照{{ task.opStat.pending_photo }}</text>
+        <text class="tag op-st-returned" wx:if="{{ task.opStat.returned > 0 }}">退回{{ task.opStat.returned }}</text>
+        <text class="op-last">更新{{ task.opStat.lastTime }}</text>
+        <text class="op-arrow">{{ opOpenAll ? '收起 ▴' : '展开 ▾' }}</text>
+      </view>
+    </view>
+    <block wx:if="{{ opOpenAll }}">
+      <view wx:for="{{ task.opinions }}" wx:key="opinion_id" wx:for-item="o" class="op-item">
+        <view class="op-summary">
+          <text class="tag op-st-{{ o.status }}">{{ o.statusLabel }}</text>
+          <text class="tag tag-info" wx:if="{{ o.stage_name }}">{{ o.stage_name }}</text>
+          <text class="op-title">{{ o.title || '审核意见' }}</text>
+          <text class="op-time" wx:if="{{ o.check_time }}">核查 {{ o.check_time }}</text>
+        </view>
+        <view class="op-detail">
+          <view class="op-content">{{ o.opinion_content }}</view>
+          <view class="op-req" wx:if="{{ o.return_reason }}">退回原因：{{ o.return_reason }}</view>
+          <view class="op-check" wx:if="{{ o.check_opinion }}">核查意见：{{ o.check_opinion }}</view>
+          <view class="shot-grid" wx:if="{{ o.photos.length }}">
+            <view wx:for="{{ o.photos }}" wx:for-item="p" wx:key="photo_id" class="op-photo-box">
+              <image class="shot-img" src="{{ opinionPaths[p.photo_id] }}" mode="aspectFill" data-id="{{ p.photo_id }}" bindtap="previewOpPhoto" />
+              <view class="media-del" wx:if="{{ o.status !== 'done' }}" data-id="{{ p.photo_id }}" catchtap="delOpPhoto">×</view>
+            </view>
+          </view>
+          <view class="hazard-ops" wx:if="{{ o.status !== 'done' }}">
+            <button class="mini-btn" size="mini" data-id="{{ o.opinion_id }}" bindtap="addOpPhotos">＋上传照片</button>
+            <button class="mini-btn" size="mini" wx:if="{{ o.status === 'pending_photo' || o.status === 'returned' }}" data-id="{{ o.opinion_id }}" bindtap="submitOpOne">提交核查</button>
+          </view>
+        </view>
+      </view>
+    </block>
+  </view>
+
   <!-- 巡查时间线 -->
   <view class="card">
     <view class="section-title">巡查时间线</view>
@@ -62,6 +105,8 @@
         <view class="tl-head">
           <text wx:if="{{ item.kind === 'record' }}" class="tag {{ item.data.type === 'rectify' ? 'tag-pending' : 'tag-compliant' }}">{{ item.data.type === 'rectify' ? '整改反馈' : '日常巡查' }}</text>
           <text wx:else class="tag tag-noncompliant">风险隐患</text>
+          <text class="batch-chip" wx:if="{{ item.kind === 'record' && item.data.batchNo }}">第{{ item.data.batchNo }}批</text>
+          <text class="record-title" wx:if="{{ item.kind === 'record' && item.data.title }}">{{ item.data.title }}</text>
           <text class="muted">{{ item.data.created_by_name || '-' }} · {{ item.data.created_at }}</text>
           <text wx:if="{{ item.kind === 'record' && item.data.type === 'patrol' }}" class="link-btn" data-record="{{ item.data.record_id }}" bindtap="goAddHazard">＋添加隐患</text>
         </view>
@@ -85,55 +130,68 @@
         <!-- 隐患块（日常巡查下挂 + 独立隐患） -->
         <block wx:for="{{ item.kind === 'record' ? item.data.hazards : [item.data] }}" wx:for-item="h" wx:key="hazard_id">
           <view class="hazard-block {{ h.status === 'closed' ? 'hazard-closed' : '' }}">
-            <!-- 隐患进度条 -->
-            <view class="hazard-steps">
-              <view wx:for="{{ h.steps }}" wx:for-item="s" wx:key="key" class="hazard-step {{ s.done ? 'done' : '' }} {{ s.current ? 'current' : '' }}">
-                <view class="hazard-step-line"></view>
-                <view class="hazard-step-dot"></view>
-                <view class="hazard-step-label">{{ s.label }}</view>
-              </view>
-            </view>
-
-            <view class="hazard-meta">
-              <text class="tag tag-info" wx:if="{{ h.hazard_type }}">{{ h.hazard_type }}</text>
-              <text class="tag tag-pending" wx:if="{{ h.risk_level }}">{{ h.risk_level }}</text>
-            </view>
-
-            <view class="shot-grid" wx:if="{{ h.shots.length }}">
-              <image wx:for="{{ h.shots }}" wx:for-item="s" wx:key="shot_id" class="shot-img" src="{{ shotPaths[s.shot_id] }}" mode="aspectFill" data-id="{{ s.shot_id }}" bindtap="previewShot" />
-            </view>
-
-            <view class="hazard-desc">{{ h.description }}</view>
-            <view class="hazard-req" wx:if="{{ h.rectify_requirement }}">整改要求：{{ h.rectify_requirement }}</view>
-
-            <!-- 嵌套整改记录 -->
-            <view class="rectify-list" wx:if="{{ h.rectifyRecords.length }}">
-              <view class="rectify-title">整改记录（{{ h.rectifyRecords.length }}）</view>
-              <view wx:for="{{ h.rectifyRecords }}" wx:for-item="rr" wx:key="record_id" class="rectify-item">
-                <view class="rectify-head">
-                  <text class="muted">{{ rr.created_by_name || '-' }} · {{ rr.created_at }}</text>
+            <!-- 摘要行：状态/类型/等级/描述摘要（默认展示，点击展开详情） -->
+            <view class="hazard-summary" data-id="{{ h.hazard_id }}" bindtap="toggleHazard">
+              <view class="hazard-summary-main">
+                <view class="hazard-meta">
+                  <text class="tag {{ h.status === 'closed' ? 'tag-compliant' : 'tag-pending' }}">{{ h.statusLabel }}</text>
+                  <text class="tag tag-info" wx:if="{{ h.hazard_type }}">{{ h.hazard_type }}</text>
+                  <text class="tag {{ h.risk_level === '高' ? 'tag-noncompliant' : 'tag-pending' }}" wx:if="{{ h.risk_level }}">{{ h.risk_level }}</text>
+                  <text class="tag tag-archived" wx:if="{{ h.rectifyRecords.length }}">整改{{ h.rectifyRecords.length }}次</text>
                 </view>
-                <view class="rectify-note" wx:if="{{ rr.note }}">{{ rr.note }}</view>
-                <view class="media-grid" wx:if="{{ rr.media.length }}">
-                  <block wx:for="{{ rr.media }}" wx:for-item="rm" wx:key="media_id">
-                    <view wx:if="{{ rm.kind === 'photo' }}" class="media-cell-wrap" data-id="{{ rm.media_id }}" bindtap="preview">
-                      <image class="media-img" src="{{ photoPaths[rm.media_id] }}" mode="aspectFill" />
-                    </view>
-                    <view wx:else class="media-cell-wrap video-thumb" data-id="{{ rm.media_id }}" bindtap="playVideo">
-                      <view class="video-thumb-bg"></view>
-                      <view class="video-play-btn">▶</view>
-                      <text class="video-thumb-label">视频</text>
-                    </view>
-                  </block>
+                <view class="hazard-desc">{{ h.descShort }}</view>
+              </view>
+              <view class="hazard-expand {{ openMap[h.hazard_id] ? 'open' : '' }}">{{ openMap[h.hazard_id] ? '收起 ▴' : '详情 ▾' }}</view>
+            </view>
+
+            <!-- 详情（默认折叠，减少臃肿） -->
+            <view wx:if="{{ openMap[h.hazard_id] }}" class="hazard-detail">
+              <view class="hazard-steps">
+                <view wx:for="{{ h.steps }}" wx:for-item="s" wx:key="key" class="hazard-step {{ s.done ? 'done' : '' }} {{ s.current ? 'current' : '' }}">
+                  <view class="hazard-step-line"></view>
+                  <view class="hazard-step-dot"></view>
+                  <view class="hazard-step-label">{{ s.label }}</view>
                 </view>
               </view>
+
+              <view class="shot-grid" wx:if="{{ h.shots.length }}">
+                <image wx:for="{{ h.shots }}" wx:for-item="s" wx:key="shot_id" class="shot-img" src="{{ shotPaths[s.shot_id] }}" mode="aspectFill" data-id="{{ s.shot_id }}" bindtap="previewShot" />
+              </view>
+
+              <view class="hazard-desc" wx:if="{{ h.description && h.descShort !== h.description }}">{{ h.description }}</view>
+              <view class="hazard-req" wx:if="{{ h.rectify_requirement }}">整改要求：{{ h.rectify_requirement }}</view>
+
+              <view class="rectify-list" wx:if="{{ h.rectifyRecords.length }}">
+                <view class="rectify-title">整改记录（{{ h.rectifyRecords.length }}）</view>
+                <view wx:for="{{ h.rectifyRecords }}" wx:for-item="rr" wx:key="record_id" class="rectify-item">
+                  <view class="rectify-head">
+                    <text class="muted">{{ rr.created_by_name || '-' }} · {{ rr.created_at }}</text>
+                  </view>
+                  <view class="rectify-note" wx:if="{{ rr.note }}">{{ rr.note }}</view>
+                  <view class="media-grid" wx:if="{{ rr.media.length }}">
+                    <block wx:for="{{ rr.media }}" wx:for-item="rm" wx:key="media_id">
+                      <view wx:if="{{ rm.kind === 'photo' }}" class="media-cell-wrap" data-id="{{ rm.media_id }}" bindtap="preview">
+                        <image class="media-img" src="{{ photoPaths[rm.media_id] }}" mode="aspectFill" />
+                      </view>
+                      <view wx:else class="media-cell-wrap video-thumb" data-id="{{ rm.media_id }}" bindtap="playVideo">
+                        <view class="video-thumb-bg"></view>
+                        <view class="video-play-btn">▶</view>
+                        <text class="video-thumb-label">视频</text>
+                      </view>
+                    </block>
+                  </view>
+                </view>
+              </view>
+
+              <view class="hazard-req" wx:if="{{ h.review_comment }}">复核意见：{{ h.review_comment }}</view>
             </view>
 
-            <view class="hazard-req" wx:if="{{ h.review_comment }}">复核意见：{{ h.review_comment }}</view>
-
+            <!-- 操作行（始终可用） -->
             <view class="hazard-ops">
               <button wx:if="{{ h.status === 'pending_rectify' || h.status === 'rectifying' }}" class="mini-btn" size="mini" data-id="{{ h.hazard_id }}" bindtap="uploadRectifyPhotos">整改图片上传</button>
               <button wx:if="{{ h.status === 'rectifying' }}" class="mini-btn" size="mini" data-id="{{ h.hazard_id }}" bindtap="submitReview">整改完成</button>
+              <text class="link-btn" data-id="{{ h.hazard_id }}" bindtap="editHazard">修改</text>
+              <text class="link-btn danger" data-id="{{ h.hazard_id }}" bindtap="deleteHazard">删除</text>
             </view>
           </view>
         </block>

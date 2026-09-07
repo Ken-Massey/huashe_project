@@ -90,3 +90,35 @@ export function getPatrolDocFile(id) {
 export function deletePatrolDoc(id) {
   return request({ url: `/rail/patrol/docs/${id}`, method: 'delete' })
 }
+
+// 审核意见 → 现场核查
+export function listPatrolOpinions(taskId) {
+  return request({ url: `/rail/patrol/tasks/${taskId}/opinions`, method: 'get' })
+}
+export function syncPatrolOpinions(taskId) {
+  return request({ url: `/rail/patrol/tasks/${taskId}/opinions/sync`, method: 'post' })
+}
+export function uploadOpinionPhoto(opinionId, form) {
+  return request({
+    url: `/rail/patrol/opinions/${opinionId}/photos`,
+    method: 'post',
+    data: form,
+    timeout: 120000,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+export function getOpinionPhotoFile(id) {
+  return request({ url: `/rail/patrol/opinion-photos/${id}/file`, method: 'get', responseType: 'blob' })
+}
+export function deleteOpinionPhoto(id) {
+  return request({ url: `/rail/patrol/opinion-photos/${id}`, method: 'delete' })
+}
+export function submitOpinion(opinionId) {
+  return request({ url: `/rail/patrol/opinions/${opinionId}/submit`, method: 'post' })
+}
+export function reviewOpinion(opinionId, data) {
+  return request({ url: `/rail/patrol/opinions/${opinionId}/review`, method: 'post', data })
+}
+export function checkOpinion(opinionId, comment) {
+  return request({ url: `/rail/patrol/opinions/${opinionId}/check`, method: 'post', data: { comment } })
+}

@@ -173,6 +173,8 @@ public class RailAuditWorkflowController extends BaseController
     {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("workflow_id", String.valueOf(workflow.getWorkflowId()));
+        payload.put("project_id", workflow.getProjectId());
+        payload.put("stage_id", workflow.getStageId());
         payload.put("project_name", workflow.getProjectName());
         payload.put("initiator_id", workflow.getInitiatorId());
         payload.put("initiator_name", workflow.getInitiatorName());

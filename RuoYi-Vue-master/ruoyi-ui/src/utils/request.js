@@ -74,14 +74,21 @@ service.interceptors.request.use(config => {
 
 // 响应拦截器
 service.interceptors.response.use(res => {
-  // 未设置状态码则默认成功状态
-  const code = res.data.code || 200
-  // 获取错误信息
-  const msg = errorCode[code] || res.data.msg || errorCode['default']
   // 二进制数据则直接返回
   if (res.request.responseType === 'blob' || res.request.responseType === 'arraybuffer') {
     return res.data
   }
+  // 仅当响应是标准信封（含 msg/data/rows）时才按业务状态码解析；
+  // Python 侧原生对象（如项目详情本身带 code 字段=项目编号）直接放行，避免误判
+  const body = res.data
+  const isEnvelope = body && typeof body === 'object' && !Array.isArray(body) &&
+    'code' in body && ('msg' in body || 'data' in body || 'rows' in body)
+  if (!isEnvelope) {
+    return body
+  }
+  const code = body.code || 200
+  // 获取错误信息
+  const msg = errorCode[code] || body.msg || errorCode['default']
   if (code === 401) {
     if (!isRelogin.show) {
       isRelogin.show = true
@@ -96,16 +103,18 @@ service.interceptors.response.use(res => {
     }
     return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
   } else if (code === 500) {
+    console.error('[ERRAPI]', res.config.url, 'code=', code, 'msg=', msg)
     Message({ message: msg, type: 'error' })
     return Promise.reject(new Error(msg))
   } else if (code === 601) {
     Message({ message: msg, type: 'warning' })
     return Promise.reject('error')
   } else if (code !== 200) {
+    console.error('[ERRAPI]', res.config.url, 'code=', code, 'msg=', msg, 'resp=', JSON.stringify(body).slice(0, 300))
     Notification.error({ title: msg })
     return Promise.reject('error')
   } else {
-    return res.data
+    return body
   }
 },
 error => {
@@ -118,6 +127,7 @@ error => {
   } else if (message.includes("Request failed with status code")) {
     message = "系统接口" + message.slice(-3) + "异常"
   }
+  console.error('[ERRAPI]', (error.config && error.config.url) || '', 'http-error:', message)
   Message({ message: message, type: 'error', duration: 5 * 1000 })
   return Promise.reject(error)
 }

@@ -275,6 +275,9 @@ export default {
         if (!this.selectedProjectId && this.filteredProjects.length) this.selectedProjectId = this.filteredProjects[0].project_id
         if (this.selectedProjectId) await this.loadProjectDetail()
         else { this.projectDetail = null; this.selectedStageId = ''; this.auditRecord = null }
+      } catch (error) {
+        console.error('项目档案加载失败', error)
+        this.$message.error('项目档案加载失败，请刷新重试')
       } finally { this.projectsLoading = false }
     },
     syncFilteredSelection() {

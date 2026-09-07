@@ -2960,13 +2960,16 @@ def local_geocoder_status() -> dict[str, Any]:
     tags=["local-geocoder"],
 )
 def search_local_geocoder(
-    query: Annotated[str, Query(min_length=1, max_length=200)],
+    query: Annotated[str, Query(min_length=1, max_length=500)],
     limit: Annotated[int, Query(ge=1, le=12)] = 8,
 ) -> list[dict[str, Any]]:
+    # 地理服务未配置时优雅降级为空结果，避免 503 拖垮依赖它的页面流程
+    if not (local_geocoder.status() or {}).get("configured"):
+        return []
     try:
         return local_geocoder.search(query, limit)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError:
+        return []
 
 
 @app.post(

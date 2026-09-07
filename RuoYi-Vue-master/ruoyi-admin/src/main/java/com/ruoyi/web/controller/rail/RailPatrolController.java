@@ -140,6 +140,7 @@ public class RailPatrolController
             @RequestParam(name = "size", defaultValue = "20") Integer size,
             @RequestParam(name = "line", defaultValue = "") String line,
             @RequestParam(name = "status", defaultValue = "") String status,
+            @RequestParam(name = "taskType", defaultValue = "") String taskType,
             @RequestParam(name = "assignedUserId", defaultValue = "") String assignedUserId,
             @RequestParam(name = "keyword", defaultValue = "") String keyword,
             @RequestParam(name = "dateFrom", defaultValue = "") String dateFrom,
@@ -150,6 +151,7 @@ public class RailPatrolController
         query.put("size", size);
         query.put("line", line);
         query.put("status", status);
+        query.put("task_type", taskType);
         query.put("assigned_user_id", assignedUserId);
         query.put("keyword", keyword);
         query.put("date_from", dateFrom);
@@ -227,11 +229,13 @@ public class RailPatrolController
     public Object addMedia(@PathVariable("recordId") String recordId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "kind", defaultValue = "photo") String kind,
-            @RequestParam(name = "takenAt", required = false) String takenAt)
+            @RequestParam(name = "takenAt", required = false) String takenAt,
+            @RequestParam(name = "caption", required = false) String caption)
     {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("kind", kind);
         fields.put("taken_at", takenAt == null ? "" : takenAt);
+        fields.put("caption", caption == null ? "" : caption);
         return python.postFiles("/api/v1/patrol/records/" + recordId + "/media", Map.of("file", file), fields,
                 Map.of(), actorHeaders());
     }
@@ -265,6 +269,69 @@ public class RailPatrolController
     public Object deleteTaskDoc(@PathVariable("docId") String docId)
     {
         return python.delete("/api/v1/patrol/docs/" + docId, actorHeaders());
+    }
+
+    // ---- 审核意见 → 现场核查（意见页）----
+
+    @PreAuthorize("@ss.hasAnyPermi('" + VIEW_PERMS + "')")
+    @GetMapping("/tasks/{taskId}/opinions")
+    public Object listTaskOpinions(@PathVariable("taskId") String taskId)
+    {
+        return python.get("/api/v1/patrol/tasks/" + taskId + "/opinions", null, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('" + VIEW_PERMS + "')")
+    @PostMapping("/tasks/{taskId}/opinions/sync")
+    public Object syncTaskOpinions(@PathVariable("taskId") String taskId)
+    {
+        return python.post("/api/v1/patrol/tasks/" + taskId + "/opinions/sync", Map.of(), actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('" + UPLOAD_PERMS + "')")
+    @PostMapping(value = "/opinions/{opinionId}/photos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Object addOpinionPhoto(@PathVariable("opinionId") String opinionId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "takenAt", required = false) String takenAt)
+    {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("taken_at", takenAt == null ? "" : takenAt);
+        return python.postFiles("/api/v1/patrol/opinions/" + opinionId + "/photos", Map.of("file", file), fields,
+                Map.of(), actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('" + VIEW_PERMS + "')")
+    @GetMapping("/opinion-photos/{photoId}/file")
+    public void opinionPhotoFile(@PathVariable("photoId") String photoId, HttpServletResponse response) throws IOException
+    {
+        copyDownload(python.download("/api/v1/patrol/opinion-photos/" + photoId + "/file", actorHeaders()), response);
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('" + UPLOAD_PERMS + "')")
+    @DeleteMapping("/opinion-photos/{photoId}")
+    public Object deleteOpinionPhoto(@PathVariable("photoId") String photoId)
+    {
+        return python.delete("/api/v1/patrol/opinion-photos/" + photoId, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasAnyPermi('" + UPLOAD_PERMS + "')")
+    @PostMapping("/opinions/{opinionId}/submit")
+    public Object submitOpinion(@PathVariable("opinionId") String opinionId)
+    {
+        return python.post("/api/v1/patrol/opinions/" + opinionId + "/submit", Map.of(), actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:patrol:review')")
+    @PostMapping("/opinions/{opinionId}/review")
+    public Object reviewOpinion(@PathVariable("opinionId") String opinionId, @RequestBody Map<String, Object> request)
+    {
+        return python.post("/api/v1/patrol/opinions/" + opinionId + "/review", request, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:patrol:review')")
+    @PostMapping("/opinions/{opinionId}/check")
+    public Object checkOpinion(@PathVariable("opinionId") String opinionId, @RequestBody Map<String, Object> request)
+    {
+        return python.post("/api/v1/patrol/opinions/" + opinionId + "/check", request, actorHeaders());
     }
 
     // ---- 隐患 ----

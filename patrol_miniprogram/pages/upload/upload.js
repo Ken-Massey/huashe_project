@@ -16,6 +16,7 @@ Page({
     locStatus: '',      // 定位状态文字
     locAccuracy: 0,     // 定位精度（米）
     note: '',
+    recordTitle: '',
     // 日常巡查的隐患声明
     hasHazard: false,
     hazardTypes: [], hazardTypeLabels: [], hazardTypeIndex: -1,
@@ -113,7 +114,7 @@ Page({
     const shots = this.data.shots.slice(); shots.splice(i, 1); this.setData({ shots })
   },
   async submit() {
-    const { typeIndex, hazardIndex, hazards, media, location, note, hasHazard, hazardDesc, shots, submitting } = this.data
+    const { typeIndex, hazardIndex, hazards, media, location, note, recordTitle, hasHazard, hazardDesc, shots, submitting } = this.data
     if (submitting) return
     const type = typeIndex === 0 ? 'patrol' : 'rectify'
     if (!media.length) { wx.showToast({ title: '请先选择照片/视频', icon: 'none' }); return }
@@ -128,7 +129,8 @@ Page({
     this.setData({ submitting: true, uploadProgress: 0, uploadLabel: '正在提交…' })
     try {
       const record = await post('/rail/patrol/tasks/' + this.taskId + '/records', {
-        type, hazard_id: hazardId, longitude: location.longitude, latitude: location.latitude, accuracy: location.accuracy, note
+        type, hazard_id: hazardId, title: (recordTitle || '').trim(),
+        longitude: location.longitude, latitude: location.latitude, accuracy: location.accuracy, note
       })
 
       // 串行上传媒体，带进度
