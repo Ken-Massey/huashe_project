@@ -45,15 +45,22 @@
               <h3>{{ projectDetail.name }}</h3>
               <p>{{ projectDetail.description || '尚未填写项目说明' }}</p>
             </div>
-            <el-dropdown trigger="click" @command="projectCommand">
-              <el-button type="text" icon="el-icon-more" class="more-button" />
-              <el-dropdown-menu slot="dropdown">
-                <el-dropdown-item command="edit" icon="el-icon-edit" v-hasPermi="['rail:archive:edit']">重命名/编辑项目</el-dropdown-item>
-                <el-dropdown-item v-if="projectDetail.status === 'active'" command="archive" icon="el-icon-folder-delete" divided v-hasPermi="['rail:archive:remove']">归档项目</el-dropdown-item>
-                <el-dropdown-item v-else command="restore" icon="el-icon-refresh-left" divided v-hasPermi="['rail:archive:edit']">恢复项目</el-dropdown-item>
-                <el-dropdown-item command="delete" icon="el-icon-delete" divided v-hasPermi="['rail:archive:remove']">永久删除项目</el-dropdown-item>
-              </el-dropdown-menu>
-            </el-dropdown>
+            <div class="project-title-actions">
+              <!-- D122：跳转到该项目对应的巡查任务（严格 1:1，终审通过后自动生成） -->
+              <el-tooltip :content="projectTask ? '跳转到该项目现场符合性巡查任务' : '项目暂无巡查任务：终审通过后会自动创建'" placement="top">
+                <el-button v-if="projectTask" size="mini" type="primary" plain icon="el-icon-location-outline" :loading="projectTaskLoading" @click="gotoProjectTask">巡查任务</el-button>
+                <el-button v-else size="mini" plain icon="el-icon-location-outline" :loading="projectTaskLoading" disabled>巡查任务</el-button>
+              </el-tooltip>
+              <el-dropdown trigger="click" @command="projectCommand">
+                <el-button type="text" icon="el-icon-more" class="more-button" />
+                <el-dropdown-menu slot="dropdown">
+                  <el-dropdown-item command="edit" icon="el-icon-edit" v-hasPermi="['rail:archive:edit']">重命名/编辑项目</el-dropdown-item>
+                  <el-dropdown-item v-if="projectDetail.status === 'active'" command="archive" icon="el-icon-folder-delete" divided v-hasPermi="['rail:archive:remove']">归档项目</el-dropdown-item>
+                  <el-dropdown-item v-else command="restore" icon="el-icon-refresh-left" divided v-hasPermi="['rail:archive:edit']">恢复项目</el-dropdown-item>
+                  <el-dropdown-item command="delete" icon="el-icon-delete" divided v-hasPermi="['rail:archive:remove']">永久删除项目</el-dropdown-item>
+                </el-dropdown-menu>
+              </el-dropdown>
+            </div>
           </div>
           <div class="stage-heading">
             <div><strong>项目阶段</strong><span>阶段名称和顺序均可人工设置</span></div>
@@ -188,6 +195,7 @@ import {
   deleteArchiveProject, archiveProject, restoreProject, createArchiveStage, updateArchiveStage,
   archiveStage, restoreStage, getStageAudit
 } from '@/api/rail/archive'
+import { getProjectPatrolTask } from '@/api/rail/patrol'
 
 const emptyProject = () => ({ name: '', description: '' })
 const emptyStage = () => ({ name: '', stage_order: 1, description: '' })
@@ -198,6 +206,7 @@ export default {
     return {
       keyword: '', projects: [], projectsLoading: false,
       selectedProjectId: '', projectDetail: null, detailLoading: false,
+      projectTask: null, projectTaskLoading: false,
       selectedStageId: '', auditRecord: null, auditLoading: false,
       projectDialogOpen: false, projectDialogMode: 'create', projectForm: emptyProject(), savingProject: false,
       stageDialogOpen: false, stageDialogMode: 'create', stageForm: emptyStage(), editingStageId: '', savingStage: false,
@@ -305,7 +314,27 @@ export default {
         const target = preferredStageId || this.selectedStageId
         this.selectedStageId = stages.some(item => item.stage_id === target) ? target : (stages[0] && stages[0].stage_id) || ''
         if (this.selectedStageId) await this.loadAudit()
+        await this.loadProjectTask()
       } finally { this.detailLoading = false }
+    },
+    async loadProjectTask() {
+      if (!this.projectDetail || !this.projectDetail.project_id) { this.projectTask = null; return }
+      this.projectTaskLoading = true
+      try {
+        this.projectTask = (await getProjectPatrolTask(this.projectDetail.project_id)) || null
+      } catch (error) {
+        this.projectTask = null
+      } finally { this.projectTaskLoading = false }
+    },
+    async gotoProjectTask() {
+      if (!this.projectDetail) return
+      const task = await getProjectPatrolTask(this.projectDetail.project_id).catch(() => null)
+      if (!task) {
+        this.$message.warning('项目暂无巡查任务：终审通过后会自动创建')
+        return
+      }
+      this.projectTask = task
+      this.$router.push({ path: '/rail/patrol', query: { openTask: task.task_id } })
     },
     async selectStage(id) {
       if (id === this.selectedStageId && this.auditRecord) return
@@ -486,6 +515,7 @@ export default {
 .project-mark { display: flex; width: 34px; height: 38px; flex: none; align-items: center; justify-content: center; border-radius: 3px; background: #d9ece5; color: #347f6c; font-size: 18px; }
 .project-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }.project-copy strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }.project-stats { margin-top: 9px; color: #4b776b; font-size: 12px; }
 .project-title { display: flex; flex: none; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid #e7ece9; padding: 20px; }.project-title h3 { margin: 5px 0; font-size: 19px; }.project-title p { margin: 0; color: #7a8581; font-size: 13px; line-height: 1.5; }
+.project-title-actions { display: flex; flex: none; align-items: center; gap: 8px; }
 .more-button { padding: 4px 7px; color: #66736f; font-size: 18px; }
 .stage-heading { display: flex; height: 66px; align-items: center; justify-content: space-between; padding: 0 20px; }.stage-heading>div { display: flex; flex-direction: column; gap: 4px; }.stage-heading strong { font-size: 15px; }.stage-heading span { color: #8b9591; font-size: 12px; }
 .stage-list { min-height: 0; flex: 1; overflow: auto; padding: 0 12px 20px; }.stage-card { position: relative; display: grid; grid-template-columns: 42px minmax(0,1fr) 26px; min-height: 112px; border: 1px solid transparent; border-radius: 5px; padding: 13px 9px 13px 4px; cursor: pointer; }.stage-card:hover { background: #f5f8f7; }.stage-card.active { border-color: #cbded8; background: #edf5f2; }.stage-card.archived { opacity: .6; }

@@ -71,7 +71,7 @@
       <view wx:for="{{ task.opinions }}" wx:key="opinion_id" wx:for-item="o" class="op-item">
         <view class="op-summary">
           <text class="tag op-st-{{ o.status }}">{{ o.statusLabel }}</text>
-          <text class="tag tag-info" wx:if="{{ o.stage_name }}">{{ o.stage_name }}</text>
+          <text class="tag tag-info" wx:if="{{ o.stage_name }}">阶段·{{ o.stage_name }}</text>
           <text class="op-title">{{ o.title || '审核意见' }}</text>
           <text class="op-time" wx:if="{{ o.check_time }}">核查 {{ o.check_time }}</text>
         </view>

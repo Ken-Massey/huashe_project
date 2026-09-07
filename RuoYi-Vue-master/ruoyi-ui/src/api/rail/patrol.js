@@ -39,6 +39,10 @@ export function deletePatrolTask(id) {
 export function getPatrolStatistics(params) {
   return request({ url: '/rail/patrol/statistics', method: 'get', params })
 }
+// D122：按项目档案查唯一关联巡查任务（不存在/已删除返回 null）
+export function getProjectPatrolTask(projectId) {
+  return request({ url: `/rail/patrol/projects/${projectId}/task`, method: 'get' })
+}
 
 // 巡查记录与媒体
 export function getPatrolMediaFile(id) {

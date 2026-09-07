@@ -556,9 +556,11 @@ class PatrolRepository:
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_patrol_tasks_source_workflow "
                 "ON patrol_tasks(source_workflow_id) WHERE source_workflow_id <> ''"
             )
+            # D122：项目任务唯一索引改为“未删除才占位”，使软删后同项目终审可重建新任务
+            connection.execute("DROP INDEX IF EXISTS idx_patrol_tasks_source_project")
             connection.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_patrol_tasks_source_project "
-                "ON patrol_tasks(source_project_id) WHERE source_project_id <> ''"
+                "ON patrol_tasks(source_project_id) WHERE source_project_id <> '' AND deleted = 0"
             )
             # 存量库迁移：为已有 patrol_media 补照片名称(caption)列
             media_columns = {
@@ -922,6 +924,22 @@ class PatrolRepository:
         system_actor = {"user_id": "workflow", "name": "审核流转系统", "is_admin": True}
         project_id = _text(data.get("project_id"), field="项目档案", maximum=80)
         workflow_items = self._workflow_opinion_items(data)
+        # D122：终审通过创建时可提交可选参数（巡查员多选/位置/备注）。未带 user_ids 键（非弹窗调用）
+        # 时回退为指派流程发起人，保持向后兼容；显式传空数组 = 不指派任何人。
+        location_desc = _text(data.get("location_desc"), field="位置描述", maximum=200)
+        user_remark = _text(data.get("remark"), field="备注", maximum=1000)
+        has_user_key = any(key in data for key in ("user_ids", "assigned_user_ids"))
+        if has_user_key:
+            uid_values = _as_list(data.get("user_ids") or data.get("assigned_user_ids"))
+            name_values = _as_list(data.get("user_names") or data.get("assigned_user_names"))
+            if not name_values:
+                name_values = [str(value) for value in uid_values]
+            name_values = name_values[: len(uid_values)]
+        else:
+            fallback_uid = _text(data.get("assigned_user_id") or data.get("initiator_id"), field="指派账号", maximum=200)
+            fallback_name = _text(data.get("assigned_user_name") or data.get("initiator_name"), field="指派账号名称", maximum=200)
+            uid_values = [fallback_uid] if fallback_uid else []
+            name_values = [fallback_name or fallback_uid] if fallback_uid else []
         task_id = ""
         created = False
         if project_id:
@@ -944,12 +962,14 @@ class PatrolRepository:
                 task_id = existing["task_id"]
             else:
                 project_name = _text(data.get("project_name"), field="项目名称", required=True, maximum=120)
+                default_remark = f"来源：案例审核流转终审通过（流程 {workflow_id}）。"
                 task_data = {
                     "name": project_name,
                     "requirement": _patrol_requirement_text(len(workflow_items)),
-                    "assigned_user_id": str(data.get("initiator_id") or ""),
-                    "assigned_user_name": str(data.get("initiator_name") or ""),
-                    "remark": f"来源：案例审核流转终审通过（流程 {workflow_id}）。",
+                    "user_ids": uid_values,
+                    "user_names": name_values,
+                    "location_desc": location_desc,
+                    "remark": _limit_text(user_remark or default_remark, 1000),
                 }
                 try:
                     task = self.create_task(
@@ -969,6 +989,16 @@ class PatrolRepository:
                     task_id = existing["task_id"]
         if not task_id:
             raise ValueError("巡查任务创建失败。")
+        # D122：新建（项目路径）时应用终审弹窗提交的创建参数
+        if created and project_id:
+            self._apply_creation_persona(
+                task_id,
+                override_assign=has_user_key,
+                uids=uid_values,
+                names=name_values,
+                location=location_desc,
+                remark=user_remark,
+            )
         # 结构化意见：项目路径 = 档案历史累计 + 本次；流程路径 = 仅本次（同样落核查栏）
         added = 0
         warning = ""
@@ -1091,6 +1121,73 @@ class PatrolRepository:
             if existing is None:
                 raise
             return self.get_task(existing["task_id"], system_actor), False
+
+    def _apply_creation_persona(
+        self,
+        task_id: str,
+        *,
+        override_assign: bool = False,
+        uids: list[str] | None = None,
+        names: list[str] | None = None,
+        location: str = "",
+        remark: str = "",
+    ) -> None:
+        """把终审通过时提交的可选创建参数应用到新建任务（仅新建调用）。"""
+        uid_values = [str(value) for value in (uids or [])]
+        name_values = [str(value) for value in (names or [])]
+        if uid_values and not name_values:
+            name_values = [value for value in uid_values]
+        name_values = name_values[: len(uid_values)]
+        assigned_id = uid_values[0] if uid_values else ""
+        assigned_name = name_values[0] if name_values else assigned_id
+        sets: list[str] = []
+        params: list[Any] = []
+        if override_assign:
+            sets.extend(["assigned_user_id = ?", "assigned_user_name = ?"])
+            params.extend([assigned_id, assigned_name])
+        if location:
+            sets.append("location_desc = ?")
+            params.append(_limit_text(location, 200))
+        if remark:
+            sets.append("remark = ?")
+            params.append(_limit_text(remark, 1000))
+        if not sets:
+            return
+        params.append(_now())
+        params.append(task_id)
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                f"UPDATE patrol_tasks SET {', '.join(sets)}, updated_at = ? WHERE task_id = ?",
+                params,
+            )
+        if override_assign:
+            with self._connect() as connection:
+                line_rows = connection.execute(
+                    "SELECT line FROM patrol_task_lines WHERE task_id = ? ORDER BY sort, line",
+                    (task_id,),
+                ).fetchall()
+            lines = [row["line"] for row in line_rows]
+            users = [
+                {"user_id": value, "user_name": name_values[i] if i < len(name_values) else value}
+                for i, value in enumerate(uid_values)
+            ]
+            self._sync_task_assignments(task_id, lines, users)
+
+    def get_project_task(self, project_id: str, actor: dict[str, Any]) -> dict[str, Any] | None:
+        """按项目查唯一关联任务（供档案页跳转；软删的不算）。"""
+        system_actor = {"user_id": "workflow", "name": "审核流转系统", "is_admin": True}
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT task_id FROM patrol_tasks WHERE source_project_id = ? AND deleted = 0 "
+                "ORDER BY created_at LIMIT 1",
+                (project_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        task = self.get_task(row["task_id"], system_actor)
+        if not actor.get("is_admin") and not self._visible(task, actor):
+            return None
+        return task
 
     def _workflow_opinion_items(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         """从终审通过请求里解析“本次流程”的逐条审核意见（档案尚未归档时也可下发）。"""
@@ -2230,6 +2327,11 @@ class PatrolWorkflowTaskPayload(BaseModel):
     latest_summary: str = Field(default="", max_length=2000)
     latest_result_json: str | dict[str, Any] | None = None
     final_approval_opinion: str = Field(default="", max_length=500)
+    # D122：终审通过时提交的创建参数（可选；未传则回退指派发起人，传空数组=不指派）
+    user_ids: list[str] | None = None
+    user_names: list[str] | None = None
+    location_desc: str = Field(default="", max_length=200)
+    remark: str = Field(default="", max_length=1000)
 
 
 class PatrolTaskUpdatePayload(BaseModel):
@@ -2412,6 +2514,12 @@ def get_task(task_id: str, actor: dict = Depends(get_actor), repo: PatrolReposit
         return repo.get_task(task_id, actor)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/task")
+def get_project_task(project_id: str, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any] | None:
+    """按项目档案查唯一关联巡查任务（供档案页跳转；不存在/软删返回 null）。"""
+    return repo.get_project_task(project_id, actor)
 
 
 @router.post("/tasks/{task_id}")

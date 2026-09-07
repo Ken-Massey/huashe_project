@@ -250,6 +250,27 @@ public class RailAuditWorkflowController extends BaseController
         payload.put("latest_summary", workflow.getLatestSummary());
         payload.put("latest_result_json", workflow.getLatestResultJson());
         payload.put("final_approval_opinion", action.getOpinion());
+        // D122：终审通过时提交的创建参数（弹窗选填；字段非空即透传，空串=不指派/不填）
+        if (action.getPatrolUserIds() != null)
+        {
+            payload.put("user_ids", splitCsv(action.getPatrolUserIds()));
+            payload.put("user_names", action.getPatrolUserNames() == null ? splitCsv(action.getPatrolUserIds())
+                    : splitCsv(action.getPatrolUserNames()));
+        }
+        if (action.getLocationDesc() != null) payload.put("location_desc", action.getLocationDesc().trim());
+        if (action.getRemark() != null) payload.put("remark", action.getRemark().trim());
         return payload;
+    }
+
+    private List<String> splitCsv(String value)
+    {
+        List<String> result = new ArrayList<>();
+        if (value == null || value.trim().isEmpty()) return result;
+        for (String part : value.split("[,，]"))
+        {
+            String item = part.trim();
+            if (!item.isEmpty()) result.add(item);
+        }
+        return result;
     }
 }

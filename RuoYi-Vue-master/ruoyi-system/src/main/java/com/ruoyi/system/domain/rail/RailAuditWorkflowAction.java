@@ -24,6 +24,11 @@ public class RailAuditWorkflowAction implements Serializable
     private String snapshotJson;
     private Long operatorId;
     private String operatorName;
+    /** D122 终审自动建巡查任务的创建参数：指派巡查员（逗号分隔）/ 位置 / 备注（可选） */
+    private String patrolUserIds;
+    private String patrolUserNames;
+    private String locationDesc;
+    private String remark;
 
     public Long getWorkflowId() { return workflowId; }
     public void setWorkflowId(Long workflowId) { this.workflowId = workflowId; }
@@ -59,4 +64,12 @@ public class RailAuditWorkflowAction implements Serializable
     public void setOperatorId(Long operatorId) { this.operatorId = operatorId; }
     public String getOperatorName() { return operatorName; }
     public void setOperatorName(String operatorName) { this.operatorName = operatorName; }
+    public String getPatrolUserIds() { return patrolUserIds; }
+    public void setPatrolUserIds(String patrolUserIds) { this.patrolUserIds = patrolUserIds; }
+    public String getPatrolUserNames() { return patrolUserNames; }
+    public void setPatrolUserNames(String patrolUserNames) { this.patrolUserNames = patrolUserNames; }
+    public String getLocationDesc() { return locationDesc; }
+    public void setLocationDesc(String locationDesc) { this.locationDesc = locationDesc; }
+    public String getRemark() { return remark; }
+    public void setRemark(String remark) { this.remark = remark; }
 }

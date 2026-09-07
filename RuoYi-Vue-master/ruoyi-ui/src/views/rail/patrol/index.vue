@@ -205,6 +205,7 @@
               <div class="opinion-summary">
                 <span class="op-st" :class="'op-' + o.status">{{ opinionStatusLabel(o.status) }}</span>
                 <span v-if="o.risk_level" class="tag" :class="o.risk_level === '高' ? 'tag-noncompliant' : 'tag-pending'">{{ o.risk_level }}</span>
+                <el-tag v-if="o.stage_name" size="mini" type="info" effect="plain">阶段·{{ o.stage_name }}</el-tag>
                 <span class="opinion-title-text">{{ o.title || '审核意见' }}</span>
                 <span class="muted" v-if="o.stage_name">（{{ o.stage_name }}）</span>
                 <span class="muted" v-if="o.check_time">· 核查 {{ formatTime(o.check_time) }}</span>
@@ -525,7 +526,12 @@ export default {
     }
   },
   watch: {
-    dictType() { if (this.dictVisible) this.loadDictItems() }
+    dictType() { if (this.dictVisible) this.loadDictItems() },
+    // D122：从项目档案“巡查任务”按钮跳入时按参数直接打开对应任务详情
+    '$route'(to) {
+      const openTaskId = to && to.query && to.query.openTask
+      if (openTaskId) this.openDetail({ task_id: String(openTaskId) })
+    }
   },
   created() {
     this.loadLineDict()
@@ -534,6 +540,8 @@ export default {
       this.loadAccounts()
     }
     this.refresh()
+    const openTaskId = this.$route.query && this.$route.query.openTask
+    if (openTaskId) this.openDetail({ task_id: String(openTaskId) })
   },
   methods: {
     async refresh() { await Promise.all([this.loadStatistics(), this.loadTasks()]) },

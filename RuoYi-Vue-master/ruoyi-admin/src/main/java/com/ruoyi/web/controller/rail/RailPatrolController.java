@@ -195,6 +195,14 @@ public class RailPatrolController
         return python.get("/api/v1/patrol/tasks", query, actorHeaders());
     }
 
+    /** D122：按项目档案查唯一关联巡查任务（档案页跳转用；不存在/软删返回 null） */
+    @PreAuthorize("@ss.hasAnyPermi('" + VIEW_PERMS + "')")
+    @GetMapping("/projects/{projectId}/task")
+    public Object projectTask(@PathVariable("projectId") String projectId)
+    {
+        return python.get("/api/v1/patrol/projects/" + projectId + "/task", null, actorHeaders());
+    }
+
     @PreAuthorize("@ss.hasAnyPermi('" + VIEW_PERMS + "')")
     @GetMapping("/statistics")
     public Object statistics(@RequestParam(name = "line", defaultValue = "") String line,

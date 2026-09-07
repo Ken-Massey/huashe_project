@@ -714,6 +714,25 @@
       </span>
     </el-dialog>
 
+    <!-- D122：终审通过 → 自动创建该项目巡查任务（可选参数） -->
+    <el-dialog title="终审通过 · 自动创建巡查任务" :visible.sync="finalCreateVisible" width="580px" append-to-body :close-on-click-modal="false">
+      <el-alert type="info" :closable="false" show-icon title="终审通过后将自动创建该项目的现场符合性巡查任务；以下为任务创建参数，均可留空。" />
+      <el-form label-width="96px" style="margin-top:14px">
+        <el-form-item label="审核意见"><el-input v-model.trim="finalForm.opinion" maxlength="500" placeholder="默认：同意" /></el-form-item>
+        <el-form-item label="指派巡查员">
+          <el-select v-model="finalForm.user_ids" multiple filterable collapse-tags placeholder="可不选（默认不指派）" style="width: 100%" @change="finalAssigneesChange">
+            <el-option v-for="u in auditAccounts" :key="u.userId" :label="u.nickName || u.userName" :value="String(u.userId)" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="位置"><el-input v-model.trim="finalForm.location_desc" maxlength="200" placeholder="站点/区间/里程（选填）" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model.trim="finalForm.remark" type="textarea" :rows="2" maxlength="1000" /></el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="finalCreateVisible = false">取消</el-button>
+        <el-button type="primary" :loading="workflowSubmitting" @click="confirmFinalCreate">终审通过并创建任务</el-button>
+      </span>
+    </el-dialog>
+
     <el-dialog title="审核流转记录" :visible.sync="workflowHistoryDialogVisible" width="760px" append-to-body class="workflow-history-dialog">
       <div v-if="workflowInfo" class="workflow-history-head">
         <div>
@@ -794,6 +813,8 @@ import {
   submitAuditWorkflow, approveAuditWorkflow,
   returnAuditWorkflow, archiveAuditWorkflow
 } from '@/api/rail/workflow'
+import { getProjectPatrolTask } from '@/api/rail/patrol'
+import { listUser } from '@/api/system/user'
 import { checkPermi } from '@/utils/permission'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -824,6 +845,9 @@ export default {
       expandedSnapshotIds: {},
       workflowInfo: null, workflowTasks: [], workflowLogs: [], workflowSnapshots: [],
       workflowLoading: false, workflowSubmitting: false, workflowHistoryDialogVisible: false,
+      // D122：终审通过·自动创建巡查任务（可选参数：指派巡查员/位置/备注）
+      finalCreateVisible: false, auditAccounts: [],
+      finalForm: { opinion: '同意', user_ids: [], user_names: [], location_desc: '', remark: '' },
       prepPanelExpanded: false,
       uploadDialogVisible: false,
       uploadSourceTab: 'library',
@@ -3277,6 +3301,15 @@ export default {
       if (!this.workflowId) return
       const actionLabel = this.workflowApproveButtonText
       const isFinalApproval = this.workflowCurrentNodeCode === 'FINAL'
+      // D122：终审通过且项目尚无巡查任务 → 先弹窗收集创建参数（巡查员/位置/备注），再提交终审并自动建任务
+      if (isFinalApproval) {
+        const projectId = String(this.workflowValue(this.workflowInfo, 'projectId') || this.selectedArchiveProjectId || '')
+        let willCreate = true
+        if (projectId) {
+          try { willCreate = !(await getProjectPatrolTask(projectId)) } catch (error) {}
+        }
+        if (willCreate) return this.openFinalCreateDialog()
+      }
       try {
         const { value } = await this.$prompt('可填写审核意见；不填写则默认为同意。', actionLabel, {
           inputValue: '同意',
@@ -3292,6 +3325,45 @@ export default {
         else this.$message.success('终审已通过，已自动创建现场符合性巡查任务')
       } catch (error) {
         if (error !== 'cancel') this.$message.error(this.workflowErrorMessage(error, `${actionLabel}失败`))
+      } finally {
+        this.workflowSubmitting = false
+      }
+    },
+    async openFinalCreateDialog() {
+      if (!this.auditAccounts.length) {
+        try {
+          const res = await listUser({ pageNum: 1, pageSize: 200, status: '0' })
+          this.auditAccounts = ((res && res.rows) || []).filter(u => u.canMini === '1' || u.canMini === 1)
+        } catch (error) { this.auditAccounts = [] }
+      }
+      this.finalForm = { opinion: '同意', user_ids: [], user_names: [], location_desc: '', remark: '' }
+      this.finalCreateVisible = true
+    },
+    finalAssigneesChange(ids) {
+      this.finalForm.user_names = (ids || []).map(uid => {
+        const user = this.auditAccounts.find(x => String(x.userId) === uid)
+        return user ? (user.nickName || user.userName) : uid
+      })
+    },
+    async confirmFinalCreate() {
+      if (!this.workflowId) return
+      this.workflowSubmitting = true
+      try {
+        const response = await approveAuditWorkflow({
+          workflowId: this.workflowId,
+          opinion: this.finalForm.opinion || '同意',
+          patrolUserIds: (this.finalForm.user_ids || []).join(','),
+          patrolUserNames: (this.finalForm.user_names || []).join(','),
+          locationDesc: this.finalForm.location_desc || '',
+          remark: this.finalForm.remark || ''
+        })
+        this.finalCreateVisible = false
+        await this.refreshWorkflowInfo()
+        const patrolWarning = response && response.patrolTaskSyncWarning
+        if (patrolWarning) this.$message.warning(patrolWarning)
+        else this.$message.success('终审已通过，已自动创建现场符合性巡查任务')
+      } catch (error) {
+        this.$message.error(this.workflowErrorMessage(error, '终审通过失败'))
       } finally {
         this.workflowSubmitting = false
       }
