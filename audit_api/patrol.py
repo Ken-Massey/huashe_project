@@ -177,6 +177,8 @@ class PatrolRepository:
                     task_id TEXT PRIMARY KEY,
                     task_no TEXT NOT NULL UNIQUE,
                     source_workflow_id TEXT NOT NULL DEFAULT '',
+                    source_project_id TEXT NOT NULL DEFAULT '',
+                    source_project_name TEXT NOT NULL DEFAULT '',
                     name TEXT NOT NULL DEFAULT '',
                     line TEXT NOT NULL DEFAULT '',
                     location_desc TEXT NOT NULL DEFAULT '',
@@ -277,6 +279,42 @@ class PatrolRepository:
                     FOREIGN KEY(task_id) REFERENCES patrol_tasks(task_id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS patrol_task_opinions (
+                    opinion_id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL DEFAULT '',
+                    stage_id TEXT NOT NULL DEFAULT '',
+                    stage_name TEXT NOT NULL DEFAULT '',
+                    opinion_no INTEGER NOT NULL DEFAULT 0,
+                    title TEXT NOT NULL DEFAULT '',
+                    risk_level TEXT NOT NULL DEFAULT '',
+                    opinion_content TEXT NOT NULL DEFAULT '',
+                    source_files_json TEXT NOT NULL DEFAULT '{}',
+                    status TEXT NOT NULL DEFAULT 'pending_photo'
+                        CHECK(status IN ('pending_photo','photo_taken','done','returned')),
+                    check_opinion TEXT NOT NULL DEFAULT '',
+                    return_reason TEXT NOT NULL DEFAULT '',
+                    check_by TEXT NOT NULL DEFAULT '',
+                    check_time TEXT NOT NULL DEFAULT '',
+                    sort INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(task_id) REFERENCES patrol_tasks(task_id) ON DELETE CASCADE,
+                    UNIQUE(task_id, project_id, stage_id, opinion_no)
+                );
+
+                CREATE TABLE IF NOT EXISTS patrol_opinion_photos (
+                    photo_id TEXT PRIMARY KEY,
+                    opinion_id TEXT NOT NULL,
+                    file_name TEXT NOT NULL DEFAULT '',
+                    file_path TEXT NOT NULL DEFAULT '',
+                    taken_at TEXT NOT NULL DEFAULT '',
+                    sort INTEGER NOT NULL DEFAULT 0,
+                    uploader TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(opinion_id) REFERENCES patrol_task_opinions(opinion_id) ON DELETE CASCADE
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_patrol_dict_type
                     ON patrol_dict(dict_type, enabled, sort, created_at);
                 CREATE INDEX IF NOT EXISTS idx_patrol_tasks_list
@@ -291,6 +329,10 @@ class PatrolRepository:
                     ON patrol_hazard_shots(hazard_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_patrol_task_docs
                     ON patrol_task_docs(task_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_patrol_task_opinions
+                    ON patrol_task_opinions(task_id, status, sort, created_at);
+                CREATE INDEX IF NOT EXISTS idx_patrol_opinion_photos
+                    ON patrol_opinion_photos(opinion_id, sort, created_at);
                 """
             )
             # 存量库迁移：为已有 patrol_hazards 补 media_id / video_time 列
@@ -325,9 +367,17 @@ class PatrolRepository:
                     connection.execute(f"ALTER TABLE patrol_tasks ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
             if "source_workflow_id" not in task_columns:
                 connection.execute("ALTER TABLE patrol_tasks ADD COLUMN source_workflow_id TEXT NOT NULL DEFAULT ''")
+            if "source_project_id" not in task_columns:
+                connection.execute("ALTER TABLE patrol_tasks ADD COLUMN source_project_id TEXT NOT NULL DEFAULT ''")
+            if "source_project_name" not in task_columns:
+                connection.execute("ALTER TABLE patrol_tasks ADD COLUMN source_project_name TEXT NOT NULL DEFAULT ''")
             connection.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_patrol_tasks_source_workflow "
                 "ON patrol_tasks(source_workflow_id) WHERE source_workflow_id <> ''"
+            )
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_patrol_tasks_source_project "
+                "ON patrol_tasks(source_project_id) WHERE source_project_id <> ''"
             )
         self._seed_default_dicts()
         self._migrate_legacy_events()
