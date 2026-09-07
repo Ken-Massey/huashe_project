@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import hmac
+import io
 import json
 import logging
 import sqlite3
@@ -21,9 +22,10 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Iterator, Literal
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from .config import (
@@ -2493,3 +2495,179 @@ def update_opinion_check(opinion_id: str, payload: PatrolOpinionCheckPayload, ac
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# 终审意见与现场核查 Word 导出（python-docx）
+# ---------------------------------------------------------------------------
+
+class WorkflowWordExportPayload(BaseModel):
+    workflow_id: str = Field(default="", max_length=40)
+    project_id: str = Field(default="", max_length=80)
+    project_name: str = Field(default="", max_length=200)
+    stage_name: str = Field(default="", max_length=100)
+    audit_version: int = Field(default=1, ge=1)
+    workflow_status: str = Field(default="", max_length=32)
+    initiator_name: str = Field(default="", max_length=64)
+    latest_summary: str = Field(default="", max_length=4000)
+    latest_risk_level: str = Field(default="", max_length=16)
+    final_opinion: str = Field(default="", max_length=2000)
+    approved_time: str = Field(default="", max_length=40)
+    logs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+_OP_STATUS_LABEL = {"pending_photo": "待拍照", "photo_taken": "已拍照·待核查", "done": "已完成", "returned": "退回重拍"}
+
+
+def _patrol_check_block(project_id: str) -> dict[str, Any]:
+    """按项目读取施工前核查任务及其逐条意见+现场照片，用于并入 Word。"""
+    result: dict[str, Any] = {"task_no": "", "opinions": []}
+    if not project_id:
+        return result
+    db = Path(PATROL_DB)
+    if not db.exists():
+        return result
+    connection = sqlite3.connect(db, timeout=10)
+    try:
+        connection.row_factory = sqlite3.Row
+        task = connection.execute(
+            "SELECT task_id, task_no FROM patrol_tasks "
+            "WHERE source_project_id = ? AND deleted = 0 ORDER BY created_at LIMIT 1",
+            (project_id,),
+        ).fetchone()
+        if task is None:
+            return result
+        result["task_no"] = task["task_no"]
+        opinions = connection.execute(
+            "SELECT * FROM patrol_task_opinions WHERE task_id = ? ORDER BY sort, created_at, opinion_id",
+            (task["task_id"],),
+        ).fetchall()
+        for row in opinions:
+            photos = connection.execute(
+                "SELECT file_path, file_name, created_at FROM patrol_opinion_photos "
+                "WHERE opinion_id = ? ORDER BY sort, created_at", (row["opinion_id"],)
+            ).fetchall()
+            photo_paths = [Path(p["file_path"]) for p in photos
+                           if Path(p["file_path"]).is_file()]
+            result["opinions"].append({
+                "title": row["title"] or "",
+                "risk_level": row["risk_level"] or "",
+                "stage_name": row["stage_name"] or "",
+                "content": row["opinion_content"] or "",
+                "status": row["status"],
+                "check_opinion": row["check_opinion"] or "",
+                "check_time": row["check_time"] or "",
+                "return_reason": row["return_reason"] or "",
+                "photos": photo_paths,
+            })
+    finally:
+        connection.close()
+    return result
+
+
+def _build_workflow_word(payload: WorkflowWordExportPayload, block: dict[str, Any]) -> bytes:
+    from docx import Document
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.shared import Inches, Pt
+
+    doc = Document()
+    doc.styles['Normal'].font.name = '宋体'
+    doc.styles['Normal'].font.size = Pt(10.5)
+
+    doc.add_heading('终审意见与现场核查记录', level=0)
+
+    table = doc.add_table(rows=0, cols=4)
+    table.style = 'Table Grid'
+    info = [
+        ('项目名称', payload.project_name, '阶段', payload.stage_name),
+        ('流程编号', payload.workflow_id, '审核版本', str(payload.audit_version)),
+        ('流程状态', payload.workflow_status, '发起人', payload.initiator_name),
+        ('终审通过时间', payload.approved_time or '-', '对应巡查任务', block['task_no'] or '-'),
+    ]
+    for r in info:
+        cells = table.add_row().cells
+        for i, v in enumerate(r):
+            cells[i].text = str(v or '-')
+    doc.add_paragraph()
+
+    h = doc.add_heading('一、终审意见', level=1)
+    risk = payload.latest_risk_level or '-'
+    p = doc.add_paragraph()
+    p.add_run('风险等级：').bold = True
+    p.add_run(str(risk))
+    p = doc.add_paragraph()
+    p.add_run('终审综合结论：').bold = True
+    p.add_run(str(payload.latest_summary or '无'))
+    if payload.final_opinion:
+        p = doc.add_paragraph()
+        p.add_run('终审意见：').bold = True
+        p.add_run(str(payload.final_opinion))
+
+    if payload.logs:
+        doc.add_heading('流转留痕', level=2)
+        lt = doc.add_table(rows=1, cols=5)
+        lt.style = 'Table Grid'
+        head = lt.rows[0].cells
+        for i, t in enumerate(['时间', '节点', '动作', '操作人', '意见']):
+            head[i].text = t
+        for log in payload.logs:
+            cells = lt.add_row().cells
+            cells[0].text = str(log.get('create_time') or log.get('createTime') or '-')
+            cells[1].text = str(log.get('to_node_code') or log.get('toNodeCode') or '-')
+            cells[2].text = str(log.get('action_name') or log.get('actionName') or '-')
+            cells[3].text = str(log.get('operator_name') or log.get('operatorName') or '-')
+            cells[4].text = str(log.get('opinion') or '')
+
+    doc.add_heading('二、逐条意见现场核查记录', level=1)
+    opinions = block.get('opinions') or []
+    if not opinions:
+        doc.add_paragraph('该项目尚未生成现场核查任务/照片，本单仅含审核意见。')
+    for idx, op in enumerate(opinions, 1):
+        doc.add_heading(f'意见{idx}：{op["title"]}', level=2)
+        meta = f'风险等级：{op["risk_level"] or "-"}   阶段：{op["stage_name"] or "-"}'
+        doc.add_paragraph(meta)
+        p = doc.add_paragraph()
+        p.add_run('意见内容：').bold = True
+        p.add_run(op['content'])
+        state = _OP_STATUS_LABEL.get(op['status'], op['status'])
+        p = doc.add_paragraph()
+        p.add_run('核查状态：').bold = True
+        p.add_run(f'{state}    {op["check_time"] or ""}'.strip())
+        if op.get('return_reason'):
+            p = doc.add_paragraph()
+            p.add_run('退回原因：').bold = True
+            p.add_run(op['return_reason'])
+        p = doc.add_paragraph()
+        p.add_run('核查意见：').bold = True
+        p.add_run(op.get('check_opinion') or '-')
+        photos = op.get('photos') or []
+        if photos:
+            p = doc.add_paragraph()
+            p.add_run(f'现场照片（{len(photos)}张）：').bold = True
+            for path in photos:
+                try:
+                    doc.add_picture(str(path), width=Inches(3.4))
+                except Exception:
+                    doc.add_paragraph(f'[照片缺失] {path.name}')
+        else:
+            doc.add_paragraph('现场照片：暂无')
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+@router.post("/export/workflow-word")
+def export_workflow_word(payload: WorkflowWordExportPayload = Body(...)) -> Response:
+    block = _patrol_check_block(payload.project_id)
+    try:
+        data = _build_workflow_word(payload, block)
+    except Exception as exc:  # pragma: no cover - 生成失败兜底
+        LOGGER.exception("Word 导出失败")
+        raise HTTPException(status_code=500, detail=f"Word 生成失败：{exc}") from exc
+    name = f"{payload.project_name or '项目'}-{payload.stage_name or '流程'}-终审意见与现场核查记录"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}.docx"},
+    )

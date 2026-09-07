@@ -1,8 +1,15 @@
 package com.ruoyi.web.controller.rail;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -157,6 +164,67 @@ public class RailAuditWorkflowController extends BaseController
     {
         List<RailAuditTask> list = workflowService.selectTaskList(workflowId);
         return success(list);
+    }
+
+    /** 导出终审意见与现场核查 Word */
+    @PreAuthorize("@ss.hasPermi('rail:audit:workflow:list')")
+    @GetMapping("/{workflowId}/export-word")
+    @PostMapping("/{workflowId}/export-word")
+    public void exportWord(@PathVariable Long workflowId, HttpServletResponse response) throws IOException
+    {
+        RailAuditWorkflow w = workflowService.selectWorkflowById(workflowId);
+        if (w == null)
+        {
+            response.sendError(404);
+            return;
+        }
+        List<RailAuditFlowLog> logs = workflowService.selectLogList(workflowId);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("workflow_id", String.valueOf(workflowId));
+        body.put("project_id", w.getProjectId());
+        body.put("project_name", w.getProjectName());
+        body.put("stage_name", w.getStageName());
+        body.put("audit_version", w.getAuditVersion());
+        body.put("workflow_status", w.getWorkflowStatus());
+        body.put("initiator_name", w.getInitiatorName());
+        body.put("latest_summary", w.getLatestSummary());
+        body.put("latest_risk_level", w.getLatestRiskLevel());
+        body.put("final_opinion", "");
+        body.put("approved_time", fmtTime(w.getApprovedTime()));
+        List<Map<String, Object>> logsOut = new ArrayList<>();
+        for (RailAuditFlowLog log : logs)
+        {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("create_time", fmtTime(log.getCreateTime()));
+            item.put("action_name", log.getActionName());
+            item.put("operator_name", log.getOperatorName());
+            item.put("from_node_code", log.getFromNodeCode());
+            item.put("to_node_code", log.getToNodeCode());
+            item.put("opinion", log.getOpinion());
+            logsOut.add(item);
+        }
+        body.put("logs", logsOut);
+        org.springframework.http.ResponseEntity<byte[]> res = python.postDownload("/api/v1/patrol/export/workflow-word", body);
+        byte[] bytes = res == null ? null : res.getBody();
+        response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        String name = (w.getProjectName() == null ? "项目" : w.getProjectName()) + "-"
+                + (w.getStageName() == null ? "流程" : w.getStageName()) + "-终审意见与现场核查记录.docx";
+        String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8).replace("+", "%20");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encoded);
+        if (bytes != null && bytes.length > 0)
+        {
+            response.setContentLength(bytes.length);
+            response.getOutputStream().write(bytes);
+        }
+    }
+
+    private String fmtTime(Date value)
+    {
+        if (value == null)
+        {
+            return "";
+        }
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(value);
     }
 
     private void fillOperator(RailAuditWorkflowAction action)

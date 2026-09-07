@@ -160,7 +160,10 @@
             </span>
             <span class="muted op-last">更新{{ opStat.lastTime }}</span>
             <span class="opinion-arrow">{{ opOpenAll ? '收起 ▴' : '展开详情 ▾' }}</span>
-            <el-button v-hasPermi="['rail:patrol:manage','rail:patrol:review']" size="mini" type="text" icon="el-icon-refresh" style="margin-left:auto" @click.stop="doSyncOpinions">同步</el-button>
+            <span style="display:flex; gap:8px; margin-left:auto">
+              <el-button v-if="detail.source_workflow_id" size="mini" type="text" icon="el-icon-download" @click.stop="exportOpinionWord">导出Word</el-button>
+              <el-button v-hasPermi="['rail:patrol:manage','rail:patrol:review']" size="mini" type="text" icon="el-icon-refresh" @click.stop="doSyncOpinions">同步</el-button>
+            </span>
           </div>
           <template v-if="opOpenAll">
             <div v-for="o in detail.opinions" :key="o.opinion_id" class="opinion-item">
@@ -400,6 +403,7 @@ import {
 } from '@/api/rail/patrol'
 import { listUser } from '@/api/system/user'
 import { checkPermi } from '@/utils/permission'
+import request from '@/utils/request'
 
 export default {
   name: 'RailPatrol',
@@ -711,6 +715,27 @@ export default {
       this.opOpen = map
     },
     toggleOpinionAll() { this.opOpenAll = !this.opOpenAll },
+    async exportOpinionWord() {
+      const wf = this.detail && this.detail.source_workflow_id
+      if (!wf) { this.$message.warning('该任务未关联审核流转流程，无法导出'); return }
+      try {
+        const blob = await request({
+          url: `/rail/audit/workflow/${wf}/export-word`,
+          method: 'get',
+          responseType: 'blob',
+          timeout: 120000
+        })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = '终审意见与现场核查记录.docx'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      } catch (e) {
+        this.$message.error('导出失败，请稍后重试')
+      }
+    },
     async loadOpinionPhoto(id) {
       if (this.opinionPhotos[id] !== undefined) return
       try { const blob = await getOpinionPhotoFile(id); this.$set(this.opinionPhotos, id, URL.createObjectURL(blob)) }
