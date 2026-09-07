@@ -1,6 +1,8 @@
 package com.ruoyi.web.controller.rail;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +24,7 @@ import com.ruoyi.system.domain.rail.RailAuditTask;
 import com.ruoyi.system.domain.rail.RailAuditWorkflow;
 import com.ruoyi.system.domain.rail.RailAuditWorkflowAction;
 import com.ruoyi.system.service.IRailAuditWorkflowService;
+import com.ruoyi.web.service.PythonAuditClient;
 
 /** 案例审核多级流转控制器 */
 @RestController
@@ -30,6 +33,9 @@ public class RailAuditWorkflowController extends BaseController
 {
     @Autowired
     private IRailAuditWorkflowService workflowService;
+
+    @Autowired
+    private PythonAuditClient python;
 
     /** 查询审核流程列表 */
     @PreAuthorize("@ss.hasPermi('rail:audit:workflow:list')")
@@ -107,7 +113,21 @@ public class RailAuditWorkflowController extends BaseController
     public AjaxResult approve(@RequestBody RailAuditWorkflowAction action)
     {
         fillOperator(action);
-        return success(workflowService.approve(action));
+        RailAuditWorkflow workflow = workflowService.approve(action);
+        AjaxResult result = success(workflow);
+        if ("APPROVED".equals(workflow.getWorkflowStatus()))
+        {
+            try
+            {
+                result.put("patrolTask", python.post("/api/v1/patrol/workflow-tasks", patrolTaskPayload(workflow, action)));
+            }
+            catch (ServiceException exception)
+            {
+                // Workflow approval is already persisted. Return a visible warning instead of incorrectly reporting a failed approval.
+                result.put("patrolTaskSyncWarning", "终审已通过，但现场巡查任务创建失败：" + exception.getMessage());
+            }
+        }
+        return result;
     }
 
     /** 退回修改 */
@@ -147,5 +167,18 @@ public class RailAuditWorkflowController extends BaseController
         }
         action.setOperatorId(getUserId());
         action.setOperatorName(getUsername());
+    }
+
+    private Map<String, Object> patrolTaskPayload(RailAuditWorkflow workflow, RailAuditWorkflowAction action)
+    {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("workflow_id", String.valueOf(workflow.getWorkflowId()));
+        payload.put("project_name", workflow.getProjectName());
+        payload.put("initiator_id", workflow.getInitiatorId());
+        payload.put("initiator_name", workflow.getInitiatorName());
+        payload.put("latest_summary", workflow.getLatestSummary());
+        payload.put("latest_result_json", workflow.getLatestResultJson());
+        payload.put("final_approval_opinion", action.getOpinion());
+        return payload;
     }
 }

@@ -3258,6 +3258,7 @@ export default {
     async approveWorkflowReview() {
       if (!this.workflowId) return
       const actionLabel = this.workflowApproveButtonText
+      const isFinalApproval = this.workflowCurrentNodeCode === 'FINAL'
       try {
         const { value } = await this.$prompt('可填写审核意见；不填写则默认为同意。', actionLabel, {
           inputValue: '同意',
@@ -3265,9 +3266,12 @@ export default {
           cancelButtonText: '取消'
         })
         this.workflowSubmitting = true
-        await approveAuditWorkflow({ workflowId: this.workflowId, opinion: value || '同意' })
+        const response = await approveAuditWorkflow({ workflowId: this.workflowId, opinion: value || '同意' })
         await this.refreshWorkflowInfo()
-        this.$message.success(`已${actionLabel}`)
+        const patrolWarning = response && response.patrolTaskSyncWarning
+        if (patrolWarning) this.$message.warning(patrolWarning)
+        else if (!isFinalApproval) this.$message.success(`已${actionLabel}`)
+        else this.$message.success('终审已通过，已自动创建现场符合性巡查任务')
       } catch (error) {
         if (error !== 'cancel') this.$message.error(this.workflowErrorMessage(error, `${actionLabel}失败`))
       } finally {

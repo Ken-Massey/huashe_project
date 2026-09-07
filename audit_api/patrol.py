@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import hmac
+import json
 import logging
 import sqlite3
 import threading
@@ -94,6 +95,47 @@ def _optional_int(value: Any, *, field: str, minimum: int, maximum: int) -> int 
     return result
 
 
+def _limit_text(value: str, maximum: int) -> str:
+    text = " ".join(str(value or "").split())
+    return text if len(text) <= maximum else text[: maximum - 1].rstrip() + "…"
+
+
+def _workflow_patrol_opinion(data: dict[str, Any]) -> str:
+    """Turn the structured final audit result into readable field-inspection instructions."""
+    raw = data.get("latest_result_json")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = {}
+    payload = raw if isinstance(raw, dict) else {}
+    overall = payload.get("overall_opinion") or payload.get("overallOpinion") or {}
+    if not isinstance(overall, dict):
+        overall = {}
+    items = payload.get("review_items") or payload.get("items") or []
+    if not isinstance(items, list):
+        items = []
+
+    lines: list[str] = []
+    conclusion = _limit_text(str(overall.get("conclusion") or data.get("latest_summary") or ""), 700)
+    recommendation = _limit_text(str(overall.get("recommendation") or ""), 700)
+    if conclusion:
+        lines.append(f"终审综合结论：{conclusion}")
+    if recommendation and recommendation != conclusion:
+        lines.append(f"综合处置要求：{recommendation}")
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        title = _limit_text(str(item.get("title") or item.get("topic") or f"审核事项{index}"), 120)
+        opinion = _limit_text(str(item.get("conclusion") or item.get("recommendation") or item.get("opinion") or ""), 600)
+        if opinion:
+            lines.append(f"{index}. {title}：{opinion}")
+    final_approval = _limit_text(str(data.get("final_approval_opinion") or ""), 500)
+    if final_approval and final_approval not in " ".join(lines):
+        lines.append(f"终审人意见：{final_approval}")
+    return _limit_text("；".join(lines) or "终审通过。请结合审核结论开展现场符合性巡查。", 1900)
+
+
 class PatrolRepository:
     """巡查任务、巡查记录、媒体、隐患与字典的持久化存储。"""
 
@@ -134,6 +176,7 @@ class PatrolRepository:
                 CREATE TABLE IF NOT EXISTS patrol_tasks (
                     task_id TEXT PRIMARY KEY,
                     task_no TEXT NOT NULL UNIQUE,
+                    source_workflow_id TEXT NOT NULL DEFAULT '',
                     name TEXT NOT NULL DEFAULT '',
                     line TEXT NOT NULL DEFAULT '',
                     location_desc TEXT NOT NULL DEFAULT '',
@@ -280,6 +323,12 @@ class PatrolRepository:
             ):
                 if column not in task_columns:
                     connection.execute(f"ALTER TABLE patrol_tasks ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+            if "source_workflow_id" not in task_columns:
+                connection.execute("ALTER TABLE patrol_tasks ADD COLUMN source_workflow_id TEXT NOT NULL DEFAULT ''")
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_patrol_tasks_source_workflow "
+                "ON patrol_tasks(source_workflow_id) WHERE source_workflow_id <> ''"
+            )
         self._seed_default_dicts()
         self._migrate_legacy_events()
 
@@ -465,7 +514,13 @@ class PatrolRepository:
         assigned = str(task.get("assigned_user_id") or "")
         return bool(assigned) and assigned == str(actor.get("user_id") or "")
 
-    def create_task(self, data: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
+    def create_task(
+        self,
+        data: dict[str, Any],
+        actor: dict[str, Any],
+        *,
+        source_workflow_id: str = "",
+    ) -> dict[str, Any]:
         task_id, now = _id("ptask"), _now()
         name = _text(data.get("name"), field="任务名称", required=True, maximum=120)
         line = _text(data.get("line"), field="线路", maximum=60)
@@ -481,20 +536,21 @@ class PatrolRepository:
         report_requirement = _text(data.get("report_requirement"), field="数据报送要求", maximum=2000)
         review_opinion = _text(data.get("review_opinion"), field="监测审查意见", maximum=2000)
         dispatcher = _text(actor.get("name") or actor.get("user_id"), field="派发人", maximum=60)
+        source_workflow_id = _text(source_workflow_id, field="审核流程", maximum=80)
         with self._lock, self._connect() as connection:
             task_no = self._next_task_no(connection)
             connection.execute(
                 """
                 INSERT INTO patrol_tasks(
-                    task_id, task_no, name, line, location_desc, requirement,
+                    task_id, task_no, source_workflow_id, name, line, location_desc, requirement,
                     assigned_user_id, assigned_user_name, status, dispatcher, dispatch_time,
                     remark, monitor_frequency, monitor_points, warning_threshold,
                     emergency_plan, report_requirement, review_opinion,
                     legacy, deleted, created_at, updated_at
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
                 """,
                 (
-                    task_id, task_no, name, line, location_desc, requirement,
+                    task_id, task_no, source_workflow_id, name, line, location_desc, requirement,
                     assigned_user_id, assigned_user_name, dispatcher, now, remark,
                     monitor_frequency, monitor_points, warning_threshold,
                     emergency_plan, report_requirement, review_opinion,
@@ -502,6 +558,44 @@ class PatrolRepository:
                 ),
             )
         return self.get_task(task_id, actor)
+
+    def create_workflow_task(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Create one patrol task from a final-approved audit workflow, idempotently."""
+        workflow_id = _text(data.get("workflow_id"), field="审核流程", required=True, maximum=80)
+        system_actor = {"user_id": "workflow", "name": "审核流转系统", "is_admin": True}
+        with self._connect() as connection:
+            existing = connection.execute(
+                "SELECT task_id FROM patrol_tasks WHERE source_workflow_id = ? AND deleted = 0",
+                (workflow_id,),
+            ).fetchone()
+        if existing is not None:
+            return {"created": False, "task": self.get_task(existing["task_id"], system_actor)}
+
+        project_name = _text(data.get("project_name"), field="项目名称", required=True, maximum=120)
+        final_opinion = _workflow_patrol_opinion(data)
+        task_data = {
+            "name": project_name,
+            "requirement": _limit_text(
+                "请依据以下终审意见开展现场符合性巡查，核实整改落实情况并上传现场记录。" + final_opinion,
+                2000,
+            ),
+            "assigned_user_id": str(data.get("initiator_id") or ""),
+            "assigned_user_name": str(data.get("initiator_name") or ""),
+            "remark": f"来源：案例审核流转终审通过（流程 {workflow_id}）。",
+            "review_opinion": _limit_text(final_opinion, 2000),
+        }
+        try:
+            task = self.create_task(task_data, system_actor, source_workflow_id=workflow_id)
+            return {"created": True, "task": task}
+        except sqlite3.IntegrityError:
+            with self._connect() as connection:
+                existing = connection.execute(
+                    "SELECT task_id FROM patrol_tasks WHERE source_workflow_id = ? AND deleted = 0",
+                    (workflow_id,),
+                ).fetchone()
+            if existing is None:
+                raise
+            return {"created": False, "task": self.get_task(existing["task_id"], system_actor)}
 
     def get_task(self, task_id: str, actor: dict[str, Any]) -> dict[str, Any]:
         with self._connect() as connection:
@@ -1290,6 +1384,16 @@ class PatrolTaskCreatePayload(BaseModel):
     review_opinion: str = Field(default="", max_length=2000)
 
 
+class PatrolWorkflowTaskPayload(BaseModel):
+    workflow_id: str = Field(min_length=1, max_length=80)
+    project_name: str = Field(min_length=1, max_length=120)
+    initiator_id: str | int | None = None
+    initiator_name: str = Field(default="", max_length=60)
+    latest_summary: str = Field(default="", max_length=2000)
+    latest_result_json: str | dict[str, Any] | None = None
+    final_approval_opinion: str = Field(default="", max_length=500)
+
+
 class PatrolTaskUpdatePayload(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     line: str | None = Field(default=None, max_length=60)
@@ -1401,6 +1505,17 @@ def delete_dict(dict_id: str, actor: dict = Depends(get_actor), repo: PatrolRepo
 def create_task(payload: PatrolTaskCreatePayload, actor: dict = Depends(get_actor), repo: PatrolRepository = Depends(get_repository)) -> dict[str, Any]:
     try:
         return repo.create_task(_model_values(payload), actor)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/workflow-tasks", status_code=201)
+def create_workflow_task(
+    payload: PatrolWorkflowTaskPayload,
+    repo: PatrolRepository = Depends(get_repository),
+) -> dict[str, Any]:
+    try:
+        return repo.create_workflow_task(_model_values(payload))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
