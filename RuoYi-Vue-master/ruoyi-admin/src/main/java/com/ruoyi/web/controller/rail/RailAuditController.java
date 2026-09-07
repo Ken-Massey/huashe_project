@@ -1,10 +1,12 @@
 package com.ruoyi.web.controller.rail;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,7 +18,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.multipart.MultipartFile;
+import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.web.service.PythonAuditClient;
 
@@ -112,6 +116,21 @@ public class RailAuditController
     public Object taskFiles(@PathVariable("taskId") String taskId)
     {
         return python.get("/api/v1/tasks/" + taskId + "/files");
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:audit:run')")
+    @GetMapping("/local-geocoder/status")
+    public Object localGeocoderStatus()
+    {
+        return python.get("/api/v1/local-geocoder/status");
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:audit:run')")
+    @GetMapping("/local-geocoder/search")
+    public Object localGeocoderSearch(@RequestParam("query") String query,
+            @RequestParam(name = "limit", defaultValue = "8") Integer limit)
+    {
+        return python.get("/api/v1/local-geocoder/search", Map.of("query", query, "limit", limit));
     }
 
     @PreAuthorize("@ss.hasAnyPermi('" + TASK_PERMISSIONS + "')")
@@ -588,6 +607,14 @@ public class RailAuditController
     }
 
     @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
+    @PostMapping(value = "/agent/sessions/{sessionId}/pin", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Object pinAgentSession(@PathVariable("sessionId") String sessionId,
+            @RequestBody Map<String, Object> request)
+    {
+        return python.post("/api/v1/agent/sessions/" + sessionId + "/pin", request, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
     @DeleteMapping("/agent/sessions/{sessionId}")
     public Object deleteAgentSession(@PathVariable("sessionId") String sessionId)
     {
@@ -599,6 +626,31 @@ public class RailAuditController
     public Object askAgent(@RequestBody Map<String, Object> request)
     {
         return python.post("/api/v1/agent/ask", request, actorHeaders());
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:knowledge:list')")
+    @PostMapping(value = "/agent/ask/stream", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<StreamingResponseBody> streamAgent(@RequestBody Map<String, Object> request)
+    {
+        Map<String, String> actorHeaders = actorHeaders();
+        StreamingResponseBody body = output -> {
+            try
+            {
+                python.postStream("/api/v1/agent/ask/stream", request, actorHeaders, output);
+            }
+            catch (Exception exception)
+            {
+                String data = JSON.toJSONString(Map.of("message", exception.getMessage()));
+                output.write(("event: error\ndata: " + data + "\n\n").getBytes(StandardCharsets.UTF_8));
+                output.flush();
+            }
+        };
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.TEXT_EVENT_STREAM);
+        headers.setCacheControl("no-cache");
+        headers.add("X-Accel-Buffering", "no");
+        return new ResponseEntity<>(body, headers, HttpStatus.OK);
     }
 
     private Map<String, String> actorHeaders()

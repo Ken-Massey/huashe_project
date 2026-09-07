@@ -1244,6 +1244,93 @@ class RegulationRepository:
         with self._connect() as connection:
             return [dict(row) for row in connection.execute(sql, params)]
 
+    def search(self, question: str, limit: int = 5) -> list[dict[str, Any]]:
+        """Search active regulation clauses, retaining HTML tables for the AI context."""
+        query = re.sub(r"\s+", "", question or "").lower()
+        if not query:
+            return []
+        domain_terms = (
+            "风险等级", "特级", "一级", "二级", "三级", "监控频率", "监测频率", "监控",
+            "监测", "自动监测", "人工监测", "现场巡查", "桥桩施工", "承台施工", "墩柱施工",
+            "桥梁结构", "路面施工", "轨道交通", "施工期间", "安全监控", "保护区", "频次",
+        )
+        terms = [term for term in domain_terms if term in query]
+        terms.extend(re.findall(r"[a-z0-9.]+", query))
+        for segment in re.findall(r"[\u4e00-\u9fff]+", query):
+            for width in (4, 3, 2):
+                terms.extend(segment[index:index + width] for index in range(len(segment) - width + 1))
+        terms = list(dict.fromkeys(term for term in terms if len(term) >= 2))[:80]
+        if not terms:
+            return []
+        with self._connect() as connection:
+            rows = [dict(row) for row in connection.execute(
+                """SELECT rc.clause_id, rc.regulation_id, rc.clause_no, rc.title clause_title,
+                          rc.clause_text, rc.source_page, r.title regulation_title,
+                          r.original_file_name
+                   FROM regulation_clause rc
+                   JOIN regulation r ON r.regulation_id=rc.regulation_id
+                   WHERE rc.active=1 AND r.active=1"""
+            )]
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            content = "\n".join([
+                row.get("regulation_title") or "",
+                row.get("original_file_name") or "",
+                row.get("clause_no") or "",
+                row.get("clause_title") or "",
+                row.get("clause_text") or "",
+            ])
+            normalized = content.lower()
+            matched = [term for term in terms if term in normalized]
+            if not matched:
+                continue
+            title = " ".join([row.get("regulation_title") or "", row.get("clause_title") or ""]).lower()
+            score = sum(120 + len(term) * 8 for term in matched)
+            score += sum(title.count(term) * len(term) * 12 for term in matched)
+            excerpt = str(row.get("clause_text") or "").strip()
+            if len(excerpt) > 3600:
+                tables = list(re.finditer(r"<table>.*?</table>", excerpt, flags=re.IGNORECASE | re.DOTALL))
+                table_scores: list[tuple[int, re.Match[str]]] = []
+                for table in tables:
+                    # Include the nearby "表 N ..." caption when checking a table.
+                    # Keep this deliberately short: a lengthy preceding note can
+                    # belong to the previous table and contaminate the score.
+                    table_context = excerpt[max(0, table.start() - 220):table.end()].lower()
+                    table_matches = [term for term in terms if term in table_context]
+                    if table_matches:
+                        table_scores.append((
+                            sum(len(term) ** 2 * 10 for term in table_matches),
+                            table,
+                        ))
+                if table_scores:
+                    # Keep the entire most relevant table; a clause can contain four
+                    # or more adjacent tables with otherwise very similar wording.
+                    _, table = max(table_scores, key=lambda item: item[0])
+                    start = max(0, table.start() - 220)
+                    end = min(len(excerpt), table.end() + 300)
+                    excerpt = excerpt[start:end]
+                else:
+                    # Text-only clauses still use the most specific query phrase.
+                    anchor = max(
+                        matched,
+                        key=lambda term: (len(term), -normalized.count(term), normalized.rfind(term)),
+                    )
+                    anchor_index = normalized.find(anchor)
+                    start = max(0, anchor_index - 900)
+                    excerpt = excerpt[start:start + 3600]
+            results.append({
+                "source_type": "regulation",
+                "regulation_id": row["regulation_id"],
+                "clause_id": row["clause_id"],
+                "clause_no": row.get("clause_no"),
+                "source_page": row.get("source_page"),
+                "title": row.get("regulation_title"),
+                "original_file_name": row.get("original_file_name"),
+                "excerpt": excerpt,
+                "score": score,
+            })
+        return sorted(results, key=lambda item: item["score"], reverse=True)[:limit]
+
     def candidates(self, regulation_id: str, limit: int = 500) -> list[dict[str, Any]]:
         item = self.get_document(regulation_id)
         rows = json.loads((Path(item["text_file"]).parent / "paragraphs.json").read_text(encoding="utf-8"))

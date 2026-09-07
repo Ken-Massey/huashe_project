@@ -1,6 +1,8 @@
 package com.ruoyi.web.service;
 
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Collections;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -188,6 +190,58 @@ public class PythonAuditClient
         catch (Exception exception)
         {
             throw new ServiceException("智能体服务连接失败：" + exception.getMessage());
+        }
+    }
+
+    /** Forward server-sent events without waiting for the Python response body to finish. */
+    public void postStream(String path, Object body, Map<String, String> headers, OutputStream output)
+    {
+        try
+        {
+            byte[] payload = JSON.toJSONString(body).getBytes(StandardCharsets.UTF_8);
+            HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(baseUrl + path))
+                    .timeout(Duration.ofMinutes(3))
+                    .header("Content-Type", "application/json; charset=UTF-8")
+                    .header("Accept", "text/event-stream")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(payload));
+            if (StringUtils.isNotEmpty(token))
+            {
+                request.header("X-Service-Token", token);
+            }
+            if (headers != null)
+            {
+                headers.forEach(request::header);
+            }
+            HttpResponse<InputStream> response = uploadClient.send(
+                    request.build(), HttpResponse.BodyHandlers.ofInputStream());
+            try (InputStream input = response.body())
+            {
+                if (response.statusCode() < 200 || response.statusCode() >= 300)
+                {
+                    String detail = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+                    throw new ServiceException("智能体服务返回错误（" + response.statusCode() + "）：" + detail);
+                }
+                byte[] buffer = new byte[8192];
+                int length;
+                while ((length = input.read(buffer)) != -1)
+                {
+                    output.write(buffer, 0, length);
+                    output.flush();
+                }
+            }
+        }
+        catch (ServiceException exception)
+        {
+            throw exception;
+        }
+        catch (InterruptedException exception)
+        {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("智能体流式请求已中断。");
+        }
+        catch (Exception exception)
+        {
+            throw new ServiceException("智能体流式服务连接失败：" + exception.getMessage());
         }
     }
 

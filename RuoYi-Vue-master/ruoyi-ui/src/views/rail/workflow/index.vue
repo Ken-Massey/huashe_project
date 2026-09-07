@@ -176,6 +176,33 @@
               <el-table-column label="时间" prop="createTime" width="160" />
             </el-table>
           </el-tab-pane>
+
+          <el-tab-pane label="审核依据与形成说明" name="rationale">
+            <div v-if="reviewRationaleVersions.length" class="rationale-history">
+              <section v-for="version in reviewRationaleVersions" :key="version.key" class="rationale-version">
+                <div class="rationale-version-head">
+                  <strong>第 {{ version.auditVersion }} 版审核依据</strong>
+                  <span>{{ version.createTime || '' }}</span>
+                </div>
+                <div v-if="version.overall && rationaleEntries(version.overall).length" class="workflow-overall-rationale">
+                  <strong>综合评价形成说明</strong>
+                  <p v-for="entry in rationaleEntries(version.overall)" :key="entry.label"><b>{{ entry.label }}</b>{{ entry.value }}</p>
+                </div>
+                <article v-for="item in version.items" :key="`${version.key}_${item.order_no}`" class="workflow-rationale-item">
+                  <h4><span>{{ item.order_no }}</span>{{ item.title || '审核事项' }}</h4>
+                  <p v-if="item.conclusion" class="workflow-rationale-opinion"><b>审核意见：</b>{{ item.conclusion }}</p>
+                  <p v-for="entry in rationaleEntries(item)" :key="entry.label"><b>{{ entry.label }}</b>{{ entry.value }}</p>
+                  <div v-if="rationaleEvidence(item).length" class="workflow-rationale-evidence">
+                    <b>引用依据</b>
+                    <p v-for="(evidence, evidenceIndex) in rationaleEvidence(item)" :key="evidenceIndex">
+                      {{ evidenceLabel(evidence) }}<span v-if="evidence.quote">：{{ evidence.quote }}</span>
+                    </p>
+                  </div>
+                </article>
+              </section>
+            </div>
+            <el-empty v-else description="该历史版本暂未保存结构化审核依据" />
+          </el-tab-pane>
         </el-tabs>
       </div>
     </el-dialog>
@@ -262,12 +289,80 @@ export default {
         archive: '归档流程'
       }
       return titles[this.actionType] || '流程处理'
+    },
+    reviewRationaleVersions() {
+      const versions = this.snapshots.map((snapshot, index) => this.reviewRationaleVersion(snapshot, index)).filter(Boolean)
+      if (versions.length) return versions
+      const fallback = this.reviewRationaleVersion({
+        auditVersion: this.detail.auditVersion || 1,
+        createTime: this.detail.updateTime || this.detail.createTime || '',
+        resultJson: this.detail.latestResultJson
+      }, 0)
+      return fallback ? [fallback] : []
     }
   },
   created() {
     this.loadData()
   },
   methods: {
+    parseWorkflowJson(value) {
+      if (!value) return {}
+      if (typeof value === 'object') return value
+      try {
+        return JSON.parse(value)
+      } catch (error) {
+        return {}
+      }
+    },
+    reviewRationaleVersion(snapshot, index) {
+      const root = this.parseWorkflowJson(snapshot && (snapshot.resultJson || snapshot.result_json || snapshot.latestResultJson))
+      const session = root.audit_session && typeof root.audit_session === 'object' ? root.audit_session : {}
+      const latest = root.latest_result && typeof root.latest_result === 'object'
+        ? root.latest_result
+        : (session.latest_result && typeof session.latest_result === 'object' ? session.latest_result : root)
+      const rawItems = root.review_items || latest.review_items || session.items || latest.items || []
+      const items = Array.isArray(rawItems) ? rawItems.filter(item => item && (item.conclusion || item.recommendation || item.basis)) : []
+      const metadata = session.metadata && typeof session.metadata === 'object' ? session.metadata : {}
+      const overall = root.overall_opinion || latest.overall_opinion || metadata.overall_opinion || null
+      if (!items.length && !this.rationaleFor(overall)) return null
+      return {
+        key: `${snapshot && (snapshot.snapshotId || snapshot.snapshot_id || snapshot.auditVersion) || index}_${index}`,
+        auditVersion: snapshot && (snapshot.auditVersion || snapshot.audit_version) || index + 1,
+        createTime: snapshot && (snapshot.createTime || snapshot.create_time) || '',
+        overall,
+        items
+      }
+    },
+    rationaleFor(item) {
+      if (!item) return null
+      const source = item.source && typeof item.source === 'object' ? item.source : {}
+      const rationale = item.rationale || source.rationale
+      return rationale && typeof rationale === 'object' ? rationale : null
+    },
+    rationaleEntries(item) {
+      const rationale = this.rationaleFor(item)
+      if (!rationale) return []
+      return [
+        { label: '资料事实：', value: this.cleanRationaleValue(rationale.facts) },
+        { label: '审核依据：', value: this.cleanRationaleValue(rationale.rule) },
+        { label: '规则判断：', value: this.cleanRationaleValue(rationale.rule_judgement) },
+        { label: '意见形成：', value: this.cleanRationaleValue(rationale.conclusion_reason) }
+      ].filter(entry => entry.value)
+    },
+    cleanRationaleValue(value) {
+      return String(value || '').replace(/^(资料事实|审核依据|引用依据|规则判断|意见形成|形成原因)\s*[:：]\s*/, '').trim()
+    },
+    rationaleEvidence(item) {
+      const rationale = this.rationaleFor(item)
+      if (rationale && Array.isArray(rationale.evidence) && rationale.evidence.length) return rationale.evidence
+      return item && Array.isArray(item.basis) ? item.basis : []
+    },
+    evidenceLabel(evidence) {
+      if (evidence && typeof evidence === 'object') {
+        return [evidence.document, evidence.clause].filter(Boolean).join(' ') || '技术规程依据'
+      }
+      return String(evidence || '技术规程依据')
+    },
     loadData() {
       this.loading = true
       const params = { ...this.queryParams }
@@ -533,4 +628,47 @@ export default {
   color: #344541;
   line-height: 1.7;
 }
+
+.rationale-history {
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.rationale-version {
+  margin-bottom: 16px;
+  border: 1px solid #dfe9e6;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rationale-version-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f6fbf9;
+  color: #28594d;
+}
+
+.rationale-version-head span {
+  color: #7a8984;
+  font-size: 12px;
+}
+
+.workflow-overall-rationale,
+.workflow-rationale-item {
+  padding: 12px 14px;
+  border-top: 1px solid #edf2f0;
+}
+
+.workflow-overall-rationale { background: #fcfefd; }
+.workflow-rationale-item h4 { margin: 0 0 8px; color: #203c36; font-size: 14px; }
+.workflow-rationale-item h4 span { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; margin-right: 8px; border: 1px solid #65a894; border-radius: 50%; color: #2f7d69; font-size: 12px; }
+.workflow-overall-rationale p,
+.workflow-rationale-item > p { margin: 5px 0; color: #596862; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+.workflow-rationale-opinion { color: #2e423d !important; }
+.workflow-overall-rationale b,
+.workflow-rationale-item b { margin-right: 5px; color: #314a43; }
+.workflow-rationale-evidence { margin-top: 8px; padding: 8px 10px; border-radius: 4px; background: #f7faf9; }
+.workflow-rationale-evidence p { margin: 4px 0 0; color: #697872; font-size: 12px; line-height: 1.6; }
 </style>

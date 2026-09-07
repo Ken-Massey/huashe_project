@@ -115,7 +115,7 @@
         <el-alert
           v-if="hasRestoredDocuments"
           class="recognition-alert"
-          title="已恢复上次上传的文件记录。浏览器无法自动恢复原始文件本体；如需重新审核，请重新选择对应文件。"
+          :title="restoredArchiveAuditId ? '已恢复项目档案中的历史文件。可直接重新审核，系统将使用服务端留存的原始文件。' : '已恢复上次上传的文件记录。该历史记录未留存原始文件；如需重新审核，请重新选择对应文件。'"
           type="warning"
           :closable="false"
           show-icon
@@ -283,9 +283,9 @@
                       </div>
                     </el-form-item>
                   </div>
-                  <div v-if="amapKey" ref="amapContainer" class="amap-container" />
+                  <div v-if="localMapStyleUrl" ref="amapContainer" class="amap-container" />
                   <div v-else class="amap-fallback">
-                    未配置高德地图 Key，配置 VUE_APP_AMAP_KEY 后会显示南京地图并自动定位。
+                    未配置本地南京地图。地址仍可自动识别；配置 VUE_APP_LOCAL_MAP_STYLE_URL 后可点选地图微调坐标。
                   </div>
                   <div class="nearby-project-box">
                     <div class="nearby-project-head">
@@ -534,6 +534,12 @@
                 <div v-if="messageOverallOpinion(message)" class="overall-review-card leading">
                   <h4>综合评价</h4>
                   <p>{{ displayOverallOpinion(messageOverallOpinion(message)) }}</p>
+                  <details v-if="rationaleFor(messageOverallOpinion(message))" class="review-rationale">
+                    <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
+                    <div class="rationale-content">
+                      <p v-for="entry in rationaleEntries(messageOverallOpinion(message))" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
+                    </div>
+                  </details>
                 </div>
                 <article v-for="item in messageReviewItems(message)" :key="`${message.message_id}_${item.item_id || item.order_no}`" class="review-item-card">
                   <div class="review-item-head">
@@ -550,6 +556,18 @@
                   <div v-if="displayReviewOpinion(item)" class="review-conclusion">
                     <span>意见</span>{{ displayReviewOpinion(item) }}
                   </div>
+                  <details v-if="rationaleFor(item)" class="review-rationale">
+                    <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
+                    <div class="rationale-content">
+                      <p v-for="entry in rationaleEntries(item)" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
+                      <div v-if="rationaleEvidence(item).length" class="rationale-evidence">
+                        <strong>引用依据</strong>
+                        <p v-for="(evidence, evidenceIndex) in rationaleEvidence(item)" :key="evidenceIndex">
+                          {{ evidenceLabel(evidence) }}<span v-if="evidence.quote">：{{ evidence.quote }}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </details>
                 </article>
               </div>
               <div v-else class="message-review-list collapsed">
@@ -563,6 +581,12 @@
                   <div v-if="messageOverallOpinion(message)" class="overall-review-card compact leading">
                     <h4>综合评价</h4>
                     <p>{{ displayOverallOpinion(messageOverallOpinion(message)) }}</p>
+                    <details v-if="rationaleFor(messageOverallOpinion(message))" class="review-rationale">
+                      <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
+                      <div class="rationale-content">
+                        <p v-for="entry in rationaleEntries(messageOverallOpinion(message))" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
+                      </div>
+                    </details>
                   </div>
                   <article v-for="item in messageReviewItems(message)" :key="`${message.message_id}_${item.order_no}`" class="review-item-card compact">
                     <div class="review-item-head">
@@ -575,6 +599,18 @@
                     <div v-if="displayReviewOpinion(item)" class="review-conclusion">
                       <span>意见</span>{{ displayReviewOpinion(item) }}
                     </div>
+                    <details v-if="rationaleFor(item)" class="review-rationale">
+                      <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
+                      <div class="rationale-content">
+                        <p v-for="entry in rationaleEntries(item)" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
+                        <div v-if="rationaleEvidence(item).length" class="rationale-evidence">
+                          <strong>引用依据</strong>
+                          <p v-for="(evidence, evidenceIndex) in rationaleEvidence(item)" :key="evidenceIndex">
+                            {{ evidenceLabel(evidence) }}<span v-if="evidence.quote">：{{ evidence.quote }}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </details>
                   </article>
                 </div>
               </div>
@@ -745,8 +781,9 @@ import {
   createFullTask, createReplyTask, recognizeReplyLetter,
   getTask, getTaskResult, getAuditSession,
   createAuditSessionItem, updateAuditSessionItem, deleteAuditSessionItem,
-  reviseAuditSession, writeAuditSessionToArchive, generateAuditSessionReply,
-  listKnowledge, listLibraryAssets, downloadKnowledgeFile, downloadLibraryAsset
+  reviseAuditSession, writeAuditSessionToArchive, rerunArchivedAudit, generateAuditSessionReply,
+  listKnowledge, listLibraryAssets, downloadKnowledgeFile, downloadLibraryAsset,
+  searchLocalGeocoder
 } from '@/api/rail/audit'
 import {
   listArchiveProjects, getArchiveProject,
@@ -758,6 +795,8 @@ import {
   returnAuditWorkflow, archiveAuditWorkflow
 } from '@/api/rail/workflow'
 import { checkPermi } from '@/utils/permission'
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 function defaultForm() {
   return {
@@ -812,9 +851,6 @@ export default {
       amap: null,
       amapContainerEl: null,
       amapMarker: null,
-      amapLoadingPromise: null,
-      amapGeocoder: null,
-      amapPlaceSearch: null,
       autoLocating: false,
       locationManuallyCleared: false,
       locationSelecting: false,
@@ -860,11 +896,8 @@ export default {
         selected_nearby_projects: this.selectedNearbyProjects
       }
     },
-    amapKey() {
-      return String(process.env.VUE_APP_AMAP_KEY || process.env.VUE_APP_GAODE_MAP_KEY || '').trim()
-    },
-    amapSecurityCode() {
-      return String(process.env.VUE_APP_AMAP_SECURITY_CODE || process.env.VUE_APP_GAODE_MAP_SECURITY_CODE || '').trim()
+    localMapStyleUrl() {
+      return String(process.env.VUE_APP_LOCAL_MAP_STYLE_URL || '').trim()
     },
     selectedNearbyProjects() {
       const ids = new Set(this.selectedNearbyProjectIds || [])
@@ -938,17 +971,22 @@ export default {
     restoredDocumentCount() { return this.documents.filter(item => item && item.restored).length },
     hasRestoredDocuments() { return this.restoredDocumentCount > 0 },
     hasOnlyRestoredDocuments() { return this.documents.length > 0 && this.uploadableDocumentCount === 0 },
+    restoredArchiveAuditId() {
+      const metadata = this.auditSession && this.auditSession.metadata || {}
+      return String(metadata.restored_from_archive_audit_id || '').trim()
+    },
     currentAuditSignature() { return this.auditInputSignature() },
     auditInputChanged() {
       return Boolean((this.auditSession || this.auditResult) && this.baselineAuditSignature && this.currentAuditSignature !== this.baselineAuditSignature)
     },
     auditButtonText() {
       if (this.auditSubmitting) return this.auditInputChanged ? '重新审核中' : '审核中'
+      if (this.hasOnlyRestoredDocuments && this.restoredArchiveAuditId) return '重新审核历史文件'
       return this.auditInputChanged ? '重新审核' : '开始审核'
     },
     reviewBriefText() {
       const fileText = this.hasOnlyRestoredDocuments
-        ? `已保留上次 ${this.restoredDocumentCount} 个文件记录；如需重新审核请重新选择文件`
+        ? (this.restoredArchiveAuditId ? `已恢复 ${this.restoredDocumentCount} 个历史文件；可直接重新审核` : `已保留上次 ${this.restoredDocumentCount} 个文件记录；如需重新审核请重新选择文件`)
         : (this.documents.length ? `已上传 ${this.uploadableDocumentCount || this.documents.length} 个文件` : '尚未上传文件')
       const projectName = String(this.form.project_name || '').trim()
       const stageName = String(this.form.project_stage || '').trim()
@@ -1164,7 +1202,7 @@ export default {
     if (this.projectNameLookupTimer) clearTimeout(this.projectNameLookupTimer)
     if (this.locationInputTimer) clearTimeout(this.locationInputTimer)
     this.stopAuditPolling()
-    if (this.amap && this.amap.destroy) this.amap.destroy()
+    if (this.amap) this.amap.remove()
     this.saveAuditDraft()
   },
   methods: {
@@ -1248,62 +1286,40 @@ export default {
         this.refreshNearbyProjects()
       })
     },
-    loadAmapScript() {
-      if (!this.amapKey) return Promise.resolve(null)
-      if (window.AMap) return Promise.resolve(window.AMap)
-      if (this.amapLoadingPromise) return this.amapLoadingPromise
-      if (this.amapSecurityCode) {
-        window._AMapSecurityConfig = window._AMapSecurityConfig || {}
-        window._AMapSecurityConfig.securityJsCode = this.amapSecurityCode
-      }
-      this.amapLoadingPromise = new Promise((resolve, reject) => {
-        const script = document.createElement('script')
-        script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(this.amapKey)}`
-        script.async = true
-        script.onload = () => resolve(window.AMap)
-        script.onerror = () => reject(new Error('高德地图加载失败'))
-        document.head.appendChild(script)
-      })
-      return this.amapLoadingPromise
-    },
     async initAmap() {
-      if (!this.amapKey || !this.$refs.amapContainer) return
+      if (!this.localMapStyleUrl || !this.$refs.amapContainer) return
       try {
-        const AMap = await this.loadAmapScript()
-        if (!AMap || !this.$refs.amapContainer) return
         const current = this.currentLngLat()
         if (this.amap && this.amapContainerEl !== this.$refs.amapContainer) {
-          if (this.amap.destroy) this.amap.destroy()
+          this.amap.remove()
           this.amap = null
           this.amapMarker = null
         }
         if (!this.amap) {
-          const tileLayer = AMap.TileLayer ? new AMap.TileLayer() : undefined
           this.amapContainerEl = this.$refs.amapContainer
-          this.amap = new AMap.Map(this.$refs.amapContainer, {
+          this.amap = new maplibregl.Map({
+            container: this.$refs.amapContainer,
+            style: this.localMapStyleUrl,
             zoom: 12,
             center: current || [118.7969, 32.0603],
-            viewMode: '2D',
-            resizeEnable: true,
-            mapStyle: 'amap://styles/normal',
-            features: ['bg', 'road', 'building', 'point'],
-            ...(tileLayer ? { layers: [tileLayer] } : {})
+            attributionControl: true
           })
           this.amap.on('click', event => {
-            const lnglat = event && event.lnglat
+            const lnglat = event && event.lngLat
             if (!lnglat) return
-            this.setProjectCoordinate(lnglat.getLng(), lnglat.getLat(), true)
+            this.setProjectCoordinate(lnglat.lng, lnglat.lat, true)
           })
+          this.amap.on('load', () => this.syncAmapMarker())
         }
         this.syncAmapMarker()
         if (current) {
-          this.amap.setFitView(null, false, [40, 40, 40, 40], 12)
+          this.amap.setCenter(current)
         } else {
-          this.amap.setZoomAndCenter(12, [118.7969, 32.0603])
+          this.amap.setCenter([118.7969, 32.0603])
         }
         this.refreshAmapLayout()
       } catch (error) {
-        this.$message.warning('高德地图加载失败，可先填写位置描述后重试')
+        this.$message.warning('本地南京地图加载失败，可先填写位置描述后重试')
       }
     },
     refreshAmapLayout() {
@@ -1313,72 +1329,22 @@ export default {
           this.amap.resize()
           const current = this.currentLngLat()
           if (current) {
-            this.amap.setZoomAndCenter(this.amap.getZoom ? this.amap.getZoom() : 12, current)
+            this.amap.setCenter(current)
           } else {
-            this.amap.setZoomAndCenter(12, [118.7969, 32.0603])
+            this.amap.setCenter([118.7969, 32.0603])
           }
         }, delay)
       })
     },
-    getAmapGeocoder(AMap) {
-      if (this.amapGeocoder) return Promise.resolve(this.amapGeocoder)
-      return new Promise((resolve, reject) => {
-        AMap.plugin('AMap.Geocoder', () => {
-          if (!AMap.Geocoder) {
-            reject(new Error('高德地理编码插件加载失败'))
-            return
-          }
-          this.amapGeocoder = new AMap.Geocoder({ city: '南京' })
-          resolve(this.amapGeocoder)
-        })
-      })
-    },
-    getAmapPlaceSearch(AMap) {
-      if (this.amapPlaceSearch) return Promise.resolve(this.amapPlaceSearch)
-      return new Promise((resolve, reject) => {
-        AMap.plugin('AMap.PlaceSearch', () => {
-          if (!AMap.PlaceSearch) {
-            reject(new Error('高德地点搜索插件加载失败'))
-            return
-          }
-          this.amapPlaceSearch = new AMap.PlaceSearch({
-            city: '南京',
-            citylimit: false,
-            pageSize: 8,
-            extensions: 'base'
-          })
-          resolve(this.amapPlaceSearch)
-        })
-      })
-    },
     searchLocationCandidates(keyword) {
       const text = String(keyword || '').trim()
-      if (!text || !this.amapKey) return Promise.resolve([])
+      if (!text) return Promise.resolve([])
       const query = /南京|江苏|鼓楼|玄武|秦淮|建邺|雨花台|栖霞|江宁|浦口|六合|溧水|高淳/.test(text)
         ? text
         : `南京 ${text}`
-      return this.loadAmapScript().then(AMap => {
-        if (!AMap) return []
-        return this.getAmapPlaceSearch(AMap).then(placeSearch => new Promise(resolve => {
-          placeSearch.search(query, (status, result) => {
-            const pois = result && result.poiList && Array.isArray(result.poiList.pois) ? result.poiList.pois : []
-            const rows = pois.map(poi => {
-              const location = poi.location || {}
-              const address = [poi.pname, poi.cityname, poi.adname, poi.address]
-                .filter(Boolean)
-                .join('')
-              return {
-                value: `${poi.name}${address ? `（${address}）` : ''}`,
-                name: poi.name || text,
-                address: address || '暂无详细地址',
-                longitude: Number(location.lng),
-                latitude: Number(location.lat)
-              }
-            }).filter(item => Number.isFinite(item.longitude) && Number.isFinite(item.latitude))
-            resolve(rows)
-          })
-        }))
-      }).catch(() => [])
+      return searchLocalGeocoder(query, 8)
+        .then(rows => Array.isArray(rows) ? rows : [])
+        .catch(() => [])
     },
     queryLocationSuggestions(queryString, callback) {
       this.searchLocationCandidates(queryString).then(rows => callback(rows))
@@ -1431,25 +1397,16 @@ export default {
     },
     geocodeAddress(address) {
       const text = String(address || '').trim()
-      if (!text || !this.amapKey) return Promise.resolve(null)
-      return this.loadAmapScript().then(AMap => {
-        if (!AMap) return null
-        return this.getAmapGeocoder(AMap).then(geocoder => new Promise(resolve => {
-          geocoder.getLocation(text, (status, result) => {
-            const geocode = result && result.geocodes && result.geocodes[0]
-            const location = geocode && geocode.location
-            if (status !== 'complete' || !location) {
-              resolve(null)
-              return
-            }
-            resolve({
-              longitude: location.lng,
-              latitude: location.lat,
-              formattedAddress: geocode.formattedAddress || text
-            })
-          })
-        }))
-      }).catch(() => null)
+      if (!text) return Promise.resolve(null)
+      return this.searchLocationCandidates(text).then(rows => {
+        const item = rows[0]
+        if (!item) return null
+        return {
+          longitude: item.longitude,
+          latitude: item.latitude,
+          formattedAddress: item.address || item.value || text
+        }
+      })
     },
     autoLocateProject(force = false) {
       if (this.autoLocating) return Promise.resolve(null)
@@ -1541,20 +1498,21 @@ export default {
       this.saveAuditDraft()
     },
     syncAmapMarker() {
-      if (!this.amap || !window.AMap) return
+      if (!this.amap) return
       const current = this.currentLngLat()
       if (!current) {
         if (this.amapMarker) {
-          this.amap.remove(this.amapMarker)
+          this.amapMarker.remove()
           this.amapMarker = null
         }
         return
       }
       if (!this.amapMarker) {
-        this.amapMarker = new window.AMap.Marker({ position: current })
-        this.amap.add(this.amapMarker)
+        this.amapMarker = new maplibregl.Marker({ color: '#238f79' })
+          .setLngLat(current)
+          .addTo(this.amap)
       } else {
-        this.amapMarker.setPosition(current)
+        this.amapMarker.setLngLat(current)
       }
       this.amap.setCenter(current)
     },
@@ -2551,7 +2509,7 @@ export default {
         this.chatInstruction = ''
         this.saveAuditDraft()
       }
-      if (this.hasOnlyRestoredDocuments) return this.$message.warning('已恢复的是上次文件记录；如需重新审核，请重新选择原始文件')
+      if (this.hasOnlyRestoredDocuments) return this.rerunArchivedDocuments()
       if (!this.hasAnyFile) return this.$message.warning('请至少上传函件或案例文件')
       this.ensureMainCaseSelection()
       if (!this.letterFile && !this.caseFile) return this.$message.warning('请将至少一个文件设为函件或案例/方案')
@@ -2630,6 +2588,31 @@ export default {
       } catch (error) {
         this.auditSubmitting = false
         this.$message.error('审核任务创建失败，请检查服务状态或稍后重试')
+      }
+    },
+    async rerunArchivedDocuments() {
+      if (!this.restoredArchiveAuditId) {
+        this.$message.warning('该历史记录未留存原始文件；如需重新审核，请重新选择原始文件')
+        return
+      }
+      try {
+        await this.$confirm('将使用项目档案中留存的原始文件重新生成审核结果，当前审核意见会保留在历史版本中。是否继续？', '重新审核确认', {
+          type: 'warning', confirmButtonText: '重新审核', cancelButtonText: '取消'
+        })
+      } catch (error) {
+        return
+      }
+      this.stopAuditPolling()
+      this.auditTaskId = ''
+      this.expandedSnapshotIds = {}
+      this.auditSubmitting = true
+      try {
+        const task = await rerunArchivedAudit(this.restoredArchiveAuditId)
+        this.auditTaskId = task.task_id
+        this.startAuditPolling(task.task_id)
+      } catch (error) {
+        this.auditSubmitting = false
+        this.$message.error((error && error.msg) || '历史文件重新审核任务创建失败，请检查原文件是否仍可用')
       }
     },
     startAuditPolling(taskId) {
@@ -2740,6 +2723,37 @@ export default {
         if (typeof item === 'string') return item
         return [item.document, item.clause, item.quote].filter(Boolean).join(' ')
       }).filter(Boolean).join('；')
+    },
+    rationaleFor(item) {
+      if (!item) return null
+      const source = item.source && typeof item.source === 'object' ? item.source : {}
+      const rationale = item.rationale || source.rationale
+      return rationale && typeof rationale === 'object' ? rationale : null
+    },
+    rationaleEntries(item) {
+      const rationale = this.rationaleFor(item)
+      if (!rationale) return []
+      return [
+        { label: '资料事实：', value: this.cleanRationaleValue(rationale.facts) },
+        { label: '审核依据：', value: this.cleanRationaleValue(rationale.rule) },
+        { label: '规则判断：', value: this.cleanRationaleValue(rationale.rule_judgement) },
+        { label: '意见形成：', value: this.cleanRationaleValue(rationale.conclusion_reason) }
+      ].filter(entry => entry.value)
+    },
+    cleanRationaleValue(value) {
+      return String(value || '').replace(/^(资料事实|审核依据|引用依据|规则判断|意见形成|形成原因)\s*[:：]\s*/, '').trim()
+    },
+    rationaleEvidence(item) {
+      const rationale = this.rationaleFor(item)
+      if (rationale && Array.isArray(rationale.evidence) && rationale.evidence.length) return rationale.evidence
+      const basis = item && item.basis
+      return Array.isArray(basis) ? basis : []
+    },
+    evidenceLabel(evidence) {
+      if (evidence && typeof evidence === 'object') {
+        return [evidence.document, evidence.clause].filter(Boolean).join(' ') || '技术规程依据'
+      }
+      return String(evidence || '技术规程依据')
     },
     hasMessageSnapshot(message) {
       if (!message || message.role !== 'assistant') return false
@@ -3661,6 +3675,14 @@ export default {
 .review-conclusion { margin: 12px 0 0 0; color: #263833; font-weight: 600; line-height: 1.8; white-space: pre-wrap; }
 .review-conclusion span { margin-right: 8px; color: #2f7d69; font-weight: 700; }
 .review-basis { margin: 9px 0 0 0; color: #76827d; font-size: 12px; line-height: 1.6; }
+.review-rationale { margin-top: 12px; border-top: 1px dashed #d9e5e1; padding-top: 10px; color: #55645f; font-size: 13px; line-height: 1.7; }
+.review-rationale summary { cursor: pointer; color: #2f7d69; font-weight: 600; outline: none; }
+.review-rationale summary i { margin-right: 5px; }
+.rationale-content { padding: 8px 0 0 20px; }
+.rationale-content p { margin: 5px 0; color: #596862; font-weight: 400; white-space: pre-wrap; }
+.rationale-content p strong, .rationale-evidence > strong { margin-right: 5px; color: #314a43; }
+.rationale-evidence { margin-top: 8px; padding: 8px 10px; border-radius: 4px; background: #f7faf9; }
+.rationale-evidence p { margin: 4px 0 0; color: #66756f; font-size: 12px; }
 .overall-review-card { margin-top: 14px; border: 1px solid #d9e9e3; border-left: 4px solid #2f7d69; border-radius: 8px; padding: 14px 16px; background: #f6fbf9; }
 .overall-review-card h4 { margin: 0 0 8px; color: #1f4f43; font-size: 15px; }
 .overall-review-card p { margin: 0; color: #263833; font-weight: 600; line-height: 1.8; white-space: pre-wrap; }

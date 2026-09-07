@@ -6,25 +6,32 @@
           <h3>AI 智能体</h3>
           <p>历史对话</p>
         </div>
-        <el-tooltip content="开启新对话" placement="top">
-          <el-button class="new-session" type="primary" icon="el-icon-plus" circle @click="newSession" />
-        </el-tooltip>
+        <el-button class="new-session" icon="el-icon-plus" @click="newSession">新对话</el-button>
       </div>
       <div v-loading="sessionsLoading" class="session-list">
-        <button
+        <div
           v-for="item in sessions"
           :key="item.session_id"
-          type="button"
-          class="session-item"
+          class="session-row"
           :class="{ active: item.session_id === activeSessionId }"
-          @click="selectSession(item)"
         >
-          <i :class="item.mode === 'knowledge' ? 'el-icon-collection' : 'el-icon-chat-dot-round'" />
-          <span class="session-copy">
-            <strong :title="item.title">{{ item.title }}</strong>
-            <small>{{ modeLabel(item.mode) }}</small>
-          </span>
-        </button>
+          <button type="button" class="session-item" @click="selectSession(item)">
+            <i :class="item.mode === 'knowledge' ? 'el-icon-collection' : 'el-icon-chat-dot-round'" />
+            <span class="session-copy">
+              <strong :title="item.title">{{ item.title }}</strong>
+              <small>{{ modeLabel(item.mode) }}</small>
+            </span>
+            <i v-if="item.pinned" class="session-pin el-icon-pin" title="已置顶" />
+          </button>
+          <el-dropdown class="session-more" trigger="click" @command="command => handleSessionAction(command, item)">
+            <el-button type="text" icon="el-icon-more" circle @click.native.stop />
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="pin"><i :class="item.pinned ? 'el-icon-bottom' : 'el-icon-top'" />{{ item.pinned ? '取消置顶' : '置顶对话' }}</el-dropdown-item>
+              <el-dropdown-item command="rename"><i class="el-icon-edit-outline" />重命名</el-dropdown-item>
+              <el-dropdown-item command="delete" divided class="danger-action"><i class="el-icon-delete" />删除对话</el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+        </div>
         <div v-if="!sessionsLoading && sessions.length === 0" class="empty-sessions">
           <i class="el-icon-chat-dot-square" />
           <span>暂无历史对话</span>
@@ -43,7 +50,7 @@
             <i class="state-dot" />
             {{ configured ? modelDisplayName : '模型未配置' }}
           </span>
-          <span class="knowledge-state"><i class="el-icon-collection" /> {{ knowledgeCount }} 个启用案例</span>
+          <span class="knowledge-state"><i class="el-icon-collection" /> {{ knowledgeCount }} 个可检索资料</span>
         </div>
       </header>
 
@@ -84,7 +91,10 @@
               {{ message.role === 'user' ? '你' : '智能体' }}
               <span v-if="message.model">{{ compactModelName(message.model) }}</span>
             </div>
-            <div v-if="message.role === 'assistant'" class="message-body markdown-body" v-html="renderMarkdown(message.content)" />
+            <div v-if="message.role === 'assistant' && !message.content && message.message_id === streamingMessageId" class="message-body stream-pending">
+              <i class="el-icon-loading" /> 正在生成回答
+            </div>
+            <div v-else-if="message.role === 'assistant'" class="message-body markdown-body" v-html="renderMarkdown(message.content)" />
             <div v-else class="message-body">{{ message.content }}</div>
             <details v-if="message.sources && message.sources.length" class="sources">
               <summary><i class="el-icon-document" /> 查看 {{ message.sources.length }} 条知识库依据</summary>
@@ -96,7 +106,7 @@
           </div>
         </article>
 
-        <div v-if="loading" class="message-row assistant thinking-row">
+        <div v-if="loading && !streamingMessageId" class="message-row assistant thinking-row">
           <div class="assistant-avatar"><i class="el-icon-chat-dot-round" /></div>
           <div class="message-content">
             <div class="message-label">智能体</div>
@@ -145,13 +155,17 @@
 <script>
 import MarkdownIt from 'markdown-it'
 import {
-  askAgent,
   createAgentSession,
   getAgentConfig,
   getAgentSession,
   getKnowledgeStats,
-  listAgentSessions
+  getRegulationStats,
+  listAgentSessions,
+  renameAgentSession,
+  pinAgentSession,
+  deleteAgentSession
 } from '@/api/rail/audit'
+import { getToken } from '@/utils/auth'
 
 const markdown = new MarkdownIt({
   html: false,
@@ -175,6 +189,7 @@ export default {
     return {
       question: '',
       loading: false,
+      streamingMessageId: '',
       sessionsLoading: false,
       messages: [],
       sessions: [],
@@ -206,7 +221,10 @@ export default {
   },
   methods: {
     async loadState() {
-      try { const value = await getKnowledgeStats(); this.knowledgeCount = value.active || 0 } catch (_) { this.knowledgeCount = 0 }
+      try {
+        const [cases, regulations] = await Promise.all([getKnowledgeStats(), getRegulationStats()])
+        this.knowledgeCount = (cases.active || 0) + (regulations.active_regulations || 0)
+      } catch (_) { this.knowledgeCount = 0 }
       try {
         const value = await getAgentConfig()
         this.configured = Boolean(value.configured)
@@ -259,6 +277,7 @@ export default {
         title: session.title || '新对话',
         mode: session.mode || this.mode,
         message_count: session.message_count || 0,
+        pinned: Boolean(session.pinned),
         created_at: session.created_at,
         updated_at: session.updated_at,
         last_message_at: session.last_message_at
@@ -266,7 +285,65 @@ export default {
       const index = this.sessions.findIndex(item => item.session_id === summary.session_id)
       if (index >= 0) this.$set(this.sessions, index, { ...this.sessions[index], ...summary })
       else this.sessions.unshift(summary)
-      this.sessions.sort((a, b) => String(b.last_message_at || b.updated_at || '').localeCompare(String(a.last_message_at || a.updated_at || '')))
+      this.sessions.sort((a, b) => {
+        if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1
+        return String(b.last_message_at || b.updated_at || '').localeCompare(String(a.last_message_at || a.updated_at || ''))
+      })
+    },
+    async handleSessionAction(command, item) {
+      if (!item || this.loading) return
+      if (command === 'pin') {
+        await this.setSessionPinned(item, !item.pinned)
+      } else if (command === 'rename') {
+        await this.renameSession(item)
+      } else if (command === 'delete') {
+        await this.removeSession(item)
+      }
+    },
+    async setSessionPinned(item, pinned) {
+      try {
+        const session = await pinAgentSession(item.session_id, pinned)
+        this.upsertSession(session)
+        this.$message.success(pinned ? '对话已置顶' : '已取消置顶')
+      } catch (error) {
+        this.$message.error(error.msg || error.message || '置顶操作失败')
+      }
+    },
+    async renameSession(item) {
+      try {
+        const { value } = await this.$prompt('请输入新的对话名称', '重命名对话', {
+          inputValue: item.title,
+          inputPlaceholder: '例如：基坑监控频率咨询',
+          inputPattern: /\S+/,
+          inputErrorMessage: '请输入对话名称',
+          confirmButtonText: '保存',
+          cancelButtonText: '取消'
+        })
+        const session = await renameAgentSession(item.session_id, value)
+        this.upsertSession(session)
+        this.$message.success('对话已重命名')
+      } catch (error) {
+        if (error !== 'cancel' && error !== 'close') this.$message.error(error.msg || error.message || '重命名失败')
+      }
+    },
+    async removeSession(item) {
+      try {
+        await this.$confirm(`确定删除“${item.title}”吗？删除后无法恢复。`, '删除对话', {
+          type: 'warning',
+          confirmButtonText: '删除',
+          cancelButtonText: '取消'
+        })
+        await deleteAgentSession(item.session_id)
+        this.sessions = this.sessions.filter(session => session.session_id !== item.session_id)
+        if (this.activeSessionId === item.session_id) {
+          this.activeSessionId = ''
+          this.messages = []
+          if (this.sessions.length) await this.selectSession(this.sessions[0])
+        }
+        this.$message.success('对话已删除')
+      } catch (error) {
+        if (error !== 'cancel' && error !== 'close') this.$message.error(error.msg || error.message || '删除失败')
+      }
     },
     normalizeMessages(values) {
       return values.map(item => ({
@@ -288,6 +365,48 @@ export default {
         this.send()
       }
     },
+    async readAgentStream(payload, handleEvent) {
+      const response = await fetch(`${process.env.VUE_APP_BASE_API}/rail/agent/ask/stream`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          'Content-Type': 'application/json;charset=UTF-8',
+          Accept: 'text/event-stream'
+        },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.msg || error.message || `请求失败（${response.status}）`)
+      }
+      if (!response.body) throw new Error('浏览器不支持流式回答。')
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+      const consume = (block) => {
+        const lines = block.replace(/\r/g, '').split('\n')
+        const name = (lines.find(line => line.startsWith('event:')) || 'event: message').slice(6).trim()
+        const raw = lines.filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('\n')
+        if (!raw) return
+        let data
+        try { data = JSON.parse(raw) } catch (_) { return }
+        if (name === 'error') throw new Error(data.message || '智能体服务暂时不可用。')
+        handleEvent(name, data)
+      }
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let boundary = buffer.indexOf('\n\n')
+        while (boundary >= 0) {
+          consume(buffer.slice(0, boundary))
+          buffer = buffer.slice(boundary + 2)
+          boundary = buffer.indexOf('\n\n')
+        }
+      }
+      buffer += decoder.decode()
+      if (buffer.trim()) consume(buffer)
+    },
     async send() {
       const value = this.question.trim()
       if (!value || this.loading || !this.configured) return
@@ -296,16 +415,37 @@ export default {
       try {
         const sessionId = await this.ensureSession()
         this.messages.push({ role: 'user', content: value, created_at: new Date().toISOString() })
+        const assistantMessage = {
+          message_id: `stream-${Date.now()}`,
+          role: 'assistant',
+          content: '',
+          sources: [],
+          created_at: new Date().toISOString()
+        }
+        this.messages.push(assistantMessage)
+        this.streamingMessageId = assistantMessage.message_id
         this.scrollBottom()
-        const result = await askAgent({ question: value, top_k: 5, mode: this.mode, session_id: sessionId })
-        if (Array.isArray(result.messages)) this.messages = this.normalizeMessages(result.messages)
-        else this.messages.push({ role: 'assistant', content: result.answer, model: result.model, sources: result.sources || [] })
-        this.upsertSession(result.session)
-        this.knowledgeCount = result.knowledge_stats ? result.knowledge_stats.active : this.knowledgeCount
+        let receivedDone = false
+        await this.readAgentStream({ question: value, mode: this.mode, session_id: sessionId }, (event, result) => {
+          if (event === 'chunk') {
+            assistantMessage.content += result.content || ''
+            this.scrollBottom()
+          } else if (event === 'done') {
+            receivedDone = true
+            assistantMessage.model = result.model
+            assistantMessage.sources = result.sources || []
+            this.upsertSession(result.session)
+            this.knowledgeCount = result.knowledge_stats ? result.knowledge_stats.active : this.knowledgeCount
+          }
+        })
+        if (!receivedDone) throw new Error('回答传输意外中断，请重试。')
       } catch (error) {
-        this.messages.push({ role: 'assistant', content: `暂时无法完成回答：${error.msg || error.message || '服务异常'}`, sources: [] })
+        const current = this.messages.find(item => item.message_id === this.streamingMessageId)
+        if (current) current.content = `暂时无法完成回答：${error.msg || error.message || '服务异常'}`
+        else this.messages.push({ role: 'assistant', content: `暂时无法完成回答：${error.msg || error.message || '服务异常'}`, sources: [] })
       } finally {
         this.loading = false
+        this.streamingMessageId = ''
         this.scrollBottom()
       }
     },
@@ -336,17 +476,29 @@ export default {
 }
 .session-head h3 { margin: 0 0 4px; font-size: 18px; font-weight: 600; letter-spacing: 0; }
 .session-head p { margin: 0; color: #86928e; font-size: 12px; }
-.new-session { width: 34px; height: 34px; padding: 0; }
+.new-session {
+  height: 32px;
+  padding: 0 10px;
+  border-color: #9bcabb;
+  border-radius: 6px;
+  background: #eef8f4;
+  color: #24775f;
+  font-size: 12px;
+  font-weight: 600;
+}
+.new-session:hover,
+.new-session:focus { border-color: #58a98d; background: #e1f3eb; color: #1f6854; }
 .session-list { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 10px; }
+.session-row { position: relative; margin-bottom: 4px; border: 1px solid transparent; border-radius: 7px; }
 .session-item {
   display: flex;
   width: 100%;
   min-height: 58px;
   gap: 10px;
   align-items: flex-start;
-  padding: 10px;
-  border: 1px solid transparent;
-  border-radius: 7px;
+  padding: 10px 40px 10px 10px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: #35413d;
   cursor: pointer;
@@ -363,11 +515,29 @@ export default {
   color: #2f8168;
   font-size: 15px;
 }
-.session-item:hover { background: #fff; border-color: #dce6e2; }
-.session-item.active { background: #e7f3ef; border-color: #bad8ce; }
-.session-copy { display: grid; min-width: 0; gap: 4px; }
+.session-row:hover { border-color: #dce6e2; background: #fff; }
+.session-row.active { border-color: #bad8ce; background: #e7f3ef; }
+.session-row.active .session-item { background: transparent; }
+.session-item:hover { background: transparent; }
+.session-copy { display: grid; flex: 1 1 auto; min-width: 0; gap: 4px; }
 .session-copy strong { overflow: hidden; color: #24302c; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .session-copy small { color: #89938f; font-size: 11px; }
+.session-pin {
+  width: auto !important;
+  height: auto !important;
+  margin-left: auto;
+  background: transparent !important;
+  color: #5b9b85 !important;
+  font-size: 13px !important;
+}
+.session-more { position: absolute; top: 50%; right: 5px; display: none; transform: translateY(-50%); }
+.session-row:hover .session-more,
+.session-row.active .session-more { display: block; }
+.session-more ::v-deep .el-button { width: 26px; height: 26px; padding: 0; color: #6d7b76; }
+.session-more ::v-deep .el-button:hover { background: #eff5f2; color: #287660; }
+.session-more ::v-deep .el-button.is-circle { border-radius: 5px; }
+.danger-action { color: #ca544a; }
+.danger-action i { margin-right: 6px; }
 .empty-sessions { display: grid; gap: 8px; place-items: center; padding: 58px 14px; color: #9aa4a0; font-size: 13px; }
 .empty-sessions i { font-size: 26px; }
 .agent-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
@@ -501,6 +671,8 @@ export default {
 .thinking-row { margin-bottom: 12px; }
 .thinking { padding: 8px 4px; color: #55786d; font-size: 14px; }
 .thinking i { margin-right: 7px; }
+.stream-pending { color: #55786d; }
+.stream-pending i { margin-right: 7px; }
 .composer { position: relative; z-index: 5; flex: 0 0 auto; padding: 12px 24px 14px; border-top: 1px solid #e7ebe9; background: rgba(255, 255, 255, 0.98); }
 .composer-inner { width: min(900px, 100%); margin: 0 auto; }
 .composer-box {

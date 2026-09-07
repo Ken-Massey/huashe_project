@@ -876,6 +876,15 @@ class ProjectArchiveRepository:
             )
         return self.get_audit(audit_id)
 
+    def update_audit_source_files(self, audit_id: str, source_files: list[dict[str, Any]]) -> dict[str, Any]:
+        self.get_audit(audit_id)
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "UPDATE audit_records SET source_files_json = ?, updated_at = ? WHERE audit_id = ?",
+                (_json_dump(source_files, []), _now(), audit_id),
+            )
+        return self.get_audit(audit_id)
+
     def previous_successful_audits(self, stage_id: str) -> list[dict[str, Any]]:
         current = self.get_stage(stage_id)
         with self._connect() as connection:

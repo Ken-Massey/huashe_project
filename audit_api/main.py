@@ -6,6 +6,8 @@ import json
 import logging
 import mimetypes
 import re
+import shutil
+import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
 from pathlib import Path
 from typing import Any, Literal
@@ -16,16 +18,20 @@ except ImportError:  # Python 3.8 compatibility
     from typing_extensions import Annotated
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .agent import AgentService
 from .agent_conversation import AgentConversationRepository
 from .audit_session import AuditSessionRepository
-from .config import MAX_UPLOAD_BYTES, MAX_WORKERS, RESULT_ROOT, SERVICE_TOKEN, TASK_ROOT, UPLOAD_ROOT
+from .config import (
+    LOCAL_GEOCODER_DB, LOCAL_GEOCODER_TIMEOUT_SECONDS, LOCAL_GEOCODER_URL,
+    MAX_UPLOAD_BYTES, MAX_WORKERS, RESULT_ROOT, SERVICE_TOKEN, TASK_ROOT, UPLOAD_ROOT,
+)
 from .ima_rag import purge_rag_document
 from .knowledge_base import KnowledgeBase
 from .library_assets import LibraryAssetRepository
+from .local_geocoder import LocalGeocoder
 from .project_archive import ProjectArchiveRepository
 from .patrol import router as patrol_router
 from .regulation_rules import RegulationRepository, RuleEngine
@@ -50,6 +56,7 @@ agent_conversations = AgentConversationRepository()
 regulations = RegulationRepository()
 library_assets = LibraryAssetRepository()
 project_archives = ProjectArchiveRepository()
+local_geocoder = LocalGeocoder(LOCAL_GEOCODER_DB, LOCAL_GEOCODER_URL, LOCAL_GEOCODER_TIMEOUT_SECONDS)
 audit_sessions = AuditSessionRepository()
 for interrupted_audit in project_archives.incomplete_audits():
     interrupted_task_id = str(interrupted_audit.get("source_task_id") or "")
@@ -73,7 +80,9 @@ class AgentMessage(BaseModel):
 
 class AgentQuestion(BaseModel):
     question: str = Field(min_length=2, max_length=2000)
-    top_k: int = Field(default=5, ge=1, le=10)
+    # Kept for backward compatibility with older clients. The service chooses
+    # the effective value from the question so callers do not need to tune it.
+    top_k: int | None = Field(default=None, ge=1, le=10)
     mode: Literal["general", "knowledge"] = "general"
     history: list[AgentMessage] = Field(default_factory=list)
     session_id: str | None = Field(default=None, max_length=80)
@@ -86,6 +95,10 @@ class AgentSessionCreatePayload(BaseModel):
 
 class AgentSessionRenamePayload(BaseModel):
     title: str = Field(min_length=1, max_length=120)
+
+
+class AgentSessionPinPayload(BaseModel):
+    pinned: bool
 
 
 class AgentConfigRequest(BaseModel):
@@ -298,6 +311,55 @@ def _agent_owner_id(user_id: str | None, username: str | None) -> str:
     return value or "anonymous"
 
 
+def _search_agent_knowledge(question: str, limit: int) -> list[dict[str, Any]]:
+    """Retrieve from both indexed case files and active technical regulations."""
+    case_sources = [{**item, "source_type": "case"} for item in knowledge.search(question, limit)]
+    regulation_sources = regulations.search(question, limit)
+    candidates = case_sources + regulation_sources
+    candidates.sort(key=lambda item: int(item.get("score") or 0), reverse=True)
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in candidates:
+        key = str(item.get("case_id") or item.get("clause_id") or item.get("regulation_id") or "")
+        if not key or key in seen:
+            continue
+        selected.append(item)
+        seen.add(key)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+_TABLE_QUERY_PATTERN = re.compile(
+    r"表\s*\d*|频率|频次|风险等级|影响等级|监测手段|监控手段|自动监测|人工监测|"
+    r"现场巡查|工况|支撑施工|围护结构|首道支撑|一次\s*/\s*|\d+\s*次\s*/",
+    re.IGNORECASE,
+)
+
+
+def _agent_knowledge_limit(question: str, requested_limit: int | None = None) -> int:
+    """Use more context only for questions that need table row/column matching."""
+    automatic_limit = 5 if _TABLE_QUERY_PATTERN.search(question) else 3
+    if requested_limit is None:
+        return automatic_limit
+    return min(requested_limit, automatic_limit)
+
+
+def _agent_knowledge_stats() -> dict[str, int]:
+    case_stats = knowledge.stats()
+    regulation_stats = regulations.stats()
+    return {
+        "active": case_stats["active"] + regulation_stats["active_regulations"],
+        "cases": case_stats["active"],
+        "regulations": regulation_stats["active_regulations"],
+        "regulation_clauses": regulation_stats["clauses"],
+    }
+
+
+def _sse_event(event: str, payload: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
 def _resolve_archive_context(binding: Any) -> dict[str, Any] | None:
     if binding in (None, ""):
         return None
@@ -490,6 +552,131 @@ def _source_file_records(
             "stored_file": str(path),
         })
     return records
+
+
+def _path_under(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _persist_archive_source_files(
+    source_files: list[dict[str, Any]] | None,
+    archive_key: str,
+) -> list[dict[str, Any]]:
+    """Persist audit inputs in a content-addressed archive store.
+
+    Every audit record keeps its own file metadata, while identical file content
+    shares one physical object.  This retains historical originals without
+    multiplying storage for a file that is re-audited or attached repeatedly.
+    """
+    del archive_key  # The record owns the reference; the physical object is shared by checksum.
+    object_dir = RESULT_ROOT / "project_archives" / "source_files" / "objects"
+    object_dir.mkdir(parents=True, exist_ok=True)
+    persisted: list[dict[str, Any]] = []
+    for value in source_files or []:
+        if not isinstance(value, dict):
+            continue
+        record = dict(value)
+        raw_path = str(record.get("stored_file") or "")
+        source = Path(raw_path).resolve() if raw_path else None
+        if not source or not source.is_file() or not (_path_under(source, UPLOAD_ROOT) or _path_under(source, RESULT_ROOT)):
+            persisted.append(record)
+            continue
+        checksum = hashlib.sha256()
+        with source.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                checksum.update(chunk)
+        digest = checksum.hexdigest()
+        # Preserve the extension for extraction tools, but make the checksum the identity.
+        target = object_dir / f"{digest}{source.suffix.lower()}"
+        if not target.exists():
+            temporary = target.with_name(f"{target.name}.{uuid.uuid4().hex}.uploading")
+            try:
+                shutil.copy2(source, temporary)
+                if not target.exists():
+                    temporary.replace(target)
+            finally:
+                if temporary.exists():
+                    temporary.unlink(missing_ok=True)
+        record["stored_file"] = str(target)
+        record["archive_source"] = True
+        record["sha256"] = digest
+        record["storage_mode"] = "content_addressed"
+        persisted.append(record)
+    return persisted
+
+
+def _archive_source_path(record: dict[str, Any]) -> Path:
+    raw_path = str(record.get("stored_file") or "")
+    path = Path(raw_path).resolve() if raw_path else None
+    if not path or not path.is_file() or not (_path_under(path, UPLOAD_ROOT) or _path_under(path, RESULT_ROOT)):
+        raise ValueError(f"历史原文件不可用：{record.get('name') or '未命名文件'}")
+    return path
+
+
+def _release_archived_upload_copies(
+    source_files: list[dict[str, Any]],
+    archived_source_files: list[dict[str, Any]],
+) -> None:
+    """Remove a completed task's temporary upload only after checksum archival."""
+    archived_hashes = {
+        str(item.get("sha256") or "")
+        for item in archived_source_files
+        if isinstance(item, dict) and item.get("archive_source")
+    }
+    if not archived_hashes:
+        return
+    for value in source_files:
+        if not isinstance(value, dict):
+            continue
+        raw_path = str(value.get("stored_file") or "")
+        source = Path(raw_path).resolve() if raw_path else None
+        if not source or not source.is_file() or not _path_under(source, UPLOAD_ROOT):
+            continue
+        checksum = hashlib.sha256()
+        with source.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                checksum.update(chunk)
+        if checksum.hexdigest() not in archived_hashes:
+            continue
+        source.unlink(missing_ok=True)
+        try:
+            source.parent.rmdir()
+        except OSError:
+            pass
+
+
+def _recover_archive_source_files(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """Backfill older archive records when their original upload still exists."""
+    result_data = record.get("result_data") if isinstance(record.get("result_data"), dict) else {}
+    candidates = list(record.get("source_files") or [])
+    for context in (result_data, result_data.get("latest_result") if isinstance(result_data, dict) else {}):
+        if isinstance(context, dict):
+            for key in ("source_files", "uploaded_documents"):
+                if isinstance(context.get(key), list):
+                    candidates.extend(context[key])
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for value in candidates:
+        if not isinstance(value, dict):
+            continue
+        item = dict(value)
+        name = str(item.get("name") or item.get("file_name") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        if not item.get("stored_file"):
+            matches = [path for path in UPLOAD_ROOT.rglob(name) if path.is_file()]
+            if len(matches) == 1:
+                item["stored_file"] = str(matches[0])
+        records.append(item)
+    persisted = _persist_archive_source_files(records, str(record.get("audit_id") or "legacy"))
+    if persisted and persisted != (record.get("source_files") or []):
+        project_archives.update_audit_source_files(record["audit_id"], persisted)
+    return persisted
 
 
 def _archive_completion_data(result: dict[str, Any]) -> dict[str, Any]:
@@ -965,6 +1152,108 @@ def _review_item_basis_from_finding(item: dict[str, Any]) -> list[dict[str, Any]
     return basis
 
 
+def _rationale_text(value: Any, maximum: int = 360) -> str:
+    """Turn stored audit evidence into short, human-readable audit facts."""
+    if isinstance(value, (dict, list)):
+        try:
+            value = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except (TypeError, ValueError):
+            value = str(value)
+    return _short_text(value, maximum)
+
+
+def _rationale_evidence(basis: Any) -> list[dict[str, str]]:
+    evidence: list[dict[str, str]] = []
+    values = basis if isinstance(basis, list) else [basis]
+    for value in values:
+        if isinstance(value, dict):
+            document = _short_text(value.get("document") or value.get("document_title"), 140)
+            clause = _short_text(value.get("clause") or value.get("section"), 120)
+            quote = _short_text(value.get("quote") or value.get("chunk_text") or value.get("text"), 500)
+        else:
+            document = ""
+            clause = ""
+            quote = _short_text(value, 500)
+        if document or clause or quote:
+            evidence.append({"document": document, "clause": clause, "quote": quote})
+    return evidence[:8]
+
+
+def _build_review_item_rationale(item: dict[str, Any]) -> dict[str, Any]:
+    """Build an auditable explanation, rather than exposing model reasoning."""
+    source = item.get("source") if isinstance(item.get("source"), dict) else {}
+    evidence = _rationale_evidence(item.get("basis") or [])
+    kind = str(source.get("kind") or "")
+    comparison = _rationale_text(source.get("comparison"), 360)
+    source_result = _rationale_text(source.get("source_result") or source.get("result"), 360)
+
+    if comparison:
+        facts = f"资料与技术要求比对结果为：{comparison}"
+    elif source_result:
+        facts = f"本次资料识别结果为：{source_result}"
+    elif kind == "previous_stage_delta":
+        facts = "本阶段资料与已归档上一阶段资料比对后，发现需要继续复核或说明的关键变化。"
+    elif kind == "same_upload_data_consistency":
+        facts = "同批上传资料交叉核对后，发现需要统一或进一步核验的关键数据。"
+    elif evidence:
+        facts = "根据已关联的资料摘录和技术规程条款形成审核事项。"
+    else:
+        facts = "该条意见尚未关联到可定位的资料事实或技术规程条款。"
+
+    evidence_summary = "；".join(
+        " ".join(part for part in (entry.get("document"), entry.get("clause")) if part)
+        or entry.get("quote", "")
+        for entry in evidence
+    )
+    rule = _short_text(evidence_summary, 520) if evidence_summary else "未找到可引用的规程条款或资料定位，需补充审核依据。"
+    judgement = str(source.get("judgement") or source.get("review_status") or "")
+    judgement_map = {
+        "non_compliant": "识别结果提示相关资料或控制要求尚需补充、复核或落实。",
+        "missing": "关键资料未完整提供，暂不具备充分核验条件。",
+        "warning": "存在需要重点关注并落实控制措施的风险提示。",
+        "needs_review": "现有资料需要由专业人员进一步复核确认。",
+    }
+    rule_judgement = judgement_map.get(judgement) or (
+        "结合资料事实与引用依据，形成需处理的审核事项。"
+        if evidence
+        else "本条尚缺少可核验依据，仅可作为待补充、待复核事项，不能直接作为正式审核结论。"
+    )
+    title = _short_text(item.get("title") or "该审核事项", 100)
+    return {
+        "facts": facts,
+        "rule": rule,
+        "rule_judgement": rule_judgement,
+        "conclusion_reason": f"上述资料事实和规则判断共同指向“{title}”，具体处理要求见该条审核意见。",
+        "evidence": evidence,
+    }
+
+
+def _attach_review_item_rationales(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for item in items:
+        source = item.get("source") if isinstance(item.get("source"), dict) else {}
+        rationale = item.get("rationale") or source.get("rationale")
+        if not isinstance(rationale, dict) or not rationale:
+            rationale = _build_review_item_rationale(item)
+        source = {**source, "rationale": rationale}
+        item["source"] = source
+        item["rationale"] = rationale
+    return items
+
+
+def _build_overall_rationale(items: list[dict[str, Any]]) -> dict[str, str]:
+    levels = [str(item.get("risk_level") or "").strip() for item in items]
+    high_count = sum(level == "高" for level in levels)
+    facts = f"本次审核共形成 {len(items)} 项分项审核意见"
+    if high_count:
+        facts += f"，其中 {high_count} 项标记为高风险"
+    return {
+        "facts": facts + "。",
+        "rule": "各分项中已记录的上传资料、技术规程条款、资料比对结果和风险识别结果。",
+        "rule_judgement": "综合评价汇总各分项审核意见，不替代下一节点审核人的专业复核。",
+        "conclusion_reason": "综合评价由本版本全部分项审核意见归纳形成，具体依据可在各条审核意见中展开查看。",
+    }
+
+
 def _looks_like_source_title(value: Any) -> bool:
     text = str(value or "").strip()
     if not text:
@@ -1321,14 +1610,14 @@ def _ai_expand_review_items(result: dict[str, Any], items: list[dict[str, Any]])
         "综合评价只写在overall_opinion中；items中的分条内容只写审核意见、补充资料要求、复核要求、控制措施或报审管理要求，"
         "不要写“符合要求、满足要求、风险可控、已落实、低于限值、严于规范”等评价性结论。"
         "每条意见应按技术规程审核逻辑展开，约100至200个汉字，避免一句话过短；应说明缺少/需明确的资料、对应安全控制或复核要求。"
-        "只保留5至6条最主要意见，优先保留高风险、资料缺失、净距/保护区、地下水/地质、变形控制、监测和报审要求。"
+        "每条意见必须明确关联一个已有审核事项的编号，严禁按位置错配资料事实、规程条款或比对结果。"
         f"{profile_style}"
         "只输出JSON，不要输出Markdown。"
     )
     prompt = (
         f"当前审核上下文：{json.dumps(context, ensure_ascii=False)}\n\n"
-        "请返回JSON：{\"items\":[{\"order_no\":1,\"title\":\"8至20字的意见主题，不要写规程名称\",\"conclusion\":\"100至200字的正式审核意见，只写意见和要求，不写评价性结论\",\"risk_level\":\"高/中/低/提示/可为空\",\"basis\":[\"可为空\"],\"recommendation\":\"可为空\"}]}\n"
-        "要求：items必须是完整最新版审核意见列表，数量5至6条；如果候选不足5条，可在不编造数值的前提下，根据资料缺失、规范复核、监测控制、报审要求等方向补足。"
+        "请返回JSON：{\"items\":[{\"order_no\":1,\"source_order_no\":1,\"title\":\"8至20字的意见主题，不要写规程名称\",\"conclusion\":\"100至200字的正式审核意见，只写意见和要求，不写评价性结论\",\"risk_level\":\"高/中/低/提示/可为空\",\"basis\":[],\"recommendation\":\"可为空\"}]}\n"
+        "要求：source_order_no必须填写，且只能取当前审核上下文items中已有的order_no；每条新意见必须沿用该原始事项的资料事实和规程依据。不得新增没有来源的事项，不得为了凑数量补造意见；可保留全部已有事项，也可删除不成立事项。"
     )
     try:
         executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="review-polish")
@@ -1367,6 +1656,7 @@ def _attach_audit_session(
     review_profile = _infer_review_profile_from_result(result)
     result["review_profile"] = review_profile
     items = _apply_review_profile_wording(items, review_profile)
+    items = _attach_review_item_rationales(items)
     manual_context = _extract_manual_context(result)
     overall_context = {}
     if isinstance(result, dict):
@@ -1387,6 +1677,7 @@ def _attach_audit_session(
     )
     if review_profile == "safety_assessment_report":
         overall_opinion["conclusion"] = _normalize_safety_assessment_wording_text(overall_opinion.get("conclusion") or "")
+    overall_opinion["rationale"] = _build_overall_rationale(items)
     uploaded_documents = manual_context.get("uploaded_documents") if isinstance(manual_context, dict) else []
     if not isinstance(uploaded_documents, list):
         uploaded_documents = []
@@ -1436,6 +1727,7 @@ def _instruction_order_no(text: str) -> int | None:
 
 
 def _public_review_item(item: dict[str, Any]) -> dict[str, Any]:
+    source = item.get("source") if isinstance(item.get("source"), dict) else {}
     return {
         "order_no": item.get("order_no"),
         "title": item.get("title") or "",
@@ -1443,7 +1735,8 @@ def _public_review_item(item: dict[str, Any]) -> dict[str, Any]:
         "risk_level": item.get("risk_level") or "",
         "basis": item.get("basis") or [],
         "recommendation": item.get("recommendation") or "",
-        "source": item.get("source") or {},
+        "source": source,
+        "rationale": item.get("rationale") or source.get("rationale") or {},
     }
 
 
@@ -1454,6 +1747,16 @@ def _sanitize_review_items(value: Any, fallback: list[dict[str, Any]]) -> list[d
         candidates = value
     if not isinstance(candidates, list):
         raise ValueError("AI did not return a valid review item list.")
+    fallback_by_order = {
+        int(item.get("order_no") or 0): item
+        for item in fallback
+        if int(item.get("order_no") or 0) > 0
+    }
+    fallback_by_title = {
+        _short_text(item.get("title"), 200): item
+        for item in fallback
+        if _short_text(item.get("title"), 200)
+    }
     items: list[dict[str, Any]] = []
     for index, item in enumerate(candidates[:50], start=1):
         if not isinstance(item, dict):
@@ -1468,21 +1771,40 @@ def _sanitize_review_items(value: Any, fallback: list[dict[str, Any]]) -> list[d
             title = f"????{index}"
         if not conclusion and not recommendation:
             continue
+        raw_source_order_no = item.get("source_order_no") or (item.get("source") or {}).get("source_order_no") or 0
+        try:
+            source_order_no = int(raw_source_order_no)
+        except (TypeError, ValueError):
+            source_order_no = 0
+        original = fallback_by_order.get(source_order_no) or fallback_by_title.get(title) or {}
+        original_source = original.get("source") if isinstance(original.get("source"), dict) else {}
+        incoming_source = item.get("source") if isinstance(item.get("source"), dict) else {}
+        basis = (original.get("basis") or []) if original else []
+        if not basis and original and isinstance(item.get("basis"), list):
+            basis = item.get("basis") or []
+        rationale = item.get("rationale") if isinstance(item.get("rationale"), dict) else None
+        if not rationale:
+            rationale = original.get("rationale") or original_source.get("rationale")
+        source = {**original_source, **incoming_source, "modified_by": "ai_instruction"}
+        if source_order_no:
+            source["source_order_no"] = source_order_no
+        if not original:
+            source["kind"] = "unverified_ai_generated"
+        if isinstance(rationale, dict) and rationale:
+            source["rationale"] = rationale
         items.append({
             "order_no": index,
             "title": title,
             "conclusion": conclusion,
             "risk_level": _short_text(item.get("risk_level"), 40),
-            "basis": item.get("basis") if isinstance(item.get("basis"), list) else [],
+            "basis": basis,
             "recommendation": recommendation,
-            "source": {
-                **(item.get("source") if isinstance(item.get("source"), dict) else {}),
-                "modified_by": "ai_instruction",
-            },
+            "source": source,
+            "rationale": rationale or {},
         })
     if not items:
         raise ValueError("No review item remains after AI modification.")
-    return _select_key_review_items(items, REVIEW_ITEM_MAX_COUNT)
+    return _attach_review_item_rationales(_select_key_review_items(items, REVIEW_ITEM_MAX_COUNT))
 
 
 def _merge_partial_review_items(
@@ -1688,7 +2010,33 @@ def _support_form_text(value: Any) -> str:
     if not text:
         return ""
     text = text.replace(",", "、")
-    return text if re.search(r"(支护|围护|桩|墙|锚|撑|帷幕|放坡)", text) else f"{text}支护"
+    return text if re.search(r"(支护|围护|支撑体系|支护体系|支护结构)", text) else f"{text}支护"
+
+
+def _clean_metro_target(value: Any) -> str:
+    text = _usable_overall_value(value)
+    if not text:
+        return ""
+    text = re.sub(r"^(?:本)?项目(?:位于|处于|邻近|临近|紧邻|靠近|涉及)?", "", text)
+    text = re.sub(r"^(?:地铁)?线路(?:名称)?[：:]?", "", text)
+    return text.strip("，,、：:；;。 ")
+
+
+def _relation_and_target(relation_value: Any, metro_target: str) -> tuple[str, str]:
+    """Normalize recognition fragments before they are inserted into a formal sentence."""
+    relation = _usable_overall_value(relation_value)
+    if not relation:
+        return "", metro_target
+    relation = relation.strip("，,、：:；;。 ")
+    embedded = re.match(r"^(?:本)?项目(?:位于|处于|邻近|临近|紧邻|靠近)(.+)$", relation)
+    if embedded:
+        return "", metro_target or _clean_metro_target(embedded.group(1))
+    embedded = re.match(r"^(邻近|临近|紧邻|靠近|下穿|上跨|侧穿|跨越)(.+)$", relation)
+    if embedded:
+        return embedded.group(1), metro_target or _clean_metro_target(embedded.group(2))
+    relation = re.sub(r"^(?:本)?项目(?:与|相对)?", "", relation)
+    relation = re.sub(r"(?:关系|项目)$", "", relation).strip()
+    return relation, metro_target
 
 
 def _review_profile_label(profile: str) -> str:
@@ -1703,9 +2051,8 @@ def _review_profile_label(profile: str) -> str:
 
 def _engineering_overview_sentence(result: dict[str, Any]) -> str:
     form = _overall_form_context(result)
-    relation = _usable_overall_value(form.get("relative_relationship"))
-    line = _usable_overall_value(form.get("metro_line_name") or form.get("line_name"))
-    section = _usable_overall_value(form.get("metro_section_name") or form.get("section_name"))
+    line = _clean_metro_target(form.get("metro_line_name") or form.get("line_name"))
+    section = _clean_metro_target(form.get("metro_section_name") or form.get("section_name"))
     pit_depth = _format_overall_meter(form.get("pit_depth_m"))
     support = _support_form_text(form.get("support_components") or form.get("support_form") or form.get("support_type"))
     horizontal = _format_overall_meter(form.get("minimum_horizontal_clearance_m"))
@@ -1713,7 +2060,8 @@ def _engineering_overview_sentence(result: dict[str, Any]) -> str:
     buried = _format_overall_meter(form.get("buried_depth_m"))
 
     clauses: list[str] = []
-    metro_target = "".join(part for part in (line, section) if part)
+    metro_target = section if section and (not line or line in section) else "".join(part for part in (line, section) if part)
+    relation, metro_target = _relation_and_target(form.get("relative_relationship"), metro_target)
     if relation:
         if metro_target:
             clauses.append(f"本项目与{metro_target}呈{relation}关系")
@@ -1730,7 +2078,7 @@ def _engineering_overview_sentence(result: dict[str, Any]) -> str:
     if dewatering:
         clauses.append(f"降水方式为{dewatering}")
     if buried:
-        clauses.append(f"对应地铁结构埋深约为{buried}")
+        clauses.append(f"地铁结构埋深约为{buried}")
     return "，".join(clauses) + "。" if clauses else ""
 
 
@@ -2021,8 +2369,8 @@ def _ai_rewrite_review_items(
     prompt = (
         f"当前审核结果版本：{ctx}\n\n"
         f"用户修改指令：{instruction}\n\n"
-        "请返回JSON：{\"reply\":\"用1至3个短句说明本次改动，不要输出Markdown\",\"overall_opinion\":{\"title\":\"综合评价\",\"conclusion\":\"与复函评价一致的正向概括文字，不集中罗列负面问题\",\"risk_level\":\"高/中/低/提示/可为空\"},\"items\":[{\"order_no\":1,\"title\":\"8至20字的意见主题\",\"conclusion\":\"100至200字的正式审核意见，只写意见和要求，不写评价性判断；如内容较长可按1、2、3组织要点\",\"risk_level\":\"高/中/低/提示/可为空\",\"basis\":[],\"recommendation\":\"可为空；如填写也必须是具体要求\"}]}\n"
-        "要求：items 必须是修改后的完整最新版审核结果列表，不是增量补丁；数量保持5至6条，最多6条；不要输出依据块或建议块。"
+        "请返回JSON：{\"reply\":\"用1至3个短句说明本次改动，不要输出Markdown\",\"overall_opinion\":{\"title\":\"综合评价\",\"conclusion\":\"与复函评价一致的正向概括文字，不集中罗列负面问题\",\"risk_level\":\"高/中/低/提示/可为空\"},\"items\":[{\"order_no\":1,\"source_order_no\":1,\"title\":\"8至20字的意见主题\",\"conclusion\":\"100至200字的正式审核意见，只写意见和要求，不写评价性判断；如内容较长可按1、2、3组织要点\",\"risk_level\":\"高/中/低/提示/可为空\",\"basis\":[],\"recommendation\":\"可为空；如填写也必须是具体要求\"}]}\n"
+        "要求：items 必须是修改后的完整最新版审核结果列表，不是增量补丁；source_order_no必须关联当前版本已有条目的order_no，以保留正确的资料事实与规程依据；不得新增没有来源的事项，不要输出依据块或建议块。"
     )
     value = agent.complete_json(system, prompt, max_tokens=5200)
     items = _sanitize_review_items(value, current_items)
@@ -2141,6 +2489,7 @@ def _session_archive_data(
         "review_items": items,
         "overall_opinion": overall_opinion,
         "form_data": form_data or context,
+        "source_files": (session.get("metadata") or {}).get("source_files") or [],
         "latest_result": session.get("latest_result") or {},
     }
     return {
@@ -2368,13 +2717,18 @@ def _write_audit_session_to_archive(
     existing = project_archives.get_stage_audit(stage_id)
     if existing and existing.get("status") == "success" and not payload.overwrite:
         raise ValueError("该阶段已经存在审核记录。")
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    session_source_files = metadata.get("source_files") if isinstance(metadata.get("source_files"), list) else []
+    archived_source_files = _persist_archive_source_files(session_source_files, session_id)
     record = project_archives.write_stage_audit(
         stage_id,
         _session_archive_data(session, payload.form_data),
         source_task_id=session.get("source_task_id") or "",
         overwrite=payload.overwrite,
+        source_files=archived_source_files,
         history_context=history_context,
     )
+    _release_archived_upload_copies(session_source_files, archived_source_files)
     return {
         "archive_record": record,
         "project": resolved["project"],
@@ -2475,9 +2829,11 @@ def _create_audit_task(
     auto_archive: bool = True,
     manual_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    source_records = _source_file_records(source_file, attachments)
     if not archive_context or not auto_archive:
         def session_worker(task_id: str, progress):
             result = worker(task_id, progress)
+            result["source_files"] = source_records
             if manual_context:
                 result["manual_context_for_consistency"] = manual_context
             return _attach_audit_session(
@@ -2492,10 +2848,11 @@ def _create_audit_task(
 
     def reserve(task_id: str) -> None:
         try:
+            archived_source_files = _persist_archive_source_files(source_records, task_id)
             audit_holder.update(project_archives.begin_audit(
                 stage_id,
                 task_id,
-                source_files=_source_file_records(source_file, attachments),
+                source_files=archived_source_files,
                 history_context=archive_context,
             ))
         except (KeyError, ValueError) as exc:
@@ -2506,6 +2863,7 @@ def _create_audit_task(
         project_archives.mark_audit_running(audit_id)
         try:
             result = worker(task_id, progress)
+            result["source_files"] = audit_holder.get("source_files") or source_records
             if manual_context:
                 result["manual_context_for_consistency"] = manual_context
             result = _attach_audit_session(
@@ -2584,6 +2942,31 @@ def list_nearby_archive_projects(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get(
+    "/api/v1/local-geocoder/status",
+    dependencies=[Depends(verify_service_token)],
+    tags=["local-geocoder"],
+)
+def local_geocoder_status() -> dict[str, Any]:
+    """Expose local map/geocoding readiness without leaking third-party credentials."""
+    return local_geocoder.status()
+
+
+@app.get(
+    "/api/v1/local-geocoder/search",
+    dependencies=[Depends(verify_service_token)],
+    tags=["local-geocoder"],
+)
+def search_local_geocoder(
+    query: Annotated[str, Query(min_length=1, max_length=200)],
+    limit: Annotated[int, Query(ge=1, le=12)] = 8,
+) -> list[dict[str, Any]]:
+    try:
+        return local_geocoder.search(query, limit)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post(
@@ -2789,6 +3172,74 @@ def get_archive_stage_audit(stage_id: str) -> dict[str, Any] | None:
         raise HTTPException(status_code=404, detail="???????") from exc
 
 
+@app.post(
+    "/api/v1/project-archives/audits/{audit_id}/rerun",
+    status_code=202,
+    dependencies=[Depends(verify_service_token)],
+    tags=["project-archives"],
+)
+def rerun_archive_audit(audit_id: str) -> dict[str, Any]:
+    """Create a fresh audit task from archive-owned original files."""
+    try:
+        record = project_archives.get_audit(audit_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="未找到项目档案审核记录。") from exc
+    if record.get("status") != "success":
+        raise HTTPException(status_code=409, detail="只有已完成的档案审核记录可以重新审核。")
+    result_data = record.get("result_data") if isinstance(record.get("result_data"), dict) else {}
+    source_files = _recover_archive_source_files(record)
+    primary = next(
+        (item for item in source_files if isinstance(item, dict) and str(item.get("role") or "") in {"primary", "case", "letter"}),
+        next((item for item in source_files if isinstance(item, dict)), None),
+    )
+    if not primary:
+        raise HTTPException(status_code=409, detail="该历史档案仅保存了文件记录，未保存原始文件，无法直接重新审核。")
+    try:
+        source = _archive_source_path(primary)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if source.suffix.lower() not in STAGE2_SUFFIXES:
+        raise HTTPException(status_code=415, detail=f"历史主文件类型不支持重新审核：{source.suffix or '无扩展名'}")
+    attachments: dict[str, Path] = {}
+    for index, item in enumerate(source_files, start=1):
+        if not isinstance(item, dict) or item is primary:
+            continue
+        try:
+            attachments[f"archive_attachment_{index}"] = _archive_source_path(item)
+        except ValueError:
+            LOGGER.warning("Archive attachment is unavailable for rerun: %s", item.get("name"))
+    archive_context = _resolve_archive_context({
+        "project_id": record.get("project_id"),
+        "stage_id": record.get("stage_id"),
+    })
+    form_data = result_data.get("form_data") if isinstance(result_data.get("form_data"), dict) else {}
+    manual_context = dict(form_data)
+    manual_context["uploaded_documents"] = [
+        {
+            "name": item.get("name") or Path(str(item.get("stored_file") or "")).name,
+            "role": "case" if item is primary else "attachment",
+            "size": item.get("size") or 0,
+        }
+        for item in source_files if isinstance(item, dict)
+    ]
+    manual_context["rerun_context"] = {
+        "mode": "基于项目档案原文件重新审核",
+        "source_audit_id": audit_id,
+        "source_file_count": len(source_files),
+    }
+    options = {"manual_context": manual_context, "project_archive_context": archive_context}
+    task = _create_audit_task(
+        "archive_rerun",
+        source,
+        stage2_full_worker(source, options, attachments),
+        archive_context,
+        attachments=attachments,
+        auto_archive=False,
+        manual_context=manual_context,
+    )
+    return {key: task[key] for key in ("task_id", "task_type", "status", "progress", "message")}
+
+
 @app.get(
     "/api/v1/project-archives/stages/{stage_id}/previous-audits",
     dependencies=[Depends(verify_service_token)],
@@ -2865,7 +3316,9 @@ def create_audit_session_item(
     payload: AuditReviewItemPayload,
 ) -> dict[str, Any]:
     try:
-        return audit_sessions.create_item(session_id, payload.model_dump())
+        data = payload.model_dump()
+        _attach_review_item_rationales([data])
+        return audit_sessions.create_item(session_id, data)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="???????") from exc
     except ValueError as exc:
@@ -2886,7 +3339,17 @@ def update_audit_session_item(
         item = audit_sessions.get_item(item_id)
         if item["session_id"] != session_id:
             raise KeyError("审核条目不存在。")
-        return audit_sessions.update_item(item_id, payload.model_dump(exclude_unset=True))
+        updates = payload.model_dump(exclude_unset=True)
+        merged = {**item, **updates}
+        merged_source = item.get("source") if isinstance(item.get("source"), dict) else {}
+        if isinstance(updates.get("source"), dict):
+            merged_source = {**merged_source, **updates["source"]}
+        merged_source.pop("rationale", None)
+        merged["source"] = merged_source
+        merged["rationale"] = {}
+        _attach_review_item_rationales([merged])
+        updates["source"] = merged["source"]
+        return audit_sessions.update_item(item_id, updates)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="???????") from exc
     except ValueError as exc:
@@ -3586,6 +4049,21 @@ def rename_agent_session(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@app.post("/api/v1/agent/sessions/{session_id}/pin", dependencies=[Depends(verify_service_token)], tags=["agent"])
+def pin_agent_session(
+    session_id: str,
+    request: AgentSessionPinPayload,
+    x_actor_user_id: Annotated[str | None, Header()] = None,
+    x_actor_name: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    try:
+        return agent_conversations.set_pinned(
+            _agent_owner_id(x_actor_user_id, x_actor_name), session_id, request.pinned
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="会话不存在。") from exc
+
+
 @app.delete("/api/v1/agent/sessions/{session_id}", dependencies=[Depends(verify_service_token)], tags=["agent"])
 def delete_agent_session(
     session_id: str,
@@ -3618,7 +4096,8 @@ def ask_knowledge_agent(
         if item.get("role") in {"user", "assistant"} and item.get("content")
     ]
     use_knowledge = request.mode == "knowledge"
-    sources = knowledge.search(request.question, request.top_k) if use_knowledge else []
+    retrieval_limit = _agent_knowledge_limit(request.question, request.top_k)
+    sources = _search_agent_knowledge(request.question, retrieval_limit) if use_knowledge else []
     history = stored_history or [
         item.model_dump() if hasattr(item, "model_dump") else item.dict()
         for item in request.history[-20:]
@@ -3650,12 +4129,93 @@ def ask_knowledge_agent(
         "model": result["model"],
         "usage": result["usage"],
         "sources": sources,
-        "knowledge_stats": knowledge.stats(),
+        "retrieval_limit": retrieval_limit if use_knowledge else 0,
+        "knowledge_stats": _agent_knowledge_stats(),
         "session": {key: updated_session.get(key) for key in (
             "session_id", "title", "mode", "message_count", "created_at", "updated_at", "last_message_at"
         )},
         "messages": updated_session.get("messages", []),
     }
+
+
+@app.post("/api/v1/agent/ask/stream", dependencies=[Depends(verify_service_token)], tags=["agent"])
+def stream_knowledge_agent(
+    request: AgentQuestion,
+    x_actor_user_id: Annotated[str | None, Header()] = None,
+    x_actor_name: Annotated[str | None, Header()] = None,
+) -> StreamingResponse:
+    owner_id = _agent_owner_id(x_actor_user_id, x_actor_name)
+    if request.session_id:
+        try:
+            session = agent_conversations.get(owner_id, request.session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="会话不存在。") from exc
+    else:
+        session = agent_conversations.create(owner_id, mode=request.mode)
+    stored_history = [
+        {"role": item["role"], "content": item["content"]}
+        for item in session.get("messages", [])[-20:]
+        if item.get("role") in {"user", "assistant"} and item.get("content")
+    ]
+    use_knowledge = request.mode == "knowledge"
+    retrieval_limit = _agent_knowledge_limit(request.question, request.top_k)
+    sources = _search_agent_knowledge(request.question, retrieval_limit) if use_knowledge else []
+    history = stored_history or [
+        item.model_dump() if hasattr(item, "model_dump") else item.dict()
+        for item in request.history[-20:]
+    ]
+    agent_conversations.add_message(owner_id, session["session_id"], "user", request.question, mode=request.mode)
+
+    def event_stream() -> Any:
+        answer_parts: list[str] = []
+        try:
+            yield _sse_event("start", {"session_id": session["session_id"], "sources": sources})
+            result: dict[str, Any] | None = None
+            for event in agent.stream_chat(request.question, history, sources, use_knowledge):
+                if event.get("type") == "chunk":
+                    content = str(event.get("content") or "")
+                    answer_parts.append(content)
+                    yield _sse_event("chunk", {"content": content})
+                elif event.get("type") == "done":
+                    result = event
+            answer = "".join(answer_parts).strip()
+            if not answer:
+                raise RuntimeError("硅基流动 API 未返回回答内容。")
+            result = result or {"provider": "siliconflow", "model": "", "usage": {}}
+            conversation_title = None
+            if session.get("title") == "新对话":
+                conversation_title = agent.summarize_conversation_title(request.question, answer, request.mode)
+            updated_session = agent_conversations.add_message(
+                owner_id,
+                session["session_id"],
+                "assistant",
+                answer,
+                model=str(result.get("model") or ""),
+                sources=sources,
+                usage=result.get("usage") or {},
+                mode=request.mode,
+                title=conversation_title,
+            )
+            yield _sse_event("done", {
+                "model": result.get("model") or "",
+                "sources": sources,
+                "knowledge_stats": _agent_knowledge_stats(),
+                "retrieval_limit": retrieval_limit if use_knowledge else 0,
+                "session": {key: updated_session.get(key) for key in (
+                    "session_id", "title", "mode", "message_count", "created_at", "updated_at", "last_message_at", "pinned"
+                )},
+            })
+        except RuntimeError as exc:
+            yield _sse_event("error", {"message": str(exc)})
+        except Exception:
+            LOGGER.exception("智能体流式回答失败")
+            yield _sse_event("error", {"message": "智能体服务暂时不可用，请稍后重试。"})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/v1/stage1/tasks", status_code=202, dependencies=[Depends(verify_service_token)], tags=["stage1"])

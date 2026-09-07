@@ -159,6 +159,13 @@ public class RailProjectArchiveController
         return python.get("/api/v1/project-archives/stages/" + stageId + "/audit");
     }
 
+    @PreAuthorize("@ss.hasPermi('rail:audit:run')")
+    @PostMapping("/audits/{auditId}/rerun")
+    public Object rerunAudit(@PathVariable("auditId") String auditId)
+    {
+        return python.post("/api/v1/project-archives/audits/" + auditId + "/rerun");
+    }
+
     @PreAuthorize("@ss.hasAnyPermi('rail:archive:audit:list,rail:audit:run')")
     @GetMapping("/stages/{stageId}/previous-audits")
     public Object previousAudits(@PathVariable("stageId") String stageId)

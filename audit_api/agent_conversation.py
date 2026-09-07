@@ -46,6 +46,7 @@ class AgentConversationRepository:
                     title TEXT NOT NULL,
                     mode TEXT NOT NULL DEFAULT 'general',
                     message_count INTEGER NOT NULL DEFAULT 0,
+                    pinned INTEGER NOT NULL DEFAULT 0,
                     archived INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -74,6 +75,9 @@ class AgentConversationRepository:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_agent_message_session_time ON agent_chat_message(session_id, created_at)"
             )
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(agent_chat_session)")}
+            if "pinned" not in columns:
+                connection.execute("ALTER TABLE agent_chat_session ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
 
     def create(self, owner_id: str, title: str = "", mode: str = "general") -> dict[str, Any]:
         session_id = "chat_" + uuid.uuid4().hex[:20]
@@ -100,7 +104,7 @@ class AgentConversationRepository:
                 """
                 SELECT * FROM agent_chat_session
                 WHERE owner_id = ? AND archived = 0
-                ORDER BY COALESCE(last_message_at, updated_at) DESC, created_at DESC
+                ORDER BY pinned DESC, COALESCE(last_message_at, updated_at) DESC, created_at DESC
                 LIMIT ?
                 """,
                 (owner_id or "anonymous", int(limit)),
@@ -207,6 +211,20 @@ class AgentConversationRepository:
                 raise KeyError(session_id)
         return self.get(owner_id, session_id, include_messages=False)
 
+    def set_pinned(self, owner_id: str, session_id: str, pinned: bool) -> dict[str, Any]:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE agent_chat_session
+                SET pinned = ?, updated_at = ?
+                WHERE owner_id = ? AND session_id = ? AND archived = 0
+                """,
+                (1 if pinned else 0, _now(), owner_id or "anonymous", session_id),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(session_id)
+        return self.get(owner_id, session_id, include_messages=False)
+
     def archive(self, owner_id: str, session_id: str) -> dict[str, Any]:
         with self._connect() as connection:
             cursor = connection.execute(
@@ -227,6 +245,7 @@ class AgentConversationRepository:
             "title": row["title"],
             "mode": row["mode"],
             "message_count": row["message_count"],
+            "pinned": bool(row["pinned"]),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "last_message_at": row["last_message_at"],

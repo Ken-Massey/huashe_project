@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from json_repair import repair_json
 
@@ -111,14 +111,16 @@ class AgentService:
         )
         if use_knowledge:
             context = "\n\n".join(
-                f"[{index}] 案例《{item['case_name']}》"
+                f"[{index}] {'技术规程' if item.get('source_type') == 'regulation' else '案例'}《{item.get('case_name') or item.get('title') or '知识库材料'}》"
                 f"{'，文件名：' + item.get('original_file_name') if item.get('original_file_name') else ''}\n"
-                f"{item['excerpt']}"
+                f"{'条款：' + str(item.get('clause_no')) + '；' if item.get('clause_no') else ''}"
+                f"{self._source_excerpt(item)}"
                 for index, item in enumerate(sources, start=1)
             )
             system += (
                 "本轮启用了知识库。优先依据下面的检索材料回答，并在使用材料时标注[序号]。"
-                "材料不足时可以使用通用知识补充，但必须明确区分。\n\n知识库材料：\n"
+                "技术规程材料可能包含表格；涉及风险等级、工况、监控或监测频率等问题时，必须结合表头、行和列定位具体数值，"
+                "不得因案例材料未提及而忽略规程材料。材料不足时可以使用通用知识补充，但必须明确区分。\n\n知识库材料：\n"
                 + (context or "未检索到相关材料")
             )
         messages: list[dict[str, str]] = [{"role": "system", "content": system}]
@@ -127,6 +129,16 @@ class AgentService:
                 messages.append({"role": item["role"], "content": item["content"][:8000]})
         messages.append({"role": "user", "content": question})
         return messages
+
+    @staticmethod
+    def _source_excerpt(item: dict[str, Any]) -> str:
+        """Keep ordinary passages compact while preserving selected table context."""
+        excerpt = str(item.get("excerpt") or "")
+        is_table = item.get("source_type") == "regulation" and "<table" in excerpt.lower()
+        limit = 6000 if is_table else 1800
+        if len(excerpt) <= limit:
+            return excerpt
+        return excerpt[:limit].rstrip() + "\n[材料节选已截断]"
 
     def chat(
         self,
@@ -179,6 +191,71 @@ class AgentService:
             "model": result.get("model") or SILICONFLOW_MODEL,
             "usage": result.get("usage") or {},
         }
+
+    def stream_chat(
+        self,
+        question: str,
+        history: list[dict[str, str]],
+        sources: list[dict[str, Any]],
+        use_knowledge: bool,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield OpenAI-compatible streaming deltas from SiliconFlow."""
+        config = self._load()
+        if not config["api_key"]:
+            raise RuntimeError("硅基流动 API 尚未配置，请先在左下角“设置 > 大模型”中填写 API Key。")
+        payload = json.dumps(
+            {
+                "model": SILICONFLOW_MODEL,
+                "messages": self._messages(question, history, sources, use_knowledge),
+                "stream": True,
+                "stream_options": {"include_usage": True},
+                "max_tokens": 2800,
+                "temperature": 0.5,
+                "enable_thinking": False,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            SILICONFLOW_ENDPOINT,
+            data=payload,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {config['api_key']}",
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "text/event-stream",
+            },
+        )
+        model = SILICONFLOW_MODEL
+        usage: dict[str, Any] = {}
+        try:
+            with self._open_with_retry(request, timeout=120) as response:
+                for raw_line in response:
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    model = event.get("model") or model
+                    if isinstance(event.get("usage"), dict):
+                        usage = event["usage"]
+                    choices = event.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    content = delta.get("content")
+                    if content:
+                        yield {"type": "chunk", "content": str(content)}
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"硅基流动 API 返回错误（{exc.code}）：{detail[:500]}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"无法连接硅基流动 API：{exc.reason}") from exc
+        yield {"type": "done", "provider": "siliconflow", "model": model, "usage": usage}
 
     def complete_json(self, system: str, prompt: str, *, max_tokens: int = 2400) -> dict[str, Any] | list[Any]:
         """Request one strict JSON response for machine-reviewed rule drafts."""

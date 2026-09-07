@@ -15,6 +15,10 @@ export function getTask(id) { return request({ url: `/rail/tasks/${id}`, method:
 export function listTasks(limit = 20) { return request({ url: '/rail/tasks', method: 'get', params: { limit } }) }
 export function getTaskResult(id) { return request({ url: `/rail/tasks/${id}/result`, method: 'get' }) }
 export function getTaskFiles(id) { return request({ url: `/rail/tasks/${id}/files`, method: 'get' }) }
+export function getLocalGeocoderStatus() { return request({ url: '/rail/local-geocoder/status', method: 'get' }) }
+export function searchLocalGeocoder(query, limit = 8) {
+  return request({ url: '/rail/local-geocoder/search', method: 'get', params: { query, limit } })
+}
 export function downloadTaskFile(taskId, fileId) {
   return request({ url: `/rail/tasks/${taskId}/files/${fileId}`, method: 'get', responseType: 'blob', timeout: 120000 })
 }
@@ -71,6 +75,7 @@ export function listAgentSessions(limit = 50) { return request({ url: '/rail/age
 export function createAgentSession(data = {}) { return request({ url: '/rail/agent/sessions', method: 'post', data }) }
 export function getAgentSession(id) { return request({ url: `/rail/agent/sessions/${id}`, method: 'get' }) }
 export function renameAgentSession(id, title) { return request({ url: `/rail/agent/sessions/${id}/rename`, method: 'post', data: { title } }) }
+export function pinAgentSession(id, pinned) { return request({ url: `/rail/agent/sessions/${id}/pin`, method: 'post', data: { pinned } }) }
 export function deleteAgentSession(id) { return request({ url: `/rail/agent/sessions/${id}`, method: 'delete' }) }
 
 export function createAuditSession(data) { return request({ url: '/rail/audit-sessions', method: 'post', data }) }
@@ -83,6 +88,9 @@ export function reviseAuditSession(sessionId, instruction) {
 }
 export function writeAuditSessionToArchive(sessionId, data) {
   return request({ url: `/rail/audit-sessions/${sessionId}/archive`, method: 'post', data, timeout: 120000 })
+}
+export function rerunArchivedAudit(auditId) {
+  return request({ url: `/rail/archives/audits/${auditId}/rerun`, method: 'post', timeout: 120000 })
 }
 export function generateAuditSessionReply(sessionId, data) {
   return request({
