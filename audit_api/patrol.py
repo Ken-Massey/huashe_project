@@ -232,6 +232,47 @@ def _opinion_result_items(result_data: Any) -> list[tuple[str, str, str]]:
     return out
 
 
+def _resolve_archive_stage(project_id: str, stage_id: str, fallback_name: str) -> tuple[str, str]:
+    """用项目档案里的“真实阶段”校正意见的 stage_id/stage_name。
+
+    优先级：①已带 stage_id → 按 id 查档案现名（含改名）；②未带 id 且项目仅一个阶段 → 用该阶段；
+    ③未带 id 且多个阶段 → 名称精确匹配；④都无法确认 → 保留流程快照值。
+    """
+    if not project_id:
+        return stage_id or "", fallback_name
+    db = Path(PROJECT_ARCHIVE_DB)
+    if not db.exists():
+        return stage_id or "", fallback_name
+    try:
+        connection = sqlite3.connect(db, timeout=10)
+        try:
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute(
+                "SELECT stage_id, name FROM project_stages WHERE project_id = ? ORDER BY stage_order, stage_id",
+                (project_id,),
+            ).fetchall()
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        LOGGER.exception("读取档案阶段失败：%s", project_id)
+        return stage_id or "", fallback_name
+    if not rows:
+        return stage_id or "", fallback_name
+    if stage_id:
+        found = next((row for row in rows if row["stage_id"] == stage_id), None)
+        if found is not None:
+            return stage_id, found["name"] or fallback_name
+        return stage_id, fallback_name
+    if len(rows) == 1:
+        return rows[0]["stage_id"], rows[0]["name"] or fallback_name
+    exact_name = str(fallback_name or "").strip()
+    if exact_name:
+        matched = next((row for row in rows if row["name"] == exact_name), None)
+        if matched is not None:
+            return matched["stage_id"], matched["name"]
+    return "", fallback_name
+
+
 def _collect_project_opinions(project_id: str) -> list[dict[str, Any]]:
     """读取项目档案库中该项目已成功审核的 audit_records，提取逐条意见（带阶段上下文）。"""
     db = Path(PROJECT_ARCHIVE_DB)
@@ -923,7 +964,7 @@ class PatrolRepository:
         """
         system_actor = {"user_id": "workflow", "name": "审核流转系统", "is_admin": True}
         project_id = _text(data.get("project_id"), field="项目档案", maximum=80)
-        workflow_items = self._workflow_opinion_items(data)
+        workflow_items = self._workflow_opinion_items(data, project_id=project_id)
         # D122：终审通过创建时可提交可选参数（巡查员多选/位置/备注）。未带 user_ids 键（非弹窗调用）
         # 时回退为指派流程发起人，保持向后兼容；显式传空数组 = 不指派任何人。
         location_desc = _text(data.get("location_desc"), field="位置描述", maximum=200)
@@ -1189,8 +1230,11 @@ class PatrolRepository:
             return None
         return task
 
-    def _workflow_opinion_items(self, data: dict[str, Any]) -> list[dict[str, Any]]:
-        """从终审通过请求里解析“本次流程”的逐条审核意见（档案尚未归档时也可下发）。"""
+    def _workflow_opinion_items(self, data: dict[str, Any], project_id: str = "") -> list[dict[str, Any]]:
+        """从终审通过请求里解析“本次流程”的逐条审核意见（档案尚未归档时也可下发）。
+
+        stage 信息以项目档案真实阶段为准（防流程快照名称如 AI 猜测的“设计”污染来源 tag）。
+        """
         raw = data.get("latest_result_json")
         if isinstance(raw, str) and raw.strip():
             try:
@@ -1200,6 +1244,7 @@ class PatrolRepository:
         payload = raw if isinstance(raw, dict) else {}
         stage_id = _text(data.get("stage_id") or payload.get("stage_id"), field="阶段", maximum=80)
         stage_name = _text(data.get("stage_name") or payload.get("stage_name"), field="阶段名称", maximum=80)
+        stage_id, stage_name = _resolve_archive_stage(project_id, stage_id, stage_name)
         return [
             {
                 "stage_id": stage_id,
