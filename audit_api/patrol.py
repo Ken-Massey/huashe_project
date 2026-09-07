@@ -15,6 +15,7 @@ import hmac
 import io
 import json
 import logging
+import re
 import sqlite3
 import threading
 import uuid
@@ -39,6 +40,7 @@ from .config import (
 LOGGER = logging.getLogger(__name__)
 
 TASK_STATUSES = {"pending", "executing", "completed", "closed"}
+_FIELD_CN = {"name": "任务名称", "lines": "线路", "user_ids": "指派巡查员", "location_desc": "位置", "requirement": "巡查内容"}
 HAZARD_STATUSES = {"pending_confirm", "pending_rectify", "rectifying", "pending_review", "closed"}
 RECORD_TYPES = {"patrol", "rectify"}
 MEDIA_KINDS = {"photo", "video"}
@@ -112,6 +114,17 @@ def _limit_text(value: str, maximum: int) -> str:
     return text if len(text) <= maximum else text[: maximum - 1].rstrip() + "…"
 
 
+def _as_list(value: Any) -> list[str]:
+    """把 数组 / 逗号顿号分隔串 / 单个值 归一成字符串列表。"""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        raw = [str(v).strip() for v in value]
+    else:
+        raw = [p for p in re.split(r"[,，、;；\n\r]+", str(value)) if p.strip()]
+    return [p for p in raw if p]
+
+
 def _workflow_patrol_opinion(data: dict[str, Any]) -> str:
     """Turn the structured final audit result into readable field-inspection instructions."""
     raw = data.get("latest_result_json")
@@ -146,6 +159,36 @@ def _workflow_patrol_opinion(data: dict[str, Any]) -> str:
     if final_approval and final_approval not in " ".join(lines):
         lines.append(f"终审人意见：{final_approval}")
     return _limit_text("；".join(lines) or "终审通过。请结合审核结论开展现场符合性巡查。", 1900)
+
+
+def _workflow_overall_meta(data: dict[str, Any]) -> dict[str, str]:
+    """从终审载荷提取“综合评价/终审人意见”文本（核查栏顶部综合评价卡用，不再拼进巡查内容）。"""
+    raw = data.get("latest_result_json")
+    if isinstance(raw, str) and raw.strip():
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = {}
+    payload = raw if isinstance(raw, dict) else {}
+    overall = payload.get("overall_opinion") or payload.get("overallOpinion") or {}
+    if not isinstance(overall, dict):
+        overall = {}
+    conclusion = str(overall.get("conclusion") or data.get("latest_summary") or "").strip()
+    recommendation = str(overall.get("recommendation") or "").strip()
+    overall_text = _limit_text(conclusion, 1600)
+    if recommendation and recommendation not in (conclusion or ""):
+        recommendation_block = f"综合处置要求：{recommendation}"
+        overall_text = _limit_text(
+            f"{conclusion}\n{recommendation_block}" if conclusion else recommendation_block,
+            1900,
+        )
+    final_opinion = _limit_text(str(data.get("final_approval_opinion") or "").strip(), 800)
+    return {"overall_conclusion": overall_text, "final_opinion": final_opinion}
+
+
+def _patrol_requirement_text(opinion_count: int) -> str:
+    """D120：巡查内容固定为“指引 + 意见条数”，不再拼接整段终审长文。"""
+    return f"终审通过，共 {int(opinion_count or 0)} 条意见需现场核查，请逐条核实并拍照留证。"
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +425,32 @@ class PatrolRepository:
                     FOREIGN KEY(task_id) REFERENCES patrol_tasks(task_id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS patrol_task_lines (
+                    task_id TEXT NOT NULL,
+                    line TEXT NOT NULL,
+                    sort INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(task_id, line),
+                    FOREIGN KEY(task_id) REFERENCES patrol_tasks(task_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS patrol_task_users (
+                    task_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    user_name TEXT NOT NULL DEFAULT '',
+                    sort INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(task_id, user_id),
+                    FOREIGN KEY(task_id) REFERENCES patrol_tasks(task_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS patrol_task_edit_logs (
+                    log_id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
+                    operator TEXT NOT NULL DEFAULT '',
+                    summary TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(task_id) REFERENCES patrol_tasks(task_id) ON DELETE CASCADE
+                );
+
                 CREATE TABLE IF NOT EXISTS patrol_task_opinions (
                     opinion_id TEXT PRIMARY KEY,
                     task_id TEXT NOT NULL,
@@ -436,6 +505,12 @@ class PatrolRepository:
                     ON patrol_task_opinions(task_id, status, sort, created_at);
                 CREATE INDEX IF NOT EXISTS idx_patrol_opinion_photos
                     ON patrol_opinion_photos(opinion_id, sort, created_at);
+                CREATE INDEX IF NOT EXISTS idx_patrol_task_lines_task
+                    ON patrol_task_lines(task_id, sort);
+                CREATE INDEX IF NOT EXISTS idx_patrol_task_users_task
+                    ON patrol_task_users(task_id, sort);
+                CREATE INDEX IF NOT EXISTS idx_patrol_task_users_uid
+                    ON patrol_task_users(user_id);
                 """
             )
             # 存量库迁移：为已有 patrol_hazards 补 media_id / video_time 列
@@ -492,6 +567,24 @@ class PatrolRepository:
             }
             if "caption" not in media_columns:
                 connection.execute("ALTER TABLE patrol_media ADD COLUMN caption TEXT NOT NULL DEFAULT ''")
+            # 存量数据回填：旧单值线路/指派迁移进关联表
+            connection.execute(
+                "INSERT OR IGNORE INTO patrol_task_lines(task_id, line, sort) "
+                "SELECT task_id, line, 0 FROM patrol_tasks WHERE line <> ''"
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO patrol_task_users(task_id, user_id, user_name, sort) "
+                "SELECT task_id, assigned_user_id, assigned_user_name, 0 FROM patrol_tasks "
+                "WHERE assigned_user_id <> ''"
+            )
+            # 基础信息最近修改时间列（仅“编辑/改派”更新；与列表业务活动时间相互独立）
+            if "info_updated_at" not in task_columns:
+                connection.execute(
+                    "ALTER TABLE patrol_tasks ADD COLUMN info_updated_at TEXT NOT NULL DEFAULT ''"
+                )
+            connection.execute(
+                "UPDATE patrol_tasks SET info_updated_at = created_at WHERE info_updated_at = ''"
+            )
             # 存量库迁移：为已有 patrol_records 补“本次上传名称”列
             record_columns = {
                 item["name"]
@@ -499,6 +592,12 @@ class PatrolRepository:
             }
             if "title" not in record_columns:
                 connection.execute("ALTER TABLE patrol_records ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+            # D120：终审综合评价 / 终审人意见（核查栏顶部“综合评价卡”数据源；监测审查意见不再自动预填）
+            for d120_column in ("overall_conclusion", "final_opinion"):
+                if d120_column not in task_columns:
+                    connection.execute(
+                        f"ALTER TABLE patrol_tasks ADD COLUMN {d120_column} TEXT NOT NULL DEFAULT ''"
+                    )
         self._seed_default_dicts()
         self._migrate_legacy_events()
 
@@ -682,7 +781,63 @@ class PatrolRepository:
         if actor.get("is_admin"):
             return True
         assigned = str(task.get("assigned_user_id") or "")
-        return bool(assigned) and assigned == str(actor.get("user_id") or "")
+        uid = str(actor.get("user_id") or "")
+        if not uid:
+            return False
+        if assigned == uid:
+            return True
+        # 多指派：任一关联 user_id 匹配即可见
+        with self._connect() as connection:
+            return connection.execute(
+                "SELECT 1 FROM patrol_task_users WHERE task_id = ? AND user_id = ?",
+                (task.get("task_id"), uid),
+            ).fetchone() is not None
+
+    def _attach_task_extras(self, tasks: list[dict[str, Any]]) -> None:
+        """为任务附加 lines[] / assignees[]，并把旧字段回填为聚合值（兼容展示/水印）。"""
+        if not tasks:
+            return
+        ids = [t["task_id"] for t in tasks]
+        with self._connect() as connection:
+            ph = ",".join("?" for _ in ids)
+            lines: dict[str, list[str]] = {}
+            for row in connection.execute(
+                f"SELECT task_id, line FROM patrol_task_lines WHERE task_id IN ({ph}) ORDER BY sort, line",
+                ids,
+            ):
+                lines.setdefault(row["task_id"], []).append(row["line"])
+            users: dict[str, list[dict[str, str]]] = {}
+            for row in connection.execute(
+                f"SELECT task_id, user_id, user_name FROM patrol_task_users WHERE task_id IN ({ph}) "
+                "ORDER BY sort, user_id",
+                ids,
+            ):
+                users.setdefault(row["task_id"], []).append(
+                    {"user_id": row["user_id"], "user_name": row["user_name"]}
+                )
+        for t in tasks:
+            t["lines"] = lines.get(t["task_id"], [])
+            t["assignees"] = users.get(t["task_id"], [])
+            if t["lines"]:
+                t["line"] = "、".join(t["lines"])
+            if t["assignees"]:
+                t["assigned_user_id"] = ",".join(a["user_id"] for a in t["assignees"])
+                t["assigned_user_name"] = "、".join(a["user_name"] or a["user_id"] for a in t["assignees"])
+
+    def _sync_task_assignments(self, task_id: str, lines: list[str], users: list[dict[str, str]]) -> None:
+        with self._lock, self._connect() as connection:
+            connection.execute("DELETE FROM patrol_task_lines WHERE task_id = ?", (task_id,))
+            connection.execute("DELETE FROM patrol_task_users WHERE task_id = ?", (task_id,))
+            for i, line in enumerate(lines):
+                connection.execute(
+                    "INSERT OR IGNORE INTO patrol_task_lines(task_id, line, sort) VALUES(?, ?, ?)",
+                    (task_id, line, i),
+                )
+            for i, u in enumerate(users):
+                connection.execute(
+                    "INSERT OR IGNORE INTO patrol_task_users(task_id, user_id, user_name, sort) VALUES(?, ?, ?, ?)",
+                    (task_id, u.get("user_id", ""), u.get("user_name", ""), i),
+                )
 
     def create_task(
         self,
@@ -694,12 +849,21 @@ class PatrolRepository:
         source_project_id: str = "",
     ) -> dict[str, Any]:
         task_id, now = _id("ptask"), _now()
+        lines_in = _as_list(data.get("lines") or data.get("line_list"))
+        uids_in = _as_list(data.get("user_ids") or data.get("assigned_user_ids"))
+        names_in = _as_list(data.get("user_names") or data.get("assigned_user_names"))
         name = _text(data.get("name"), field="任务名称", required=True, maximum=120)
         line = _text(data.get("line"), field="线路", maximum=60)
         location_desc = _text(data.get("location_desc"), field="位置描述", maximum=200)
         requirement = _text(data.get("requirement"), field="巡查内容", maximum=2000)
-        assigned_user_id = _text(data.get("assigned_user_id"), field="指派账号", maximum=40)
-        assigned_user_name = _text(data.get("assigned_user_name"), field="指派账号名称", maximum=60)
+        assigned_user_id = _text(data.get("assigned_user_id"), field="指派账号", maximum=200)
+        assigned_user_name = _text(data.get("assigned_user_name"), field="指派账号名称", maximum=200)
+        # 旧列存首值便于兼容（展示统一走 lines/assignees 关联值）
+        if not line and lines_in:
+            line = lines_in[0]
+        if not assigned_user_id and uids_in:
+            assigned_user_id = uids_in[0]
+            assigned_user_name = names_in[0] if names_in else uids_in[0]
         remark = _text(data.get("remark"), field="备注", maximum=1000)
         monitor_frequency = _text(data.get("monitor_frequency"), field="监测频率", maximum=2000)
         monitor_points = _text(data.get("monitor_points"), field="监测点位", maximum=2000)
@@ -736,15 +900,30 @@ class PatrolRepository:
                     now, now,
                 ),
             )
+        # 多线路 / 多巡查员关联行
+        final_lines = lines_in or ([line] if line else [])
+        final_uids = uids_in or ([assigned_user_id] if assigned_user_id else [])
+        final_names = names_in if names_in else ([assigned_user_name] if assigned_user_name else [])
+        users = [
+            {"user_id": u, "user_name": (final_names[i] if i < len(final_names) else u)}
+            for i, u in enumerate(final_uids)
+        ]
+        self._sync_task_assignments(task_id, final_lines, users)
         return self.get_task(task_id, actor)
 
     def create_workflow_task(self, data: dict[str, Any]) -> dict[str, Any]:
-        """终审通过后按“项目”建/复用一个巡查任务，并把项目档案中记录的意见同步进任务。
+        """终审通过后建/复用“施工前核查”任务，并把本次终审意见结构化写入“审核意见现场核查”。
 
-        幂等：patrol_tasks.source_project_id（项目级唯一）；无 project_id 时退回按流程(source_workflow_id)幂等。
+        D120：逐条意见一律落 patrol_task_opinions（含未绑定项目档案的流程）；巡查内容只放
+        “指引+条数”；监测审查意见(review_opinion)不再自动预填长文；综合评价/终审人意见写入
+        overall_conclusion/final_opinion 供详情页“综合评价卡”展示。
+        幂等：有 project_id 按项目唯一，否则按流程(source_workflow_id)唯一。
         """
         system_actor = {"user_id": "workflow", "name": "审核流转系统", "is_admin": True}
         project_id = _text(data.get("project_id"), field="项目档案", maximum=80)
+        workflow_items = self._workflow_opinion_items(data)
+        task_id = ""
+        created = False
         if project_id:
             task, created = self.ensure_project_task(
                 project_id,
@@ -753,43 +932,118 @@ class PatrolRepository:
                 initiator_id=data.get("initiator_id"),
                 initiator_name=data.get("initiator_name"),
             )
-            added = self.sync_project_opinions(task["task_id"], project_id)
-            return {"created": created, "opinions_added": added, "task": self.get_task(task["task_id"], system_actor)}
-
-        workflow_id = _text(data.get("workflow_id"), field="审核流程", required=True, maximum=80)
-        with self._connect() as connection:
-            existing = connection.execute(
-                "SELECT task_id FROM patrol_tasks WHERE source_workflow_id = ? AND deleted = 0",
-                (workflow_id,),
-            ).fetchone()
-        if existing is not None:
-            return {"created": False, "task": self.get_task(existing["task_id"], system_actor)}
-
-        project_name = _text(data.get("project_name"), field="项目名称", required=True, maximum=120)
-        final_opinion = _workflow_patrol_opinion(data)
-        task_data = {
-            "name": project_name,
-            "requirement": _limit_text(
-                "请依据以下终审意见开展现场符合性巡查，核实整改落实情况并上传现场记录。" + final_opinion,
-                2000,
-            ),
-            "assigned_user_id": str(data.get("initiator_id") or ""),
-            "assigned_user_name": str(data.get("initiator_name") or ""),
-            "remark": f"来源：案例审核流转终审通过（流程 {workflow_id}）。",
-            "review_opinion": _limit_text(final_opinion, 2000),
-        }
-        try:
-            task = self.create_task(task_data, system_actor, task_type="pre_construction", source_workflow_id=workflow_id)
-            return {"created": True, "task": task}
-        except sqlite3.IntegrityError:
+            task_id = task["task_id"]
+        else:
+            workflow_id = _text(data.get("workflow_id"), field="审核流程", required=True, maximum=80)
             with self._connect() as connection:
                 existing = connection.execute(
                     "SELECT task_id FROM patrol_tasks WHERE source_workflow_id = ? AND deleted = 0",
                     (workflow_id,),
                 ).fetchone()
-            if existing is None:
-                raise
-            return {"created": False, "task": self.get_task(existing["task_id"], system_actor)}
+            if existing is not None:
+                task_id = existing["task_id"]
+            else:
+                project_name = _text(data.get("project_name"), field="项目名称", required=True, maximum=120)
+                task_data = {
+                    "name": project_name,
+                    "requirement": _patrol_requirement_text(len(workflow_items)),
+                    "assigned_user_id": str(data.get("initiator_id") or ""),
+                    "assigned_user_name": str(data.get("initiator_name") or ""),
+                    "remark": f"来源：案例审核流转终审通过（流程 {workflow_id}）。",
+                }
+                try:
+                    task = self.create_task(
+                        task_data, system_actor, task_type="pre_construction",
+                        source_workflow_id=workflow_id,
+                    )
+                    task_id = task["task_id"]
+                    created = True
+                except sqlite3.IntegrityError:
+                    with self._connect() as connection:
+                        existing = connection.execute(
+                            "SELECT task_id FROM patrol_tasks WHERE source_workflow_id = ? AND deleted = 0",
+                            (workflow_id,),
+                        ).fetchone()
+                    if existing is None:
+                        raise
+                    task_id = existing["task_id"]
+        if not task_id:
+            raise ValueError("巡查任务创建失败。")
+        # 结构化意见：项目路径 = 档案历史累计 + 本次；流程路径 = 仅本次（同样落核查栏）
+        added = 0
+        warning = ""
+        try:
+            added = self.sync_project_opinions(
+                task_id,
+                project_id if project_id else "",
+                workflow_items=workflow_items,
+            )
+        except Exception:
+            LOGGER.exception("终审后同步意见失败 task=%s project=%s", task_id, project_id)
+            warning = "任务已创建，但本次意见同步失败，请在任务详情点「同步」重试。"
+        # 终审元数据：综合评价卡 + 巡查内容形态 + 监测审查意见不预填（旧长文存量自动迁移）
+        self._finalize_workflow_task(task_id, _workflow_overall_meta(data), created)
+        result = {
+            "created": created,
+            "opinions_added": added,
+            "task": self.get_task(task_id, system_actor),
+        }
+        if warning:
+            result["warning"] = warning
+        return result
+
+    def _finalize_workflow_task(
+        self,
+        task_id: str,
+        meta: dict[str, str],
+        created: bool,
+    ) -> None:
+        """写入综合评价/终审人意见；巡查内容收敛为“指引+条数”；监测审查意见不自动预填。"""
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT requirement, review_opinion FROM patrol_tasks WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            if row is None:
+                return
+            current_requirement = row["requirement"] or ""
+            current_review = row["review_opinion"] or ""
+
+            def _legacy_blob(value: str) -> bool:
+                # 识别旧逻辑整段拼接终审长文的形态
+                return bool(value) and (
+                    value.startswith("请依据以下终审意见开展现场符合性巡查")
+                    or value.startswith("终审综合结论：")
+                    or "；1. " in value
+                    or "；2. " in value
+                )
+
+            count = connection.execute(
+                "SELECT COUNT(*) AS c FROM patrol_task_opinions WHERE task_id = ?", (task_id,)
+            ).fetchone()["c"]
+            template = _patrol_requirement_text(count)
+            default_project_requirement = (
+                "请按项目档案中记录的审核意见逐项开展现场符合性巡查：实地核实每条意见所涉情况，"
+                "拍摄现场照片并对照说明。"
+            )
+            new_requirement = current_requirement
+            if created or _legacy_blob(current_requirement) or current_requirement == default_project_requirement or not current_requirement.strip():
+                new_requirement = template
+            new_review = current_review
+            if created or _legacy_blob(current_review):
+                new_review = ""
+            connection.execute(
+                """
+                UPDATE patrol_tasks SET requirement = ?, review_opinion = ?,
+                    overall_conclusion = ?, final_opinion = ?, updated_at = ?
+                WHERE task_id = ?
+                """,
+                (
+                    new_requirement, new_review,
+                    meta.get("overall_conclusion", ""), meta.get("final_opinion", ""),
+                    _now(), task_id,
+                ),
+            )
 
     # ---- 审核意见 → 现场核查（Step①）----
 
@@ -838,13 +1092,67 @@ class PatrolRepository:
                 raise
             return self.get_task(existing["task_id"], system_actor), False
 
-    def sync_project_opinions(self, task_id: str, project_id: str) -> int:
-        """把项目档案中该项目已审核记录的意见幂等合并进任务（只新增不改旧）。返回新增条数。"""
-        items = _collect_project_opinions(project_id)
+    def _workflow_opinion_items(self, data: dict[str, Any]) -> list[dict[str, Any]]:
+        """从终审通过请求里解析“本次流程”的逐条审核意见（档案尚未归档时也可下发）。"""
+        raw = data.get("latest_result_json")
+        if isinstance(raw, str) and raw.strip():
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError:
+                raw = {}
+        payload = raw if isinstance(raw, dict) else {}
+        stage_id = _text(data.get("stage_id") or payload.get("stage_id"), field="阶段", maximum=80)
+        stage_name = _text(data.get("stage_name") or payload.get("stage_name"), field="阶段名称", maximum=80)
+        return [
+            {
+                "stage_id": stage_id,
+                "stage_name": stage_name,
+                "title": title,
+                "risk_level": risk,
+                "content": content,
+            }
+            for title, risk, content in _opinion_result_items(payload)
+        ]
+
+    def sync_project_opinions(
+        self,
+        task_id: str,
+        project_id: str,
+        workflow_items: list[dict[str, Any]] | None = None,
+    ) -> int:
+        """把项目档案中该项目已审核记录的意见 + 本次终审通过意见幂等合并进任务（只新增不改旧）。
+
+        返回新增条数。意见序号按阶段内顺序连续编号；同阶段同内容自动去重。
+        """
+        rows = _collect_project_opinions(project_id)
+        rows.extend(workflow_items or [])
+        if not rows:
+            return 0
         now = _now()
         added = 0
+        seen: set[str] = set()
+        # 先去掉同阶段完全重复的意见（如“终审本次意见”与“档案同阶段已归档记录”重复）
+        unique_rows: list[dict[str, Any]] = []
+        for item in rows:
+            key = "{}|{}|{}|{}".format(
+                item.get("stage_id", ""),
+                item.get("title", ""),
+                item.get("content", ""),
+                item.get("risk_level", ""),
+            )[:500]
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_rows.append(item)
+        # 阶段内连续编号（幂等：UNIQUE(task_id, project_id, stage_id, opinion_no)）
+        stage_counters: dict[str, int] = {}
+        prepared: list[tuple[Any, ...]] = []
+        for item in unique_rows:
+            stage_id = item.get("stage_id", "") or ""
+            stage_counters[stage_id] = stage_counters.get(stage_id, 0) + 1
+            prepared.append((item, stage_counters[stage_id]))
         with self._lock, self._connect() as connection:
-            for index, item in enumerate(items):
+            for item, opinion_no in prepared:
                 opinion_id = _id("popi")
                 inserted = connection.execute(
                     """
@@ -857,9 +1165,9 @@ class PatrolRepository:
                     (
                         opinion_id, task_id, project_id,
                         item.get("stage_id", ""), item.get("stage_name", ""),
-                        item.get("opinion_no", index + 1), item.get("title", ""),
+                        opinion_no, item.get("title", ""),
                         item.get("risk_level", ""), item.get("content", ""),
-                        index + 1, now, now,
+                        opinion_no, now, now,
                     ),
                 )
                 added += 1 if inserted.rowcount else 0
@@ -1094,6 +1402,13 @@ class PatrolRepository:
             for opinion in opinions:
                 opinion["photos"] = photo_map.get(opinion["opinion_id"], [])
         task["opinions"] = opinions
+        with self._connect() as connection:
+            log_rows = connection.execute(
+                "SELECT * FROM patrol_task_edit_logs WHERE task_id = ? "
+                "ORDER BY created_at DESC, log_id LIMIT 30", (task_id,)
+            ).fetchall()
+        task["edit_logs"] = [dict(log) for log in log_rows]
+        self._attach_task_extras([task])
         return task
 
     def list_tasks(
@@ -1109,6 +1424,7 @@ class PatrolRepository:
         date_from: str = "",
         date_to: str = "",
         keyword: str = "",
+        order_by: str = "created",
     ) -> dict[str, Any]:
         page = max(1, int(page))
         size = max(1, min(100, int(size)))
@@ -1120,13 +1436,20 @@ class PatrolRepository:
                 # 未提供有效身份的请求不应看到任何任务（含历史空指派任务）
                 clauses.append("1 = 0")
             else:
-                clauses.append("assigned_user_id = ?")
-                params.append(user_id)
+                clauses.append(
+                    "(EXISTS (SELECT 1 FROM patrol_task_users tu WHERE tu.task_id = {ref}.task_id AND tu.user_id = ?) "
+                    "OR assigned_user_id = ?)"
+                )
+                params.extend([user_id, user_id])
         elif assigned_user_id.strip():
-            clauses.append("assigned_user_id = ?")
+            clauses.append(
+                "EXISTS (SELECT 1 FROM patrol_task_users tu WHERE tu.task_id = {ref}.task_id AND tu.user_id = ?)"
+            )
             params.append(assigned_user_id.strip())
         if line.strip():
-            clauses.append("line = ?")
+            clauses.append(
+                "EXISTS (SELECT 1 FROM patrol_task_lines pl WHERE pl.task_id = {ref}.task_id AND pl.line = ?)"
+            )
             params.append(line.strip())
         if status_value in TASK_STATUSES:
             clauses.append("status = ?")
@@ -1143,20 +1466,27 @@ class PatrolRepository:
         if date_to.strip():
             clauses.append("substr(created_at, 1, 10) <= ?")
             params.append(date_to.strip())
-        where = "WHERE " + " AND ".join(clauses)
+        where_count = "WHERE " + " AND ".join(c.replace("{ref}", "patrol_tasks") for c in clauses)
+        where_list = "WHERE " + " AND ".join(c.replace("{ref}", "t") for c in clauses)
+        recent_expr = ("MAX(t.created_at, t.updated_at, "
+                       "COALESCE((SELECT MAX(r.created_at) FROM patrol_records r WHERE r.task_id = t.task_id), ''), "
+                       "COALESCE((SELECT MAX(h.updated_at) FROM patrol_hazards h WHERE h.task_id = t.task_id), ''), "
+                       "COALESCE((SELECT MAX(o.updated_at) FROM patrol_task_opinions o WHERE o.task_id = t.task_id), ''))")
+        order_sql = (recent_expr + " DESC, t.task_id") if order_by == "recent" else "t.created_at DESC, t.task_id"
         with self._connect() as connection:
             total = int(connection.execute(
-                f"SELECT COUNT(*) FROM patrol_tasks {where}", params
+                f"SELECT COUNT(*) FROM patrol_tasks {where_count}", params
             ).fetchone()[0])
             rows = connection.execute(
                 f"""
                 SELECT t.*,
                        (SELECT COUNT(*) FROM patrol_hazards h WHERE h.task_id = t.task_id) AS hazard_count,
                        (SELECT COUNT(*) FROM patrol_hazards h WHERE h.task_id = t.task_id AND h.status != 'closed') AS open_hazard_count,
-                       (SELECT COUNT(*) FROM patrol_records r WHERE r.task_id = t.task_id) AS record_count
+                       (SELECT COUNT(*) FROM patrol_records r WHERE r.task_id = t.task_id) AS record_count,
+                       {recent_expr} AS recent_time
                 FROM patrol_tasks t
-                {where}
-                ORDER BY t.created_at DESC, t.task_id
+                {where_list}
+                ORDER BY {order_sql}
                 LIMIT ? OFFSET ?
                 """,
                 [*params, size, (page - 1) * size],
@@ -1166,19 +1496,36 @@ class PatrolRepository:
             task = self._task(row)
             task["hazard_count"] = row["hazard_count"]
             task["record_count"] = row["record_count"]
+            task["recent_time"] = row["recent_time"] or task["created_at"]
             items.append(task)
+        self._attach_task_extras(items)
         return {"total": total, "page": page, "size": size, "items": items}
 
     def update_task(self, task_id: str, data: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
         current = self.get_task(task_id, actor)
         if not actor.get("is_admin"):
             raise ValueError("无权限更新任务。")
+        # 多值：优先数组（前端编辑必带），否则沿用现状
+        has_lines = data.get("lines") is not None or data.get("line_list") is not None
+        has_users = (data.get("user_ids") is not None or data.get("assigned_user_ids") is not None)
+        lines_in = _as_list(data.get("lines") or data.get("line_list")) if has_lines else list(current.get("lines") or [])
+        uids_in = _as_list(data.get("user_ids") or data.get("assigned_user_ids")) if has_users else [
+            a["user_id"] for a in (current.get("assignees") or [])
+        ]
+        names_in = _as_list(data.get("user_names") or data.get("assigned_user_names")) if has_users else [
+            a.get("user_name", "") for a in (current.get("assignees") or [])
+        ]
         name = _text(data.get("name", current["name"]), field="任务名称", required=True, maximum=120)
-        line = _text(data.get("line", current["line"]), field="线路", maximum=60)
+        line = _text(data.get("line", current["line"]), field="线路", maximum=200)
         location_desc = _text(data.get("location_desc", current["location_desc"]), field="位置描述", maximum=200)
         requirement = _text(data.get("requirement", current["requirement"]), field="巡查内容", maximum=2000)
-        assigned_user_id = _text(data.get("assigned_user_id", current["assigned_user_id"]), field="指派账号", maximum=40)
-        assigned_user_name = _text(data.get("assigned_user_name", current["assigned_user_name"]), field="指派账号名称", maximum=60)
+        assigned_user_id = _text(data.get("assigned_user_id", current["assigned_user_id"]), field="指派账号", maximum=200)
+        assigned_user_name = _text(data.get("assigned_user_name", current["assigned_user_name"]), field="指派账号名称", maximum=200)
+        if not line and lines_in:
+            line = lines_in[0]
+        if not assigned_user_id and uids_in:
+            assigned_user_id = uids_in[0]
+            assigned_user_name = names_in[0] if names_in else uids_in[0]
         monitor_frequency = _text(data.get("monitor_frequency", current["monitor_frequency"]), field="监测频率", maximum=2000)
         monitor_points = _text(data.get("monitor_points", current["monitor_points"]), field="监测点位", maximum=2000)
         warning_threshold = _text(data.get("warning_threshold", current["warning_threshold"]), field="预警阈值", maximum=2000)
@@ -1192,13 +1539,33 @@ class PatrolRepository:
                     assigned_user_id = ?, assigned_user_name = ?,
                     monitor_frequency = ?, monitor_points = ?, warning_threshold = ?,
                     emergency_plan = ?, report_requirement = ?, review_opinion = ?,
-                    updated_at = ?
+                    updated_at = ?, info_updated_at = ?
                 WHERE task_id = ?
                 """,
                 (name, line, location_desc, requirement, assigned_user_id, assigned_user_name,
                  monitor_frequency, monitor_points, warning_threshold,
-                 emergency_plan, report_requirement, review_opinion, _now(), task_id),
+                 emergency_plan, report_requirement, review_opinion, _now(), _now(), task_id),
             )
+        final_lines = lines_in or ([line] if line else [])
+        final_uids = uids_in or ([assigned_user_id] if assigned_user_id else [])
+        final_names = names_in if names_in else ([assigned_user_name] if assigned_user_name else [])
+        users = [
+            {"user_id": u, "user_name": (final_names[i] if i < len(final_names) else u)}
+            for i, u in enumerate(final_uids)
+        ]
+        self._sync_task_assignments(task_id, final_lines, users)
+        # 基础信息编辑留痕（记录修改字段）
+        info_keys = [k for k in ("name", "lines", "user_ids", "location_desc", "requirement")
+                     if data.get(k) is not None]
+        if info_keys:
+            now_log = _now()
+            summary = "，".join(_FIELD_CN.get(k, k) for k in info_keys)
+            with self._lock, self._connect() as connection:
+                connection.execute(
+                    "INSERT INTO patrol_task_edit_logs(log_id, task_id, operator, summary, created_at) "
+                    "VALUES(?, ?, ?, ?, ?)",
+                    (_id("pedit"), task_id, actor.get("name") or actor.get("user_id") or "", summary, now_log),
+                )
         return self.get_task(task_id, actor)
 
     def set_task_status(self, task_id: str, status_value: str, actor: dict[str, Any]) -> dict[str, Any]:
@@ -1256,10 +1623,15 @@ class PatrolRepository:
             if not user_id:
                 clauses.append("1 = 0")
             else:
-                clauses.append("assigned_user_id = ?")
-                params.append(user_id)
+                clauses.append(
+                    "(EXISTS (SELECT 1 FROM patrol_task_users tu WHERE tu.task_id = patrol_tasks.task_id AND tu.user_id = ?) "
+                    "OR assigned_user_id = ?)"
+                )
+                params.extend([user_id, user_id])
         if line.strip():
-            clauses.append("line = ?")
+            clauses.append(
+                "EXISTS (SELECT 1 FROM patrol_task_lines pl WHERE pl.task_id = patrol_tasks.task_id AND pl.line = ?)"
+            )
             params.append(line.strip())
         if date_from.strip():
             clauses.append("substr(created_at, 1, 10) >= ?")
@@ -1830,7 +2202,10 @@ class PatrolDictUpdatePayload(BaseModel):
 
 class PatrolTaskCreatePayload(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    line: str = Field(default="", max_length=60)
+    lines: list[str] = Field(default_factory=list)
+    user_ids: list[str] = Field(default_factory=list)
+    user_names: list[str] = Field(default_factory=list)
+    line: str = Field(default="", max_length=200)
     location_desc: str = Field(default="", max_length=200)
     requirement: str = Field(default="", max_length=2000)
     assigned_user_id: str = Field(default="", max_length=40)
@@ -1847,6 +2222,8 @@ class PatrolTaskCreatePayload(BaseModel):
 class PatrolWorkflowTaskPayload(BaseModel):
     workflow_id: str = Field(min_length=1, max_length=80)
     project_id: str = Field(default="", max_length=80)
+    stage_id: str = Field(default="", max_length=80)
+    stage_name: str = Field(default="", max_length=100)
     project_name: str = Field(min_length=1, max_length=120)
     initiator_id: str | int | None = None
     initiator_name: str = Field(default="", max_length=60)
@@ -1857,11 +2234,14 @@ class PatrolWorkflowTaskPayload(BaseModel):
 
 class PatrolTaskUpdatePayload(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    line: str | None = Field(default=None, max_length=60)
+    lines: list[str] | None = None
+    user_ids: list[str] | None = None
+    user_names: list[str] | None = None
+    line: str | None = Field(default=None, max_length=200)
     location_desc: str | None = Field(default=None, max_length=200)
     requirement: str | None = Field(default=None, max_length=2000)
-    assigned_user_id: str | None = Field(default=None, max_length=40)
-    assigned_user_name: str | None = Field(default=None, max_length=60)
+    assigned_user_id: str | None = Field(default=None, max_length=200)
+    assigned_user_name: str | None = Field(default=None, max_length=200)
     monitor_frequency: str | None = Field(default=None, max_length=2000)
     monitor_points: str | None = Field(default=None, max_length=2000)
     warning_threshold: str | None = Field(default=None, max_length=2000)
@@ -2003,13 +2383,15 @@ def list_tasks(
     date_from: str = "",
     date_to: str = "",
     keyword: str = "",
+    sort: str = "created",
     actor: dict = Depends(get_actor),
     repo: PatrolRepository = Depends(get_repository),
 ) -> dict[str, Any]:
     return repo.list_tasks(
         actor,
         page=page, size=size, line=line, status_value=status, task_type_value=task_type,
-        assigned_user_id=assigned_user_id, date_from=date_from, date_to=date_to, keyword=keyword,
+        assigned_user_id=assigned_user_id, date_from=date_from, date_to=date_to,
+        keyword=keyword, order_by=sort if sort in {"created", "recent"} else "created",
     )
 
 
