@@ -19,7 +19,7 @@ function formatDispatchTime(iso) {
 }
 
 Page({
-  data: { tasks: [], loading: false, firstLoad: true, username: '', stats: { total: 0, pending: 0, done: 0, hazard: 0 } },
+  data: { tasks: [], loading: false, firstLoad: true, username: '', error: '', stats: { total: 0, pending: 0, done: 0, hazard: 0 } },
   onShow() { this.load() },
   onPullDownRefresh() { this.load().finally(() => wx.stopPullDownRefresh()) },
   async load() {
@@ -43,9 +43,10 @@ Page({
         done: tasks.filter(t => t.status === 'completed' || t.status === 'closed').length,
         hazard: tasks.reduce((s, t) => s + (t.open_hazard_count || 0), 0)
       }
-      this.setData({ tasks, stats, username: wx.getStorageSync('patrol_username') || '' })
+      this.setData({ tasks, stats, error: '', username: wx.getStorageSync('patrol_username') || '' })
     } catch (e) {
-      wx.showToast({ title: e.message, icon: 'none' })
+      // 加载失败给出可见提示，避免“白屏/看似无任务”的错觉
+      this.setData({ error: e && e.message ? e.message : '加载失败，请下拉刷新重试' })
     } finally {
       this.setData({ loading: false, firstLoad: false })
     }

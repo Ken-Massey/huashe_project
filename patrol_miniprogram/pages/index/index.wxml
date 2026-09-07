@@ -62,6 +62,14 @@
     </view>
   </view>
 
+  <!-- 加载失败提示（不再静默/看似白屏） -->
+  <view wx:elif="{{ error && !loading }}" class="empty">
+    <view class="empty-icon">⚠️</view>
+    <view class="empty-title">任务加载失败</view>
+    <view class="empty-sub">{{ error }}</view>
+    <button class="retry-btn" size="mini" bindtap="load">重新加载</button>
+  </view>
+
   <!-- 空状态 -->
   <view wx:elif="{{ !loading }}" class="empty">
     <view class="empty-icon">📋</view>

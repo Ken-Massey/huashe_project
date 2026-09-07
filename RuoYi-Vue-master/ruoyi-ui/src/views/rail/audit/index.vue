@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="app-container case-review-page">
     <header class="page-head">
       <div>
@@ -1194,6 +1194,7 @@ export default {
     } else if (this.$route.query.sessionId) {
       this.openRouteAuditSession()
     } else {
+      if (typeof this.dropStaleDraftForRouteContext === 'function') this.dropStaleDraftForRouteContext()
       this.restoreAuditDraft()
       this.loadArchiveSelection()
     }
@@ -1832,6 +1833,23 @@ export default {
           mainCaseDocumentId: this.mainCaseDocumentId,
           documentSummaries
         }))
+      } catch (error) {}
+    },
+    // 从项目档案“前往审核”带 projectId/stageId 进入时，只允许恢复属于同一项目+阶段的草稿；
+    // 否则丢弃上个案例的草稿，避免新案例的资料/会话区残留旧案例内容（视为全新审核）。
+    dropStaleDraftForRouteContext() {
+      const routeProjectId = String(this.$route.query.projectId || '')
+      const routeStageId = String(this.$route.query.stageId || '')
+      if (!routeProjectId && !routeStageId) return
+      try {
+        const raw = sessionStorage.getItem(AUDIT_DRAFT_KEY)
+        if (!raw) return
+        const draft = JSON.parse(raw)
+        const savedProjectId = String(draft.selectedArchiveProjectId || '')
+        const savedStageId = String(draft.selectedArchiveStageId || '')
+        const projectMatches = !routeProjectId || savedProjectId === routeProjectId
+        const stageMatches = !routeStageId || savedStageId === routeStageId
+        if (!(projectMatches && stageMatches)) sessionStorage.removeItem(AUDIT_DRAFT_KEY)
       } catch (error) {}
     },
     restoreAuditDraft() {

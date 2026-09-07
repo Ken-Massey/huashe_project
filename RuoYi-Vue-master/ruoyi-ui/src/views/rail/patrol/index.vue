@@ -37,6 +37,12 @@
                 <el-option label="施工巡查" value="construction" />
               </el-select>
             </el-form-item>
+            <el-form-item label="排序">
+              <el-select v-model="query.sort" style="width: 140px" @change="search">
+                <el-option label="按发布时间" value="created" />
+                <el-option label="按最近修改" value="recent" />
+              </el-select>
+            </el-form-item>
             <el-form-item label="关键词">
               <el-input v-model.trim="query.keyword" clearable placeholder="任务名/编号" style="width: 150px" />
             </el-form-item>
@@ -50,8 +56,11 @@
 
         <section class="panel table-panel">
           <el-table v-loading="loading" :data="tasks" border stripe>
-            <el-table-column prop="task_no" label="任务编号" min-width="140" fixed>
+            <el-table-column prop="task_no" label="任务编号" width="128" fixed show-overflow-tooltip>
               <template slot-scope="scope"><span class="mono">{{ scope.row.task_no }}</span></template>
+            </el-table-column>
+            <el-table-column label="最近修改" width="148">
+              <template slot-scope="scope">{{ scope.row.recent_time ? formatTime(scope.row.recent_time) : '-' }}</template>
             </el-table-column>
             <el-table-column prop="name" label="任务名称" min-width="180" show-overflow-tooltip />
             <el-table-column prop="line" label="线路" width="90" />
@@ -98,10 +107,10 @@
     <el-dialog :title="editingTaskId ? '编辑巡查任务' : '新建巡查任务'" :visible.sync="taskDialogVisible" width="560px">
       <el-form ref="taskFormRef" :model="taskForm" :rules="taskRules" label-width="90px">
         <el-form-item label="任务名称" prop="name"><el-input v-model="taskForm.name" maxlength="120" placeholder="如：新街口站东侧基坑巡查" /></el-form-item>
-        <el-form-item label="线路"><el-select v-model="taskForm.line" clearable filterable style="width: 100%"><el-option v-for="item in lineDict" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="线路"><el-select v-model="taskForm.lines" multiple filterable collapse-tags placeholder="可多选" style="width: 100%"><el-option v-for="item in lineDict" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
         <el-form-item label="位置描述"><el-input v-model="taskForm.location_desc" maxlength="200" placeholder="站点/区间/里程" /></el-form-item>
         <el-form-item label="巡查内容"><el-input v-model="taskForm.requirement" type="textarea" :rows="3" maxlength="2000" placeholder="巡查要求、符合性核查要点" /></el-form-item>
-        <el-form-item label="指派巡查员"><el-select v-model="taskForm.assigned_user_id" filterable style="width: 100%" @change="onAccountChange"><el-option v-for="u in patrolAccounts" :key="u.userId" :label="u.nickName || u.userName" :value="String(u.userId)" /></el-select></el-form-item>
+        <el-form-item label="指派巡查员"><el-select v-model="taskForm.user_ids" multiple filterable collapse-tags placeholder="可多选" style="width: 100%" @change="onAssigneesChange"><el-option v-for="u in patrolAccounts" :key="u.userId" :label="u.nickName || u.userName" :value="String(u.userId)" /></el-select></el-form-item>
         <el-form-item label="备注"><el-input v-model="taskForm.remark" maxlength="1000" /></el-form-item>
       </el-form>
       <span slot="footer"><el-button @click="taskDialogVisible = false">取 消</el-button><el-button type="primary" :loading="taskSaving" @click="submitTask">提 交</el-button></span>
@@ -110,6 +119,12 @@
     <!-- 任务详情 -->
     <el-dialog title="巡查任务详情" :visible.sync="detailVisible" width="920px" top="4vh">
       <div v-if="detail" v-loading="detailLoading" class="detail-body">
+        <!-- 项目信息栏标题 + 行内编辑入口（放顶部，避免埋在页面底部看不到） -->
+        <div class="detail-basic-bar">
+          <span class="detail-basic-title">项目信息</span>
+          <el-button v-if="!inlineEdit" v-hasPermi="['rail:patrol:manage']" size="mini" type="warning" plain icon="el-icon-edit-outline" @click="beginInlineEdit">行内编辑</el-button>
+          <el-button v-else v-hasPermi="['rail:patrol:manage']" size="mini" type="info" plain icon="el-icon-close" @click="inlineEdit = false">收起编辑</el-button>
+        </div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="任务编号"><span class="mono">{{ detail.task_no }}</span></el-descriptions-item>
           <el-descriptions-item label="状态"><el-tag size="small" :type="taskTagType(detail)">{{ taskStatusLabel(detail) }}</el-tag><el-tag size="small" type="info" style="margin-left:6px">{{ taskTypeLabel(detail.task_type) }}</el-tag></el-descriptions-item>
@@ -120,7 +135,21 @@
           <el-descriptions-item label="巡查内容" :span="2">{{ detail.requirement || '-' }}</el-descriptions-item>
           <el-descriptions-item label="派发人">{{ detail.dispatcher || '-' }}</el-descriptions-item>
           <el-descriptions-item label="派发时间">{{ formatTime(detail.dispatch_time || detail.created_at) }}</el-descriptions-item>
+          <el-descriptions-item label="最近修改(基本信息)" :span="2">{{ formatTime(detail.info_updated_at || detail.created_at) }}<span v-if="detail.edit_logs && detail.edit_logs.length" class="muted">（编辑{{ detail.edit_logs.length }}次）</span></el-descriptions-item>
         </el-descriptions>
+
+        <!-- 行内编辑基本信息 -->
+        <div v-if="inlineEdit" class="inline-edit">
+          <div class="inline-edit-title">编辑基本信息（名称/线路/指派/位置/内容）</div>
+          <el-form label-width="90px" size="small">
+            <el-form-item label="任务名称"><el-input v-model="editDraft.name" maxlength="120" /></el-form-item>
+            <el-form-item label="线路"><el-select v-model="editDraft.lines" multiple filterable collapse-tags placeholder="可多选" style="width: 100%"><el-option v-for="item in lineDict" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+            <el-form-item label="指派巡查员"><el-select v-model="editDraft.user_ids" multiple filterable collapse-tags placeholder="可多选" style="width: 100%" @change="inlineOnAssignees"><el-option v-for="u in patrolAccounts" :key="u.userId" :label="u.nickName || u.userName" :value="String(u.userId)" /></el-select></el-form-item>
+            <el-form-item label="位置"><el-input v-model="editDraft.location_desc" maxlength="200" /></el-form-item>
+            <el-form-item label="巡查内容"><el-input v-model="editDraft.requirement" type="textarea" :rows="2" maxlength="2000" /></el-form-item>
+            <el-form-item><el-button type="primary" size="small" :loading="inlineSaving" @click="saveInlineEdit">保存</el-button><el-button size="small" @click="inlineEdit = false">取消</el-button></el-form-item>
+          </el-form>
+        </div>
 
         <!-- 监测方案 -->
         <div class="monitor-card">
@@ -148,10 +177,10 @@
           </div>
         </div>
 
-        <!-- 审核意见现场核查（默认收起：只显示意见数/状态/更新时间） -->
-        <div class="opinion-card" v-if="detail.opinions && detail.opinions.length">
+        <!-- 审核意见现场核查（默认收起：只显示意见数/状态/更新时间；顶部综合评价卡始终可见） -->
+        <div class="opinion-card" v-if="(detail.opinions && detail.opinions.length) || detail.overall_conclusion || detail.final_opinion">
           <div class="opinion-head op-headbar" @click="toggleOpinionAll">
-            <span class="opinion-title">📋 审核意见现场核查（{{ detail.opinions.length }}）</span>
+            <span class="opinion-title">📋 审核意见现场核查<span v-if="detail.opinions && detail.opinions.length">（{{ detail.opinions.length }}）</span></span>
             <span class="op-counts">
               <span class="op-c op-done">完成{{ opStat.done }}</span>
               <span class="op-c op-wait">待核查{{ opStat.photo_taken }}</span>
@@ -159,11 +188,17 @@
               <span class="op-c op-ret" v-if="opStat.returned">退回{{ opStat.returned }}</span>
             </span>
             <span class="muted op-last">更新{{ opStat.lastTime }}</span>
-            <span class="opinion-arrow">{{ opOpenAll ? '收起 ▴' : '展开详情 ▾' }}</span>
+            <span class="opinion-arrow" v-if="detail.opinions && detail.opinions.length">{{ opOpenAll ? '收起 ▴' : '展开详情 ▾' }}</span>
             <span style="display:flex; gap:8px; margin-left:auto">
               <el-button v-if="detail.source_workflow_id" size="mini" type="text" icon="el-icon-download" @click.stop="exportOpinionWord">导出Word</el-button>
               <el-button v-hasPermi="['rail:patrol:manage','rail:patrol:review']" size="mini" type="text" icon="el-icon-refresh" @click.stop="doSyncOpinions">同步</el-button>
             </span>
+          </div>
+          <!-- D120 综合评价卡：终审综合评价 / 终审人意见，与逐条意见明确区分 -->
+          <div v-if="detail.overall_conclusion || detail.final_opinion" class="overall-review-banner">
+            <div class="or-head"><el-tag size="mini" type="warning" effect="dark">综合评价</el-tag><span class="or-hint">终审通过时的综合评价与终审人意见，供逐条核查时对照</span></div>
+            <p v-if="detail.overall_conclusion" class="or-conclusion">{{ detail.overall_conclusion }}</p>
+            <p v-if="detail.final_opinion" class="or-final"><b>终审人意见：</b>{{ detail.final_opinion }}</p>
           </div>
           <template v-if="opOpenAll">
             <div v-for="o in detail.opinions" :key="o.opinion_id" class="opinion-item">
@@ -414,8 +449,9 @@ export default {
       taskSaving: false, hazardSaving: false, dictSaving: false, shotFiles: [], shotFileList: [], editingHazardId: null, editingTaskId: null, hazardTaskId: null,
       tasks: [], legacyTasks: [], total: 0, statistics: {},
       lineDict: [], hazardTypeDict: [], riskDict: [], patrolAccounts: [],
-      query: { page: 1, size: 20, line: '', status: '', task_type: '', keyword: '' },
+      query: { page: 1, size: 20, line: '', status: '', task_type: '', sort: 'created', keyword: '' },
       detailVisible: false, detail: null, hazardOpen: {}, photoUrls: {}, videoUrls: {}, shotUrls: {}, videoVisible: false, videoUrl: '',
+      inlineEdit: false, inlineSaving: false, editDraft: {},
       opinionPhotos: {}, opOpen: {}, opOpenAll: false, opReviewVisible: false, opReviewForm: { result: 'pass', comment: '' }, opReviewTarget: null,
       taskDialogVisible: false, taskForm: {}, taskRules: { name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }] },
       hazardDialogVisible: false, hazardForm: {}, hazardRules: { description: [{ required: true, message: '请输入隐患描述', trigger: 'blur' }] },
@@ -530,12 +566,53 @@ export default {
         this.patrolAccounts = rows.filter(u => u.canMini === '1' || u.canMini === 1)
       } catch (e) { this.patrolAccounts = [] }
     },
-    onAccountChange(uid) {
-      const u = this.patrolAccounts.find(x => String(x.userId) === uid)
-      this.taskForm.assigned_user_name = u ? (u.nickName || u.userName) : ''
+    onAssigneesChange(ids) {
+      this.taskForm.user_names = (ids || []).map(uid => {
+        const u = this.patrolAccounts.find(x => String(x.userId) === uid)
+        return u ? (u.nickName || u.userName) : uid
+      })
+    },
+    async beginInlineEdit() {
+      if (!this.detail) return
+      if (!this.patrolAccounts.length) await this.loadAccounts()
+      const assignees = this.detail.assignees || []
+      this.editDraft = {
+        name: this.detail.name || '',
+        lines: this.detail.lines || (this.detail.line ? [this.detail.line] : []),
+        user_ids: assignees.map(a => String(a.user_id)),
+        user_names: assignees.map(a => a.user_name || a.user_id),
+        location_desc: this.detail.location_desc || '',
+        requirement: this.detail.requirement || ''
+      }
+      this.inlineEdit = true
+    },
+    inlineOnAssignees(ids) {
+      this.editDraft.user_names = (ids || []).map(uid => {
+        const u = this.patrolAccounts.find(x => String(x.userId) === uid)
+        return u ? (u.nickName || u.userName) : uid
+      })
+    },
+    async saveInlineEdit() {
+      if (!this.editDraft.name || !String(this.editDraft.name).trim()) { this.$message.warning('任务名称不能为空'); return }
+      this.inlineSaving = true
+      try {
+        const payload = {
+          name: this.editDraft.name.trim(),
+          lines: this.editDraft.lines || [],
+          user_ids: this.editDraft.user_ids || [],
+          user_names: this.editDraft.user_names || [],
+          location_desc: this.editDraft.location_desc || '',
+          requirement: this.editDraft.requirement || ''
+        }
+        await updatePatrolTask(this.detail.task_id, payload)
+        this.$message.success('基本信息已保存')
+        this.inlineEdit = false
+        this.refresh()
+        this.reloadDetail()
+      } finally { this.inlineSaving = false }
     },
     search() { this.query.page = 1; this.loadTasks(); this.loadStatistics() },
-    resetQuery() { this.query = { page: 1, size: 20, line: '', status: '', task_type: '', keyword: '' }; this.refresh() },
+    resetQuery() { this.query = { page: 1, size: 20, line: '', status: '', task_type: '', sort: 'created', keyword: '' }; this.refresh() },
     taskTypeLabel(t) { return t === 'pre_construction' ? '施工前核查' : (t === 'construction' ? '施工巡查' : (t || '-')) },
     filterStatus(s) { this.query.status = s; this.query.page = 1; this.loadTasks() },
     onPageChange(p) { this.query.page = p; this.loadTasks() },
@@ -563,7 +640,11 @@ export default {
     formatTime(v) { if (!v) return '-'; return String(v).replace('T', ' ').slice(0, 19) },
 
     async openNewTask() {
-      this.taskForm = { name: '', line: '', location_desc: '', requirement: '', assigned_user_id: '', assigned_user_name: '', remark: '' }
+      this.taskForm = {
+        name: '', line: '', lines: [], location_desc: '', requirement: '', remark: '',
+        user_ids: [], user_names: [], assigned_user_id: '', assigned_user_name: '',
+        monitor_frequency: '', monitor_points: '', warning_threshold: '', emergency_plan: '', report_requirement: ''
+      }
       this.editingTaskId = null
       await this.loadAccounts()
       this.taskDialogVisible = true
@@ -573,11 +654,15 @@ export default {
         if (!valid) return
         this.taskSaving = true
         try {
+          const payload = { ...this.taskForm }
+          delete payload.line
+          delete payload.assigned_user_id
+          delete payload.assigned_user_name
           if (this.editingTaskId) {
-            await updatePatrolTask(this.editingTaskId, this.taskForm)
+            await updatePatrolTask(this.editingTaskId, payload)
             this.$message.success('任务已更新')
           } else {
-            await createPatrolTask(this.taskForm)
+            await createPatrolTask(payload)
             this.$message.success('任务已创建')
           }
           this.taskDialogVisible = false
@@ -587,7 +672,17 @@ export default {
       })
     },
     async openEditTask(task) {
-      this.taskForm = { name: task.name, line: task.line, location_desc: task.location_desc, requirement: task.requirement, assigned_user_id: task.assigned_user_id, assigned_user_name: task.assigned_user_name, remark: task.remark }
+      const assignees = task.assignees || []
+      this.taskForm = {
+        name: task.name, line: '', lines: task.lines || (task.line ? [task.line] : []),
+        location_desc: task.location_desc, requirement: task.requirement, remark: task.remark,
+        user_ids: assignees.map(a => String(a.user_id)),
+        user_names: assignees.map(a => a.user_name || a.user_id),
+        assigned_user_id: '', assigned_user_name: '',
+        monitor_frequency: task.monitor_frequency || '', monitor_points: task.monitor_points || '',
+        warning_threshold: task.warning_threshold || '', emergency_plan: task.emergency_plan || '',
+        report_requirement: task.report_requirement || ''
+      }
       this.editingTaskId = task.task_id
       await this.loadAccounts()
       this.taskDialogVisible = true
@@ -1030,4 +1125,31 @@ export default {
 .op-del { position: absolute; top: 0; right: 0; width: 18px; height: 18px; line-height: 16px; text-align: center; background: rgba(0,0,0,.6); color: #fff; border-radius: 0 0 0 6px; cursor: pointer; z-index: 3; }
 .opinion-ops { margin-top: 8px; }
 .file-hack { position: absolute; left: -9999px; opacity: 0; width: 1px; height: 1px; }
+
+/* 行内编辑基本信息 */
+.detail-basic-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.detail-basic-title { font-size: 14px; font-weight: 700; color: #303133; }
+.inline-edit { margin: 0 0 14px; padding: 14px 16px; background: #fffdf6; border: 1px dashed #f0d0a0; border-radius: 8px; }
+.inline-edit-title { font-size: 13px; font-weight: 600; color: #e6a23c; margin-bottom: 10px; }
+
+/* D120 综合评价卡（与逐条意见区分） */
+.overall-review-banner {
+  margin: 12px 0 14px;
+  padding: 12px 14px;
+  background: #fffdf3;
+  border: 1px solid #f3e2b9;
+  border-left: 4px solid #e6a23c;
+  border-radius: 6px;
+}
+.or-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.or-hint { font-size: 12px; color: #a08a4f; }
+.or-conclusion {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #5a4a20;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.or-final { margin: 0; font-size: 13px; color: #8a6d1f; white-space: pre-wrap; word-break: break-all; }
 </style>

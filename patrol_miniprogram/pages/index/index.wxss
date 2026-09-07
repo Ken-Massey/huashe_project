@@ -79,3 +79,4 @@
 .empty-title { font-size: 30rpx; color: #606266; }
 .empty-sub { margin-top: 10rpx; font-size: 24rpx; color: #a8abb2; }
 .loading-tip { padding: 20rpx 0 40rpx; text-align: center; color: #909399; font-size: 24rpx; }
+.retry-btn { margin-top: 28rpx; background: #2f7d69; color: #fff; border-radius: 40rpx; padding: 0 44rpx; font-size: 26rpx; line-height: 2.4; }

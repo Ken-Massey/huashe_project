@@ -21,6 +21,12 @@ function request(path, options = {}) {
           resolve(res.data)
         } else if (res.statusCode === 401) {
           wx.removeStorageSync('patrol_token')
+          wx.removeStorageSync('patrol_username')
+          const app = getApp()
+          if (app) {
+            app.globalData.token = ''
+            app.globalData.userName = ''
+          }
           wx.reLaunch({ url: '/pages/login/login' })
           reject(new Error('登录已过期'))
         } else {

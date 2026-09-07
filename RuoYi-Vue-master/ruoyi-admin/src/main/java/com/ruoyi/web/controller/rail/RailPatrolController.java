@@ -97,32 +97,66 @@ public class RailPatrolController
 
     // ---- 任务 ----
 
-    /** 指派账号合法性校验：assigned_user_id 非空时必须是系统内存在的用户，避免出现孤儿指派。 */
+    /** 指派账号合法性校验：assigned_user_id/user_ids/assigned_user_ids 中的每个 ID 都必须是系统内用户。 */
     private void validateAssignedUser(Map<String, Object> request)
     {
-        Object value = request == null ? null : request.get("assigned_user_id");
+        if (request == null)
+        {
+            return;
+        }
+        java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+        collectIds(request.get("assigned_user_id"), ids);
+        collectIds(request.get("assigned_user_ids"), ids);
+        collectIds(request.get("user_ids"), ids);
+        for (String id : ids)
+        {
+            if (id.isEmpty())
+            {
+                continue;
+            }
+            Long userId;
+            try
+            {
+                userId = Long.parseLong(id);
+            }
+            catch (NumberFormatException exception)
+            {
+                throw new ServiceException("指派账号ID无效：" + id);
+            }
+            SysUser user = userService.selectUserById(userId);
+            if (user == null)
+            {
+                throw new ServiceException("指派账号不存在（ID：" + id + "），请先在系统管理中创建该用户。");
+            }
+        }
+    }
+
+    private void collectIds(Object value, java.util.Set<String> target)
+    {
         if (value == null)
         {
             return;
         }
-        String id = String.valueOf(value).trim();
-        if (id.isEmpty())
+        if (value instanceof java.util.Collection)
         {
-            return;
+            for (Object item : (java.util.Collection<?>) value)
+            {
+                if (item != null)
+                {
+                    target.add(String.valueOf(item).trim());
+                }
+            }
         }
-        Long userId;
-        try
+        else
         {
-            userId = Long.parseLong(id);
-        }
-        catch (NumberFormatException exception)
-        {
-            throw new ServiceException("指派账号ID无效：" + id);
-        }
-        SysUser user = userService.selectUserById(userId);
-        if (user == null)
-        {
-            throw new ServiceException("指派账号不存在（ID：" + id + "），请先在系统管理中创建该用户。");
+            String text = String.valueOf(value).trim();
+            for (String part : text.split("[,，、;；]"))
+            {
+                if (!part.trim().isEmpty())
+                {
+                    target.add(part.trim());
+                }
+            }
         }
     }
 
@@ -141,6 +175,7 @@ public class RailPatrolController
             @RequestParam(name = "line", defaultValue = "") String line,
             @RequestParam(name = "status", defaultValue = "") String status,
             @RequestParam(name = "taskType", defaultValue = "") String taskType,
+            @RequestParam(name = "sort", defaultValue = "created") String sort,
             @RequestParam(name = "assignedUserId", defaultValue = "") String assignedUserId,
             @RequestParam(name = "keyword", defaultValue = "") String keyword,
             @RequestParam(name = "dateFrom", defaultValue = "") String dateFrom,
@@ -152,6 +187,7 @@ public class RailPatrolController
         query.put("line", line);
         query.put("status", status);
         query.put("task_type", taskType);
+        query.put("sort", sort);
         query.put("assigned_user_id", assignedUserId);
         query.put("keyword", keyword);
         query.put("date_from", dateFrom);

@@ -243,6 +243,7 @@ public class RailAuditWorkflowController extends BaseController
         payload.put("workflow_id", String.valueOf(workflow.getWorkflowId()));
         payload.put("project_id", workflow.getProjectId());
         payload.put("stage_id", workflow.getStageId());
+        payload.put("stage_name", workflow.getStageName());
         payload.put("project_name", workflow.getProjectName());
         payload.put("initiator_id", workflow.getInitiatorId());
         payload.put("initiator_name", workflow.getInitiatorName());
