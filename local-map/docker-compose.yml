@@ -7,18 +7,17 @@ services:
       - "127.0.0.1:7070:8080"
     environment:
       PBF_PATH: /nominatim/nanjing.osm.pbf
-      NOMINATIM_PASSWORD: change-this-before-production
+      NOMINATIM_PASSWORD: 123456
       IMPORT_WIKIPEDIA: "false"
       IMPORT_US_POSTCODES: "false"
     volumes:
-      - ./data/nanjing.osm.pbf:/nominatim/nanjing.osm.pbf:ro
-      - ./nominatim-data:/var/lib/postgresql/14/main
+      - ./data/nanjing.osm.pbf:/nominatim/nanjing.osm.pbf
+      - ./nominatim-data:/var/lib/postgresql/16/main
 
   tiles:
-    image: maptiler/tileserver-gl:v4.12.1
+    image: maptiler/tileserver-gl:v5.6.0
     container_name: huashe-nanjing-map
     restart: unless-stopped
-    command: -p 8080 /data/nanjing.mbtiles
     ports:
       - "127.0.0.1:7071:8080"
     volumes:

@@ -244,7 +244,7 @@
                   <div class="location-section-head">
                     <div>
                       <strong>项目位置</strong>
-                      <span>默认南京范围，点击地图或填写位置后自动检索 50 米内项目</span>
+                      <span>文件识别或选择地址候选后自动保存坐标，并检索 50 米内项目</span>
                     </div>
                     <el-button size="mini" icon="el-icon-refresh" :loading="nearbyLoading" @click="refreshNearbyProjects">刷新附近项目</el-button>
                   </div>
@@ -283,9 +283,9 @@
                       </div>
                     </el-form-item>
                   </div>
-                  <div v-if="localMapStyleUrl" ref="amapContainer" class="amap-container" />
+                  <div v-if="localMapStyleUrl" ref="amapContainer" class="amap-container amap-preview" />
                   <div v-else class="amap-fallback">
-                    未配置本地南京地图。地址仍可自动识别；配置 VUE_APP_LOCAL_MAP_STYLE_URL 后可点选地图微调坐标。
+                    未配置本地南京地图。文件识别或选择地址候选后仍会自动保存坐标。
                   </div>
                   <div class="nearby-project-box">
                     <div class="nearby-project-head">
@@ -1327,14 +1327,13 @@ export default {
             style: this.localMapStyleUrl,
             zoom: 12,
             center: current || [118.7969, 32.0603],
-            attributionControl: true
+            attributionControl: true,
+            localIdeographFontFamily: 'Microsoft YaHei'
           })
-          this.amap.on('click', event => {
-            const lnglat = event && event.lngLat
-            if (!lnglat) return
-            this.setProjectCoordinate(lnglat.lng, lnglat.lat, true)
+          this.amap.on('load', () => {
+            this.applyOfflineMapLabels()
+            this.syncAmapMarker()
           })
-          this.amap.on('load', () => this.syncAmapMarker())
         }
         this.syncAmapMarker()
         if (current) {
@@ -1361,6 +1360,16 @@ export default {
         }, delay)
       })
     },
+    applyOfflineMapLabels() {
+      if (!this.amap || !this.amap.isStyleLoaded()) return
+      const layers = (this.amap.getStyle() || {}).layers || []
+      layers.forEach(layer => {
+        const textField = layer && layer.layout && layer.layout['text-field']
+        if (layer.type === 'symbol' && textField === '{name}') {
+          this.amap.setLayoutProperty(layer.id, 'text-field', '{name:latin}')
+        }
+      })
+    },
     searchLocationCandidates(keyword) {
       const text = String(keyword || '').trim()
       if (!text) return Promise.resolve([])
@@ -1375,7 +1384,13 @@ export default {
       this.searchLocationCandidates(queryString).then(rows => callback(rows))
     },
     showLocationSuggestions() {
-      if (this.locationCandidates.length) this.locationSuggestionsVisible = true
+      const query = String(this.form.location || '').trim()
+      if (!query) return
+      if (this.locationCandidates.length) {
+        this.locationSuggestionsVisible = true
+        return
+      }
+      this.locationInputChanged(query)
     },
     locationInputChanged(value) {
       if (this.locationInputTimer) clearTimeout(this.locationInputTimer)
@@ -1438,8 +1453,7 @@ export default {
       if (!force && this.currentLngLat()) return Promise.resolve(null)
       const rawLocation = String(this.form.location || '').trim()
       if (!force && this.locationManuallyCleared && !rawLocation) return Promise.resolve(null)
-      const rawProjectName = String(this.form.project_name || '').trim()
-      const keyword = rawLocation || rawProjectName
+      const keyword = rawLocation
       if (!keyword) return Promise.resolve(null)
       const query = /南京|江苏|鼓楼|玄武|秦淮|建邺|雨花台|栖霞|江宁|浦口|六合|溧水|高淳/.test(keyword)
         ? keyword
@@ -2374,9 +2388,10 @@ export default {
         this.landUseSelection = this.landUseTypes.includes(fields.land_use_type) ? fields.land_use_type : '其他'
       }
       this.sanitizeAuditOptionValues()
-      if (fields.project_name || fields.project_stage) {
-        this.$nextTick(() => this.projectNameChanged(this.form.project_name))
-      }
+      this.$nextTick(() => {
+        if (fields.project_name || fields.project_stage) this.projectNameChanged(this.form.project_name)
+        if (fields.location) this.autoLocateProject(true)
+      })
     },
     sanitizeAuditOptionValues() {
       if (this.form.relative_relationship && !this.relations.includes(this.form.relative_relationship)) {
@@ -3707,6 +3722,7 @@ export default {
 .location-suggestion span { overflow: hidden; color: #7a8581; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .location-suggestion-empty { padding: 12px; color: #8a9490; font-size: 13px; }
 .amap-container { width: 100%; height: 260px; overflow: hidden; border: 1px solid #dce5e1; border-radius: 8px; background: #eef4f1; }
+.amap-preview { cursor: default; }
 .amap-fallback { display: flex; min-height: 92px; align-items: center; justify-content: center; border: 1px dashed #bfd1cb; border-radius: 8px; background: #f6fbf9; color: #65746f; line-height: 1.7; text-align: center; }
 .nearby-project-box { margin-top: 12px; }
 .nearby-project-box ::v-deep .el-table { border: 1px solid #e4e9ed; border-radius: 8px; overflow: hidden; }

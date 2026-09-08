@@ -1,3 +1,28 @@
 RuoYi-Vue-master/ruoyi-admin/src/main/resources/application-druid.yml
 RuoYi-Vue-master/ruoyi-admin/src/main/resources/logback.xml
 RuoYi-Vue-master/ruoyi-admin/src/main/resources/application-druid.yml
+
+# Local offline-map source files and generated geocoding database.
+/local-map/data/*.osm.pbf
+/local-map/data/*.mbtiles
+/local-map/data/*.invalid/
+/local-map/nominatim-data/
+
+# Runtime logs are local diagnostics, not source code.
+/logs/*.log
+
+# Project materials are managed by the application knowledge base, not Git.
+/华设/
+/复函/
+/规范/
+/技术规程/
+/安全评估报告/
+/项目安全评估/
+/项目审查资料归类/
+/小微工程-报审资料及回函/
+/保护区智能系统界面.pptx
+/典型案例.md
+/城市轨道交通保护区管理智能体研究与应用.docx
+/城市轨道交通保护区管理智能体研究与应用.pptx
+/城市轨道交通结构安全保护技术规程-DBT32-4351-2022.pdf
+/城市轨道交通结构安全保护技术规程.md

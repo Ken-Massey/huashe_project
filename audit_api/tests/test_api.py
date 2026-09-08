@@ -74,6 +74,20 @@ class ApiDefinitionTests(unittest.TestCase):
         self.assertEqual(fields["dewatering_method"], "管井降水")
         self.assertIn("钻孔灌注桩", fields["support_components"])
 
+    def test_recognize_letter_prefers_explicit_project_fields(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "滨湖社区项目安全性影响预评估报告.txt"
+            source.write_text(
+                "项目名称：滨湖社区综合服务中心项目\n"
+                "项目阶段：施工图设计阶段\n"
+                "工程概况：本项目基坑邻近地铁2号线。",
+                encoding="utf-8",
+            )
+            result = recognize_letter(source)
+
+        self.assertEqual(result["fields"]["project_name"], "滨湖社区综合服务中心项目")
+        self.assertEqual(result["fields"]["project_stage"], "设计")
+
     def test_explicit_artifact_files_hide_internal_task_outputs(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

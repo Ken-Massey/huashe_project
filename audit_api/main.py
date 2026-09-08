@@ -18,6 +18,7 @@ except ImportError:  # Python 3.8 compatibility
     from typing_extensions import Annotated
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -47,6 +48,15 @@ app = FastAPI(
     title="杞ㄩ亾浜ら€氫繚鎶ゅ尯鏅鸿兘瀹℃牳Python鏈嶅姟",
     version="1.0.0",
     description="为 RuoYi-Vue 提供智能审核、知识库、项目档案和回函管理接口。",
+)
+# The local geocoder is consumed directly by the browser. The API itself only
+# listens on loopback, and this rule restricts browser access to local origins.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$",
+    allow_credentials=False,
+    allow_methods=["GET"],
+    allow_headers=["*"],
 )
 app.include_router(patrol_router)
 tasks = TaskManager(TASK_ROOT, max_workers=MAX_WORKERS)

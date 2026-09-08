@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import axios from 'axios'
 
 const uploadConfig = { timeout: 120000, headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false } }
 
@@ -17,6 +18,10 @@ export function getTaskResult(id) { return request({ url: `/rail/tasks/${id}/res
 export function getTaskFiles(id) { return request({ url: `/rail/tasks/${id}/files`, method: 'get' }) }
 export function getLocalGeocoderStatus() { return request({ url: '/rail/local-geocoder/status', method: 'get' }) }
 export function searchLocalGeocoder(query, limit = 8) {
+  const localUrl = String(process.env.VUE_APP_LOCAL_GEOCODER_SEARCH_URL || '').trim()
+  if (localUrl) {
+    return axios.get(localUrl, { params: { query, limit }, timeout: 10000 }).then(response => response.data)
+  }
   return request({ url: '/rail/local-geocoder/search', method: 'get', params: { query, limit } })
 }
 export function downloadTaskFile(taskId, fileId) {

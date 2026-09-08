@@ -189,6 +189,41 @@ def _infer_project_type(compact: str) -> str | None:
     return None
 
 
+def _clean_project_name(value: str) -> str:
+    value = re.sub(r"\s+", "", str(value or ""))
+    value = re.sub(r"^(?:项目名称|工程名称|建设项目名称)[：:]?", "", value)
+    value = re.split(r"(?:建设单位|建设地点|项目地点|工程地点|项目阶段|工程阶段)[：:]?", value, maxsplit=1)[0]
+    return value.strip("，。；;、:：-—_（）()[]【】")[:120]
+
+
+def _project_name_from_filename(filename: str) -> str:
+    stem = Path(filename).stem.strip()
+    candidate = re.split(
+        r"(?:安全(?:性)?(?:影响)?(?:预)?评估报告|安全评价报告|专项评估报告|"
+        r"施工方案|专项施工方案|设计方案|监测方案|征求意见(?:函)?|报审函)",
+        stem,
+        maxsplit=1,
+    )[0]
+    candidate = _clean_project_name(candidate)
+    if re.search(r"(?:工程|项目)$", candidate):
+        return candidate
+    match = re.search(r"(.{2,120}?(?:工程|项目))", stem)
+    return _clean_project_name(match.group(1)) if match else ""
+
+
+def _location_from_document_lines(lines: list[str]) -> str:
+    labels = "建设地点|建设地址|工程地点|工程地址|项目地点|项目地址|项目位置|工程位置|建设场址|拟建地点"
+    for line in lines[:200]:
+        match = re.search(rf"(?:{labels})\s*(?:为|位于|在)?\s*[：:]?\s*(.+)", line)
+        if not match:
+            continue
+        value = re.split(r"(?:建设规模|项目规模|工程规模|建设内容|用地面积|占地面积)[：:]?", match.group(1), maxsplit=1)[0]
+        value = re.sub(r"\s+", "", value).strip("，。；;、:：")
+        if 3 <= len(value) <= 180:
+            return value
+    return ""
+
+
 def recognize_letter(source_file: Path) -> dict[str, Any]:
     """Classify a project document and extract conservative, form-ready values."""
     raw_text, metadata = _letter_plain_text(source_file)
@@ -199,15 +234,32 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
     filename = source_file.stem
     document_type, type_confidence, type_reason = _infer_document_type(source_file.name, text)
 
+    project_name = ""
+    for line in lines[:120]:
+        field_match = re.search(r"(?:建设项目名称|项目名称|工程名称)\s*[：:]\s*(.+)", line)
+        if field_match:
+            candidate = _clean_project_name(field_match.group(1))
+            if len(candidate) >= 2:
+                project_name = candidate
+                break
     project_match = re.search(
         r"关于[《“\"]?(.{2,120}?(?:工程|项目))[》”\"]?(?:规划|设计|施工|方案|征求|报审|的函|函)",
         head,
         re.S,
     )
-    project_name = re.sub(r"\s+", "", project_match.group(1)) if project_match else ""
+    if not project_name and project_match:
+        project_name = _clean_project_name(project_match.group(1))
     if not project_name:
-        filename_match = re.search(r"(.{2,100}?(?:工程|项目))", filename)
-        project_name = filename_match.group(1).strip("（）()_- ") if filename_match else ""
+        title_match = re.search(
+            r"(?:^|\n)[《“\"]?(.{2,120}?(?:工程|项目))[》”\"]?(?:安全(?:性)?(?:影响)?(?:预)?评估报告|"
+            r"安全评价报告|专项评估报告|施工方案|设计方案|监测方案)",
+            head,
+            re.S,
+        )
+        if title_match:
+            project_name = _clean_project_name(title_match.group(1))
+    if not project_name:
+        project_name = _project_name_from_filename(filename)
 
     applicant = ""
     for line in lines[:45]:
@@ -221,6 +273,16 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
         (value for value in ("出让", "规划", "设计", "施工") if value in filename or value in head),
         None,
     )
+    for line in lines[:120]:
+        stage_match = re.search(r"(?:项目阶段|工程阶段|建设阶段)\s*[：:]\s*(.{1,30})", line)
+        if stage_match:
+            stage_text = stage_match.group(1)
+            project_stage = next(
+                (value for value in ("出让", "规划", "设计", "施工") if value in stage_text),
+                project_stage,
+            )
+            if project_stage:
+                break
     if not project_stage:
         if document_type == "design_scheme":
             project_stage = "设计"
@@ -287,6 +349,7 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
     other_involvements = [
         value for value in ("红线", "接口", "临时结构", "协议") if value in compact
     ]
+    project_location = _location_from_document_lines(lines)
     fields = {
         "project_name": project_name or None,
         "applicant": applicant or None,
@@ -329,6 +392,7 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
         "is_complex_geology_or_hydrology": True if re.search(r"承压水|复杂水文|复杂地质|富水", compact) else None,
         "support_components": support_components or None,
         "protection_zone_location": protection_zone_location,
+        "location": project_location or None,
     }
     recognized = {key: value for key, value in fields.items() if value not in (None, "", [])}
     document_role, role_confidence, role_reason = _classify_project_document(source_file.name, text)
