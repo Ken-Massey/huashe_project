@@ -14,13 +14,42 @@ from audit_api.agent_conversation import AgentConversationRepository
 from audit_api.dynamic_audit import run_dynamic_regulation_audit
 from audit_api.knowledge_base import KnowledgeBase
 from audit_api.regulation_rules import RegulationRepository, RuleEngine, SafeExpression, extract_regulation
-from audit_api.main import _artifact_files, app
+from audit_api.main import _artifact_files, _audit_result_to_review_items, app
 from audit_api.services import _classify_project_document, _infer_document_type, _prepare_stage1_input, recognize_letter
 from audit_api.task_manager import TaskManager
 from deepke_case_extract.pipelines import run_audit_one_plan, run_match_new_case_advice
 
 
 class ApiDefinitionTests(unittest.TestCase):
+    def test_formal_rag_review_items_require_a_traceable_library_clause(self):
+        result = {
+            "dynamic_regulation_audit": {
+                "risk_report": {
+                    "findings": [
+                        {
+                            "title": "无规程依据的风险提示", "analysis": "案例资料缺少监测方案。",
+                            "recommendation": "补充监测方案。", "risk_level": "高", "judgement": "risk",
+                            "regulation_evidence": [],
+                        },
+                        {
+                            "title": "有规程依据的审核事项", "analysis": "案例资料未说明控制措施。",
+                            "recommendation": "按规程补充控制措施。", "risk_level": "中", "judgement": "risk",
+                            "regulation_evidence": [{
+                                "document_title": "城市轨道交通保护技术规程.pdf", "section": "5.2.3",
+                                "quote": "施工前应编制专项保护方案。",
+                            }],
+                        },
+                    ]
+                }
+            }
+        }
+        items = _audit_result_to_review_items(result)
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[0]["source"]["basis_type"], "manual_review")
+        self.assertEqual(items[1]["title"], "有规程依据的审核事项")
+        self.assertEqual(items[1]["basis"][0]["document"], "城市轨道交通保护技术规程.pdf")
+        self.assertEqual(items[1]["basis"][0]["clause"], "5.2.3")
+
     def test_project_document_classifier_distinguishes_letter_and_case(self):
         letter_role, _, _ = _classify_project_document(
             "关于规划方案征求地铁意见的函.pdf",
@@ -291,7 +320,7 @@ class AgentServiceTests(unittest.TestCase):
             with patch("audit_api.agent.urllib.request.urlopen", return_value=FakeResponse()) as mocked:
                 result = service.complete_json("only json", "return findings", max_tokens=20)
         self.assertEqual(result["findings"][0]["title"], "净距不足")
-            self.assertEqual(mocked.call_count, 1)
+        self.assertEqual(mocked.call_count, 1)
 
 
 class AgentConversationRepositoryTests(unittest.TestCase):

@@ -196,6 +196,27 @@ def _clean_project_name(value: str) -> str:
     return value.strip("，。；;、:：-—_（）()[]【】")[:120]
 
 
+def _clean_applicant(value: str) -> str:
+    value = str(value or "").strip()
+    value = re.sub(
+        r"^(?:(?:委托|收函|报审|建设|申请|业主|发函)单位|委托方|建设方)\s*[：:]\s*",
+        "",
+        value,
+    )
+    return value.strip("，。；;、:：-—_（）()[]【】")[:200]
+
+
+def _clean_metro_section(value: str) -> str:
+    value = str(value or "").strip()
+    value = re.sub(
+        r"^(?:南京地铁|地铁|轨道交通)?\s*(?:S\d+|\d+|[一二三四五六七八九十]+)\s*号线(?:线路)?\s*",
+        "",
+        value,
+    )
+    match = re.search(r"([\u4e00-\u9fffA-Za-z0-9]+站)\s*(?:~|～|至|-)\s*([\u4e00-\u9fffA-Za-z0-9]+站)(?:区间隧道|区间)?", value)
+    return f"{match.group(1)}～{match.group(2)}" if match else ""
+
+
 def _project_name_from_filename(filename: str) -> str:
     stem = Path(filename).stem.strip()
     candidate = re.split(
@@ -218,10 +239,45 @@ def _location_from_document_lines(lines: list[str]) -> str:
         if not match:
             continue
         value = re.split(r"(?:建设规模|项目规模|工程规模|建设内容|用地面积|占地面积)[：:]?", match.group(1), maxsplit=1)[0]
+        value = re.split(r"[。；;]", value, maxsplit=1)[0]
         value = re.sub(r"\s+", "", value).strip("，。；;、:：")
-        if 3 <= len(value) <= 180:
+        # 邻接道路、方位和影响关系不能定位项目落点，不能作为项目坐标来源。
+        if re.search(r"(?:东|西|南|北|左|右)侧|紧邻|相邻|邻近|毗邻|周边|范围内|沿线|之间", value):
+            continue
+        # 仅保留具备可地理编码特征的明确项目地点，而非说明性文字。
+        if not re.search(r"(?:市|区|县|镇|街道|路|街|巷|大道|广场|园区|站|号|桥|河|村)", value):
+            continue
+        if 3 <= len(value) <= 120:
             return value
     return ""
+
+
+def _location_from_project_label(value: str) -> str:
+    """Extract a geocodable project site from a project name or source filename.
+
+    This is intentionally conservative: a generic project title is not a location.
+    """
+    text = Path(str(value or "")).stem
+    text = re.sub(r"^\s*(?:\[.*?\]|【.*?】|\d+[、.\-_]*)\s*", "", text)
+    text = re.sub(r"\s+", "", text)
+    text = re.split(
+        r"(?:安全(?:性)?(?:影响)?(?:预)?评估报告|安全评价报告|专项评估报告|施工方案|"
+        r"设计方案|监测方案|征求意见(?:函)?|报审函)",
+        text,
+        maxsplit=1,
+    )[0]
+    # Keep the place-name portion before the project work suffix, for example
+    # “未央出行产业园基坑工程” -> “未央出行产业园”.
+    text = re.split(r"(?:基坑|桩基|管线|道路|桥梁|房建|改造|复建|新建|配套).{0,20}(?:工程|项目)$", text, maxsplit=1)[0]
+    text = re.sub(r"(?:工程|项目)$", "", text)
+    text = text.strip("，。；;、:：-—_（）()[]【】")
+    if not (3 <= len(text) <= 80):
+        return ""
+    if not re.search(r"(?:市|区|县|镇|街道|路|街|巷|大道|广场|园区|产业园|园|站|号|桥|河|村)", text):
+        return ""
+    if re.search(r"(?:影响评价|评估|设计研究院|有限公司|集团|施工方案)$", text):
+        return ""
+    return text
 
 
 def recognize_letter(source_file: Path) -> dict[str, Any]:
@@ -266,7 +322,7 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
         candidate = line.rstrip("：:")
         if re.search(r"(?:公司|集团|管理局|建设局|指挥部|委员会|人民政府|设计院)$", candidate):
             if 3 <= len(candidate) <= 80 and candidate not in project_name:
-                applicant = candidate
+                applicant = _clean_applicant(candidate)
                 break
 
     project_stage = next(
@@ -311,10 +367,9 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
     metro_line_match = re.search(r"((?:地铁|轨道交通|南京地铁)?\s*(?:S\d+|\d+|[一二三四五六七八九十]+)\s*号线)", text)
     metro_line_name = re.sub(r"\s+", "", metro_line_match.group(1)) if metro_line_match else ""
     metro_line_name = re.sub(r"^(?:地铁|轨道交通|南京地铁)", "", metro_line_name)
-    metro_section_name = _first_text_match(text, [
+    metro_section_name = _clean_metro_section(_first_text_match(text, [
         r"((?:[\u4e00-\u9fffA-Za-z0-9]+站)\s*[~～至-]\s*(?:[\u4e00-\u9fffA-Za-z0-9]+站)(?:区间|区间隧道)?)",
-        r"((?:区间|隧道)[^。\n]{0,40}(?:左线|右线|上下行|上行|下行)?)",
-    ])
+    ]))
 
     protection_zone_location = None
     if "特别保护区" in compact:
@@ -349,7 +404,11 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
     other_involvements = [
         value for value in ("红线", "接口", "临时结构", "协议") if value in compact
     ]
-    project_location = _location_from_document_lines(lines)
+    project_location = (
+        _location_from_project_label(project_name)
+        or _location_from_project_label(source_file.name)
+        or _location_from_document_lines(lines)
+    )
     fields = {
         "project_name": project_name or None,
         "applicant": applicant or None,

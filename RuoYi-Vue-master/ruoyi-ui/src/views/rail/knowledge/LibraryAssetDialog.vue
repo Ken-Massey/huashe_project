@@ -45,6 +45,25 @@
           style="width:100%"
         />
       </el-form-item>
+      <template v-if="libraryType === 'regulation'">
+        <el-form-item label="依据来源">
+          <el-radio-group v-model="sourceTier">
+            <el-radio label="primary">知识库主规程</el-radio>
+            <el-radio label="external_supplement">外部补充规范</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <template v-if="sourceTier === 'external_supplement'">
+          <p class="source-hint">外部文件会先归档为“待核验”且不参与审核；请填写可追溯来源，管理员核验后再启用。</p>
+          <div class="source-fields">
+            <el-form-item label="版本或标准编号" required><el-input v-model.trim="regulationVersion" maxlength="80" placeholder="例如：GB 12345-2025" /></el-form-item>
+            <el-form-item label="发布机构" required><el-input v-model.trim="sourcePublisher" maxlength="200" /></el-form-item>
+            <el-form-item label="检索日期" required><el-date-picker v-model="sourceRetrievedAt" type="date" value-format="yyyy-MM-dd" style="width:100%" /></el-form-item>
+            <el-form-item label="生效信息" required><el-input v-model.trim="sourceEffectiveDate" maxlength="40" placeholder="例如：2025-01-01施行" /></el-form-item>
+            <el-form-item label="稳定来源链接" required><el-input v-model.trim="sourceUrl" maxlength="1000" placeholder="https://..." /></el-form-item>
+            <el-form-item label="备注"><el-input v-model.trim="sourceNote" maxlength="1000" type="textarea" :rows="2" /></el-form-item>
+          </div>
+        </template>
+      </template>
     </el-form>
     <div v-if="uploading" class="processing-note">
       <i class="el-icon-loading" /> {{ processingText || '正在处理文件...' }}
@@ -81,6 +100,7 @@ export default {
       files: [],
       fileNames: {},
       folderId: '',
+      sourceTier: 'primary', regulationVersion: '', sourcePublisher: '', sourceUrl: '', sourceEffectiveDate: '', sourceRetrievedAt: '', sourceNote: '',
       uploading: false,
       processingText: '',
       folderCascaderProps: {
@@ -125,6 +145,10 @@ export default {
     },
     hasMissingDisplayName() {
       return this.files.some(file => !this.displayName(file))
+    },
+    hasIncompleteExternalSource() {
+      return this.libraryType === 'regulation' && this.sourceTier === 'external_supplement' &&
+        (!this.regulationVersion || !this.sourcePublisher || !this.sourceUrl || !this.sourceEffectiveDate || !this.sourceRetrievedAt)
     }
   },
   watch: {
@@ -160,6 +184,13 @@ export default {
       this.files = []
       this.fileNames = {}
       this.folderId = ''
+      this.sourceTier = 'primary'
+      this.regulationVersion = ''
+      this.sourcePublisher = ''
+      this.sourceUrl = ''
+      this.sourceEffectiveDate = ''
+      this.sourceRetrievedAt = ''
+      this.sourceNote = ''
       this.uploading = false
       this.processingText = ''
       if (this.$refs.picker) this.$refs.picker.clear()
@@ -191,7 +222,16 @@ export default {
       const body = new FormData()
       body.append('file', file)
       body.append('title', this.displayName(file))
+      if (this.regulationVersion) body.append('version', this.regulationVersion)
       if (this.selectedFolderId) body.append('folder_id', this.selectedFolderId)
+      if (this.sourceTier === 'external_supplement') {
+        body.append('source_tier', this.sourceTier)
+        body.append('source_publisher', this.sourcePublisher)
+        body.append('source_url', this.sourceUrl)
+        body.append('source_effective_date', this.sourceEffectiveDate)
+        body.append('source_retrieved_at', this.sourceRetrievedAt)
+        body.append('source_note', this.sourceNote)
+      }
       const result = await importRegulation(body)
       await this.waitForTask(result.task_id)
     },
@@ -214,6 +254,10 @@ export default {
     async submit() {
       if (this.hasMissingDisplayName) {
         this.$message.warning('请填写每个文件的文件名称')
+        return
+      }
+      if (this.hasIncompleteExternalSource) {
+        this.$message.warning('外部补充规范必须填写版本/标准编号、发布机构、生效信息、稳定来源链接和检索日期')
         return
       }
       this.uploading = true
@@ -269,6 +313,9 @@ export default {
 .recognition-hint { margin: 10px 0 0; color: #7f898f; font-size: 13px; line-height: 1.6; }
 .asset-form { margin-top: 16px; }
 .asset-form ::v-deep .el-select { width: 100%; }
+.source-hint { margin: -2px 0 10px; color: #b26a20; font-size: 12px; line-height: 1.6; }
+.source-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.source-fields .el-form-item:nth-child(5),.source-fields .el-form-item:nth-child(6) { grid-column: 1 / -1; }
 .processing-note { margin-top: 12px; color: #317764; font-size: 13px; }
 .processing-note i { margin-right: 6px; }
 </style>

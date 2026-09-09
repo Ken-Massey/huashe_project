@@ -49,11 +49,11 @@ app = FastAPI(
     version="1.0.0",
     description="为 RuoYi-Vue 提供智能审核、知识库、项目档案和回函管理接口。",
 )
-# The local geocoder is consumed directly by the browser. The API itself only
-# listens on loopback, and this rule restricts browser access to local origins.
+# The local geocoder is consumed through the Java API proxy. Keep CORS available
+# for local maintenance tools that call this service directly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=False,
     allow_methods=["GET"],
     allow_headers=["*"],
@@ -130,6 +130,11 @@ class RegulationFolderPayload(BaseModel):
 
 class RegulationMovePayload(BaseModel):
     folder_id: str | None = Field(default=None, max_length=40)
+
+
+class RegulationSourceVerificationPayload(BaseModel):
+    verified: bool
+    note: str = Field(default="", max_length=1000)
 
 
 class CaseFolderPayload(BaseModel):
@@ -487,7 +492,9 @@ def _public_regulation(item: dict[str, Any]) -> dict[str, Any]:
     fields = (
         "regulation_id", "title", "version", "original_file_name", "extraction_method",
         "text_length", "paragraph_count", "clause_count", "status", "active", "rule_count",
-        "published_count", "folder_id", "folder_name", "created_at", "updated_at",
+        "published_count", "folder_id", "folder_name", "source_tier", "source_publisher",
+        "source_url", "source_effective_date", "source_retrieved_at", "source_verification",
+        "source_verified_at", "source_note", "created_at", "updated_at",
     )
     return {key: item.get(key) for key in fields}
 
@@ -1162,6 +1169,32 @@ def _review_item_basis_from_finding(item: dict[str, Any]) -> list[dict[str, Any]
     return basis
 
 
+def _project_file_basis_from_finding(item: dict[str, Any]) -> list[dict[str, Any]]:
+    basis = []
+    for evidence in item.get("case_evidence") or []:
+        if not isinstance(evidence, dict):
+            continue
+        page = evidence.get("source_page") or evidence.get("page")
+        basis.append({
+            "document": Path(str(evidence.get("document_title") or "项目资料")).name,
+            "clause": f"第{page}页" if page else "相关段落",
+            "quote": _short_text(evidence.get("quote") or evidence.get("chunk_text") or evidence.get("text"), 800),
+        })
+    return basis
+
+
+def _has_traceable_regulation_basis(basis: Any) -> bool:
+    """A formal RAG opinion must identify a library document and a clause."""
+    for entry in basis if isinstance(basis, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("document") or entry.get("document_title") or "").strip() and str(
+            entry.get("clause") or entry.get("section") or ""
+        ).strip():
+            return True
+    return False
+
+
 def _rationale_text(value: Any, maximum: int = 360) -> str:
     """Turn stored audit evidence into short, human-readable audit facts."""
     if isinstance(value, (dict, list)):
@@ -1215,7 +1248,13 @@ def _build_review_item_rationale(item: dict[str, Any]) -> dict[str, Any]:
         or entry.get("quote", "")
         for entry in evidence
     )
-    rule = _short_text(evidence_summary, 520) if evidence_summary else "未找到可引用的规程条款或资料定位，需补充审核依据。"
+    basis_type = str(source.get("basis_type") or "regulation")
+    if basis_type == "project_file":
+        rule = _short_text(evidence_summary, 520) if evidence_summary else "项目资料中未定位到可复核的原文位置。"
+    elif basis_type == "manual_review":
+        rule = "未找到适用规程条款或可复核项目资料，需人工复核。"
+    else:
+        rule = _short_text(evidence_summary, 520) if evidence_summary else "未找到可引用的规程条款或资料定位，需补充审核依据。"
     judgement = str(source.get("judgement") or source.get("review_status") or "")
     judgement_map = {
         "non_compliant": "识别结果提示相关资料或控制要求尚需补充、复核或落实。",
@@ -1223,11 +1262,12 @@ def _build_review_item_rationale(item: dict[str, Any]) -> dict[str, Any]:
         "warning": "存在需要重点关注并落实控制措施的风险提示。",
         "needs_review": "现有资料需要由专业人员进一步复核确认。",
     }
-    rule_judgement = judgement_map.get(judgement) or (
+    rule_judgement = ("该项依据项目已提交资料形成补充、核验或落实要求，不作为规程符合性结论。"
+        if basis_type == "project_file" else judgement_map.get(judgement) or (
         "结合资料事实与引用依据，形成需处理的审核事项。"
         if evidence
         else "本条尚缺少可核验依据，仅可作为待补充、待复核事项，不能直接作为正式审核结论。"
-    )
+    ))
     title = _short_text(item.get("title") or "该审核事项", 100)
     return {
         "facts": facts,
@@ -1527,10 +1567,15 @@ def _audit_result_to_review_items(result: dict[str, Any]) -> list[dict[str, Any]
     items: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
-    def append_item(value: dict[str, Any]) -> None:
+    def append_item(value: dict[str, Any], *, require_regulation_basis: bool = False) -> None:
         title = _short_text(value.get("title") or value.get("topic") or "审核事项", 200)
         conclusion, recommendation = _extract_action_opinion(value)
         if not conclusion and not recommendation:
+            return
+        basis = value.get("basis") or []
+        if require_regulation_basis and not _has_traceable_regulation_basis(basis):
+            # A case-only risk signal is useful during retrieval, but it is not a
+            # formal review opinion until a clause from the regulation library is found.
             return
         if _looks_like_source_title(title) or _looks_like_evaluation_title(title):
             title = _derive_review_title(conclusion or recommendation, fallback="审核事项")
@@ -1543,7 +1588,7 @@ def _audit_result_to_review_items(result: dict[str, Any]) -> list[dict[str, Any]
             "title": title,
             "conclusion": conclusion,
             "risk_level": _short_text(value.get("risk_level") or value.get("severity"), 40),
-            "basis": value.get("basis") or [],
+            "basis": basis,
             "recommendation": recommendation,
             "source": value.get("source") or {},
         })
@@ -1554,14 +1599,18 @@ def _audit_result_to_review_items(result: dict[str, Any]) -> list[dict[str, Any]
             continue
         if finding.get("judgement") == "compliant":
             continue
+        regulation_basis = _review_item_basis_from_finding(finding)
+        project_basis = _project_file_basis_from_finding(finding)
+        has_regulation_basis = _has_traceable_regulation_basis(regulation_basis)
         append_item({
             "title": finding.get("title") or finding.get("name"),
             "analysis": finding.get("analysis"),
             "recommendation": finding.get("recommendation"),
             "risk_level": finding.get("risk_level") or finding.get("severity"),
-            "basis": _review_item_basis_from_finding(finding),
+            "basis": regulation_basis if has_regulation_basis else project_basis,
             "source": {
-                "kind": "dynamic_regulation_finding",
+                "kind": "dynamic_regulation_finding" if has_regulation_basis else "project_file_reference",
+                "basis_type": "regulation" if has_regulation_basis else ("project_file" if project_basis else "manual_review"),
                 "judgement": finding.get("judgement"),
                 "comparison": finding.get("comparison"),
             },
@@ -1580,7 +1629,7 @@ def _audit_result_to_review_items(result: dict[str, Any]) -> list[dict[str, Any]
                 "review_status": opinion.get("review_status"),
                 "result": opinion.get("result"),
             },
-        })
+        }, require_regulation_basis=True)
 
     details = result.get("audit_details") or {}
     for opinion in details.get("generated_opinions") or []:
@@ -1595,7 +1644,7 @@ def _audit_result_to_review_items(result: dict[str, Any]) -> list[dict[str, Any]
                 "source_function": opinion.get("source_function"),
                 "source_result": opinion.get("source_result"),
             },
-        })
+        }, require_regulation_basis=True)
 
     return _select_key_review_items(items, REVIEW_ITEM_TARGET_COUNT)
 
@@ -1621,6 +1670,7 @@ def _ai_expand_review_items(result: dict[str, Any], items: list[dict[str, Any]])
         "不要写“符合要求、满足要求、风险可控、已落实、低于限值、严于规范”等评价性结论。"
         "每条意见应按技术规程审核逻辑展开，约100至200个汉字，避免一句话过短；应说明缺少/需明确的资料、对应安全控制或复核要求。"
         "每条意见必须明确关联一个已有审核事项的编号，严禁按位置错配资料事实、规程条款或比对结果。"
+        "正式意见的规程名称和条款号由原始事项的知识库依据自动保留；不得补造、删改或留空该依据。"
         f"{profile_style}"
         "只输出JSON，不要输出Markdown。"
     )
@@ -3745,11 +3795,20 @@ async def import_regulation(
     title: Annotated[str | None, Form(description="可选规程名称；不填则使用文件名")] = None,
     version: Annotated[str | None, Form(description="可选版本或发布年份")] = None,
     folder_id: Annotated[str | None, Form(description="可选技术规程文件夹编号")] = None,
+    source_tier: Annotated[str | None, Form(description="primary 或 external_supplement")] = None,
+    source_publisher: Annotated[str | None, Form(description="外部规范发布机构")] = None,
+    source_url: Annotated[str | None, Form(description="外部规范稳定来源链接")] = None,
+    source_effective_date: Annotated[str | None, Form(description="外部规范生效信息")] = None,
+    source_retrieved_at: Annotated[str | None, Form(description="外部规范检索日期")] = None,
+    source_note: Annotated[str | None, Form(description="外部规范核验备注")] = None,
 ) -> dict[str, Any]:
     source = await _save_upload(file, "技术规程知识库", REGULATION_SUFFIXES)
 
     def worker(task_id: str, progress):
-        item = regulations.import_document(source, title, version, progress, folder_id)
+        item = regulations.import_document(
+            source, title, version, progress, folder_id, source_tier or "primary",
+            source_publisher, source_url, source_effective_date, source_retrieved_at, source_note,
+        )
         return {
             "stage": "regulation_import",
             "regulation": _public_regulation(item),
@@ -3877,6 +3936,7 @@ def disable_regulation(regulation_id: str) -> dict[str, Any]:
         item = regulations.set_document_active(regulation_id, False)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="???????") from exc
+    purge_rag_document(regulation_id)
     return {"regulation_id": regulation_id, "active": item["active"], "message": "技术规程已停用。"}
 
 
@@ -3886,7 +3946,24 @@ def restore_regulation(regulation_id: str) -> dict[str, Any]:
         item = regulations.set_document_active(regulation_id, True)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="???????") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"regulation_id": regulation_id, "active": item["active"], "message": "技术规程已恢复。"}
+
+
+@app.post("/api/v1/knowledge/regulations/{regulation_id}/source-verification", dependencies=[Depends(verify_service_token)], tags=["regulations"])
+def verify_regulation_source(
+    regulation_id: str, payload: RegulationSourceVerificationPayload,
+) -> dict[str, Any]:
+    try:
+        item = regulations.verify_external_source(regulation_id, payload.verified, payload.note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="???????") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not item.get("active"):
+        purge_rag_document(regulation_id)
+    return _public_regulation(item)
 
 
 @app.delete("/api/v1/knowledge/regulations/{regulation_id}/permanent", dependencies=[Depends(verify_service_token)], tags=["regulations"])

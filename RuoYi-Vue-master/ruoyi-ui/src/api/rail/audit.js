@@ -18,11 +18,14 @@ export function getTaskResult(id) { return request({ url: `/rail/tasks/${id}/res
 export function getTaskFiles(id) { return request({ url: `/rail/tasks/${id}/files`, method: 'get' }) }
 export function getLocalGeocoderStatus() { return request({ url: '/rail/local-geocoder/status', method: 'get' }) }
 export function searchLocalGeocoder(query, limit = 8) {
-  const localUrl = String(process.env.VUE_APP_LOCAL_GEOCODER_SEARCH_URL || '').trim()
-  if (localUrl) {
-    return axios.get(localUrl, { params: { query, limit }, timeout: 10000 }).then(response => response.data)
-  }
+  const localUrl = 'http://127.0.0.1:8001/api/v1/local-geocoder/search'
+  const searchLocalService = () => axios.get(localUrl, {
+    params: { query, limit },
+    timeout: 10000
+  }).then(response => response.data)
   return request({ url: '/rail/local-geocoder/search', method: 'get', params: { query, limit } })
+    .then(rows => Array.isArray(rows) && rows.length ? rows : searchLocalService())
+    .catch(() => searchLocalService())
 }
 export function downloadTaskFile(taskId, fileId) {
   return request({ url: `/rail/tasks/${taskId}/files/${fileId}`, method: 'get', responseType: 'blob', timeout: 120000 })
@@ -61,6 +64,7 @@ export function renameRegulation(id, name) { return request({ url: `/rail/knowle
 export function generateRegulationRules(id) { return request({ url: `/rail/knowledge/regulations/${id}/generate-rules`, method: 'post' }) }
 export function disableRegulation(id) { return request({ url: `/rail/knowledge/regulations/${id}`, method: 'delete' }) }
 export function restoreRegulation(id) { return request({ url: `/rail/knowledge/regulations/${id}/restore`, method: 'post' }) }
+export function verifyRegulationSource(id, data) { return request({ url: `/rail/knowledge/regulations/${id}/source-verification`, method: 'post', data }) }
 export function deleteRegulation(id) { return request({ url: `/rail/knowledge/regulations/${id}/permanent`, method: 'delete' }) }
 export function downloadRegulationFile(id) { return request({ url: `/rail/knowledge/regulations/${id}/file`, method: 'get', responseType: 'blob', timeout: 120000 }) }
 export function listLibraryAssets(params) { return request({ url: '/rail/knowledge/assets', method: 'get', params }) }

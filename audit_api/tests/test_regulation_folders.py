@@ -116,3 +116,32 @@ def test_default_folders_and_automatic_classification():
         repository._classify_uncategorized_documents()
         item = repository.get_document(document_id)
         assert item["folder_id"] == folders["foundation_pit"]["folder_id"]
+
+
+def test_external_supplement_requires_traceability_and_manual_verification():
+    with TemporaryDirectory() as temp:
+        root = Path(temp)
+        repository = RegulationRepository(root / "regulations.sqlite3", root / "files")
+        source = root / "external-standard.txt"
+        source.write_text("3.1.1 基坑施工应当实施监测。", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="发布机构"):
+            repository.import_document(
+                source, "外部规范", "2026", lambda _: None,
+                source_tier="external_supplement",
+            )
+
+        item = repository.import_document(
+            source, "外部规范", "2026", lambda _: None,
+            source_tier="external_supplement", source_publisher="某标准发布机构",
+            source_url="https://standards.example.test/2026", source_effective_date="2026-01-01施行",
+            source_retrieved_at="2026-09-09",
+        )
+        assert item["active"] == 0
+        assert item["source_verification"] == "pending_verification"
+        with pytest.raises(ValueError, match="尚未完成来源核验"):
+            repository.set_document_active(item["regulation_id"], True)
+
+        verified = repository.verify_external_source(item["regulation_id"], True, "已核对归档原件与发布页")
+        assert verified["source_verification"] == "verified"
+        assert repository.set_document_active(item["regulation_id"], True)["active"] == 1

@@ -118,14 +118,14 @@ public class RailAuditController
         return python.get("/api/v1/tasks/" + taskId + "/files");
     }
 
-    @PreAuthorize("@ss.hasPermi('rail:audit:run')")
+    @PreAuthorize("@ss.hasAnyPermi('" + TASK_PERMISSIONS + "')")
     @GetMapping("/local-geocoder/status")
     public Object localGeocoderStatus()
     {
         return python.get("/api/v1/local-geocoder/status");
     }
 
-    @PreAuthorize("@ss.hasPermi('rail:audit:run')")
+    @PreAuthorize("@ss.hasAnyPermi('" + TASK_PERMISSIONS + "')")
     @GetMapping("/local-geocoder/search")
     public Object localGeocoderSearch(@RequestParam("query") String query,
             @RequestParam(name = "limit", defaultValue = "8") Integer limit)
@@ -471,12 +471,24 @@ public class RailAuditController
     public Object importRegulation(@RequestParam("file") MultipartFile file,
             @RequestParam(name = "title", required = false) String title,
             @RequestParam(name = "version", required = false) String version,
-            @RequestParam(name = "folder_id", required = false) String folderId)
+            @RequestParam(name = "folder_id", required = false) String folderId,
+            @RequestParam(name = "source_tier", required = false) String sourceTier,
+            @RequestParam(name = "source_publisher", required = false) String sourcePublisher,
+            @RequestParam(name = "source_url", required = false) String sourceUrl,
+            @RequestParam(name = "source_effective_date", required = false) String sourceEffectiveDate,
+            @RequestParam(name = "source_retrieved_at", required = false) String sourceRetrievedAt,
+            @RequestParam(name = "source_note", required = false) String sourceNote)
     {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("title", title);
         fields.put("version", version);
         fields.put("folder_id", folderId);
+        fields.put("source_tier", sourceTier);
+        fields.put("source_publisher", sourcePublisher);
+        fields.put("source_url", sourceUrl);
+        fields.put("source_effective_date", sourceEffectiveDate);
+        fields.put("source_retrieved_at", sourceRetrievedAt);
+        fields.put("source_note", sourceNote);
         return python.postFiles("/api/v1/knowledge/regulations", Map.of("file", file), fields);
     }
 
@@ -515,6 +527,14 @@ public class RailAuditController
     public Object restoreRegulation(@PathVariable("regulationId") String regulationId)
     {
         return python.post("/api/v1/knowledge/regulations/" + regulationId + "/restore");
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:knowledge:import')")
+    @PostMapping("/knowledge/regulations/{regulationId}/source-verification")
+    public Object verifyRegulationSource(@PathVariable("regulationId") String regulationId,
+            @RequestBody Map<String, Object> request)
+    {
+        return python.post("/api/v1/knowledge/regulations/" + regulationId + "/source-verification", request);
     }
 
     @PreAuthorize("@ss.hasPermi('rail:knowledge:remove')")

@@ -1,13 +1,17 @@
+import gc
 import tempfile
 import unittest
+import sqlite3
 from pathlib import Path
 
 from audit_api.ima_rag import (
     SemanticIndex,
     _audit_context_hash,
     _audit_packet_batch,
+    _bind_retrieved_regulation_evidence,
     _fast_dimensions,
     _history_context_text,
+    _has_applicable_primary_regulation,
     _packet_context,
     _regulation_reference,
     _regulation_source_name,
@@ -84,16 +88,40 @@ class ImaRagTests(unittest.TestCase):
             _regulation_reference({"document_title": source_file, "section": "3.4.4"}),
             "《城市轨道交通结构安全保护技术规程-DBT32-4351-2022.pdf》 第3.4.4条",
         )
+        self.assertIn(
+            "外部补充规范，已核验",
+            _regulation_reference({"document_title": "外部规范.pdf", "section": "4.2.1", "source_tier": "external_supplement"}),
+        )
+
+    def test_primary_regulation_only_blocks_external_fallback_when_relevant(self):
+        self.assertFalse(_has_applicable_primary_regulation([{"rerank_score": 0.33}]))
+        self.assertTrue(_has_applicable_primary_regulation([{"rerank_score": 0.34}]))
+
+    def test_retrieved_clause_is_bound_when_model_omits_regulation_chunk_id(self):
+        evidence = {
+            "case-1": {"corpus_type": "case"},
+            "reg-1": {"corpus_type": "regulation"},
+        }
+        findings = [{"category": "监测方案", "title": "监测方案待补充", "regulation_evidence": []}]
+        packets = [{
+            "dimension": {"title": "监测方案"},
+            "regulation_hits": [{
+                "chunk_id": "reg-1", "document_title": "城市轨道交通保护技术规程.pdf",
+                "section": "7.2.1", "chunk_text": "施工期间应实施保护监测。",
+            }],
+        }]
+        bound = _bind_retrieved_regulation_evidence(findings, packets, evidence)
+        self.assertEqual(bound[0]["regulation_evidence"][0]["chunk_id"], "reg-1")
+        self.assertTrue(bound[0]["regulation_evidence"][0]["auto_bound"])
 
     def test_fast_dimensions_cover_numeric_and_general_audit_topics(self):
         dimensions = _fast_dimensions()
         titles = {item["title"] for item in dimensions}
 
-        self.assertEqual(len(dimensions), 10)
+        self.assertEqual(len(dimensions), 6)
         self.assertIn("关键控制指标与超限值", titles)
         self.assertIn("原方案与修改方案对比", titles)
         self.assertIn("工程与水文地质", titles)
-        self.assertIn("监测与风险控制", titles)
 
     def test_packet_context_deduplicates_shared_evidence(self):
         case_hit = {
@@ -158,6 +186,55 @@ class ImaRagTests(unittest.TestCase):
                 hits[0]["document_title"],
                 "城市轨道交通结构安全保护技术规程-DBT32-4351-2022.pdf",
             )
+
+    def test_semantic_index_filters_metadata_and_returns_hybrid_rerank_scores(self):
+        with tempfile.TemporaryDirectory() as directory:
+            index = SemanticIndex(Path(directory) / "vectors.sqlite3", FakeEmbeddingAgent())
+            index.sync("regulation", "reg-a", "规程A", [
+                {
+                    "chunk_id": "table", "text": "基坑监测频率应根据风险等级调整。",
+                    "content_type": "table",
+                    "metadata": {"source_kind": "technical_regulation", "knowledge_type": "table"},
+                },
+                {
+                    "chunk_id": "other", "text": "其他工程的一般管理要求。",
+                    "content_type": "qualitative",
+                    "metadata": {"source_kind": "other_source", "knowledge_type": "qualitative"},
+                },
+            ])
+
+            hits = index.search(
+                "基坑监测频率",
+                "regulation",
+                metadata_filters={"source_kind": "technical_regulation"},
+                metadata_preferences={"table": 0.7},
+            )
+
+            self.assertEqual([item["chunk_id"] for item in hits], ["table"])
+            self.assertGreater(hits[0]["bm25_score"], 0)
+            self.assertIn("rerank_score", hits[0])
+            self.assertEqual(hits[0]["metadata"]["knowledge_type"], "table")
+
+    def test_semantic_index_migrates_existing_vector_store_for_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "vectors.sqlite3"
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    """CREATE TABLE rag_chunk(
+                        chunk_id TEXT PRIMARY KEY, corpus_type TEXT NOT NULL, document_id TEXT NOT NULL,
+                        document_title TEXT, source_page INTEGER, section TEXT, content_type TEXT,
+                        chunk_text TEXT NOT NULL, content_hash TEXT NOT NULL, vector_json TEXT NOT NULL,
+                        embedding_model TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1
+                    )"""
+                )
+            connection.close()
+            index = SemanticIndex(database, FakeEmbeddingAgent())
+            del index
+            gc.collect()
+            with sqlite3.connect(database) as connection:
+                columns = {row[1] for row in connection.execute("PRAGMA table_info(rag_chunk)")}
+            connection.close()
+            self.assertIn("metadata_json", columns)
 
     def test_report_validation_rejects_cross_corpus_evidence_and_sorts_risk(self):
         evidence = {

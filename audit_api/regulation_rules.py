@@ -655,7 +655,15 @@ class RegulationRepository:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     folder_id TEXT,
-                    folder_assignment TEXT
+                    folder_assignment TEXT,
+                    source_tier TEXT NOT NULL DEFAULT 'primary',
+                    source_publisher TEXT,
+                    source_url TEXT,
+                    source_effective_date TEXT,
+                    source_retrieved_at TEXT,
+                    source_verification TEXT NOT NULL DEFAULT 'verified',
+                    source_verified_at TEXT,
+                    source_note TEXT
                 );
                 CREATE TABLE IF NOT EXISTS regulation_folder (
                     folder_id TEXT PRIMARY KEY,
@@ -715,6 +723,25 @@ class RegulationRepository:
                 connection.execute("ALTER TABLE regulation ADD COLUMN folder_id TEXT")
             if "folder_assignment" not in regulation_columns:
                 connection.execute("ALTER TABLE regulation ADD COLUMN folder_assignment TEXT")
+            # Existing imported regulations are the established primary corpus.  New
+            # externally collected standards must be explicitly verified before use.
+            source_columns = {
+                "source_tier": "TEXT NOT NULL DEFAULT 'primary'",
+                "source_publisher": "TEXT",
+                "source_url": "TEXT",
+                "source_effective_date": "TEXT",
+                "source_retrieved_at": "TEXT",
+                "source_verification": "TEXT NOT NULL DEFAULT 'verified'",
+                "source_verified_at": "TEXT",
+                "source_note": "TEXT",
+            }
+            for column, definition in source_columns.items():
+                if column not in regulation_columns:
+                    connection.execute(f"ALTER TABLE regulation ADD COLUMN {column} {definition}")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_regulation_source_tier "
+                "ON regulation(source_tier, source_verification, active)"
+            )
             folder_columns = {row["name"] for row in connection.execute("PRAGMA table_info(regulation_folder)")}
             if "system_key" not in folder_columns:
                 connection.execute("ALTER TABLE regulation_folder ADD COLUMN system_key TEXT")
@@ -991,7 +1018,35 @@ class RegulationRepository:
         version: str | None,
         progress: Progress,
         folder_id: str | None = None,
+        source_tier: str = "primary",
+        source_publisher: str | None = None,
+        source_url: str | None = None,
+        source_effective_date: str | None = None,
+        source_retrieved_at: str | None = None,
+        source_note: str | None = None,
     ) -> dict[str, Any]:
+        source_tier = str(source_tier or "primary").strip()
+        if source_tier not in {"primary", "external_supplement"}:
+            raise ValueError("规程来源层级只能是 primary 或 external_supplement。")
+        source_publisher = str(source_publisher or "").strip()[:200] or None
+        source_url = str(source_url or "").strip()[:1000] or None
+        source_effective_date = str(source_effective_date or "").strip()[:40] or None
+        source_retrieved_at = str(source_retrieved_at or "").strip()[:40] or None
+        source_note = str(source_note or "").strip()[:1000] or None
+        if source_tier == "external_supplement":
+            missing = []
+            if not str(version or "").strip():
+                missing.append("版本或标准编号")
+            if not source_publisher:
+                missing.append("发布机构")
+            if not source_url:
+                missing.append("来源链接")
+            if not source_effective_date:
+                missing.append("生效信息")
+            if not source_retrieved_at:
+                missing.append("检索日期")
+            if missing:
+                raise ValueError("外部补充规范需填写" + "、".join(missing) + "，并上传归档原文件。")
         if folder_id:
             self.get_folder(folder_id)
         digest = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -1017,12 +1072,21 @@ class RegulationRepository:
                 """INSERT INTO regulation(
                     regulation_id, title, version, original_file_name, stored_file, text_file,
                     sha256, extraction_method, text_length, paragraph_count, status, active,
-                    created_at, updated_at, folder_id, folder_assignment
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    created_at, updated_at, folder_id, folder_assignment,
+                    source_tier, source_publisher, source_url, source_effective_date,
+                    source_retrieved_at, source_verification, source_verified_at, source_note
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (regulation_id, title or source.stem, version, source.name, str(stored), str(text_file), digest,
                  method, len(text), len(rows), "ready", 1, now, now, assigned_folder_id,
-                 "manual" if folder_id else "auto"),
+                 "manual" if folder_id else "auto", source_tier, source_publisher, source_url,
+                 source_effective_date, source_retrieved_at,
+                 "pending_verification" if source_tier == "external_supplement" else "verified",
+                 None if source_tier == "external_supplement" else now, source_note),
             )
+            if source_tier == "external_supplement":
+                connection.execute(
+                    "UPDATE regulation SET active=0 WHERE regulation_id=?", (regulation_id,)
+                )
         self._sync_clause_index(regulation_id, rows)
         progress("技术规程已入库，可开始AI识别规则")
         return self.get_document(regulation_id)
@@ -1985,9 +2049,32 @@ class RegulationRepository:
         return self.get_rule(rule_id)
 
     def set_document_active(self, regulation_id: str, active: bool) -> dict[str, Any]:
-        self.get_document(regulation_id)
+        item = self.get_document(regulation_id)
+        if active and item.get("source_tier") == "external_supplement" and item.get("source_verification") != "verified":
+            raise ValueError("外部补充规范尚未完成来源核验，不能启用为审核依据。")
         with self._connect() as connection:
             connection.execute("UPDATE regulation SET active=?, updated_at=? WHERE regulation_id=?", (int(active), _now(), regulation_id))
+        return self.get_document(regulation_id)
+
+    def verify_external_source(self, regulation_id: str, verified: bool, note: str | None = None) -> dict[str, Any]:
+        """Record a human verification decision for an archived external standard.
+
+        This never downloads a URL.  The uploaded original file remains the audit
+        artifact, while the URL/date/publisher explain where it came from.
+        """
+        item = self.get_document(regulation_id)
+        if item.get("source_tier") != "external_supplement":
+            raise ValueError("仅外部补充规范需要执行来源核验。")
+        verification = "verified" if verified else "rejected"
+        clean_note = str(note or "").strip()[:1000] or None
+        with self._connect() as connection:
+            connection.execute(
+                """UPDATE regulation
+                   SET source_verification=?, source_verified_at=?, source_note=?,
+                       active=CASE WHEN ?='verified' THEN active ELSE 0 END, updated_at=?
+                   WHERE regulation_id=?""",
+                (verification, _now() if verified else None, clean_note, verification, _now(), regulation_id),
+            )
         return self.get_document(regulation_id)
 
     def delete_document(self, regulation_id: str) -> dict[str, Any]:

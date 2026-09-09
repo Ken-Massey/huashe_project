@@ -97,6 +97,7 @@
         >
           <span class="doc-icon"><i class="el-icon-document" /></span>
           <span class="copy"><strong>{{ item.title }}</strong><small>{{ item.version || item.original_file_name }}</small></span>
+          <el-tag v-if="item.source_tier === 'external_supplement'" size="mini" type="warning">外部补充</el-tag>
           <el-tag size="mini" :type="item.active ? 'success' : 'info'">{{ item.active ? '启用' : '停用' }}</el-tag>
         </div>
         <div
@@ -139,7 +140,7 @@
       </template>
       <template v-else>
         <header class="detail-head">
-          <div class="title"><span><i class="el-icon-document-checked" /></span><div><h2>{{ detail.title }}</h2><p>{{ detail.original_file_name }}<em v-if="detail.version"> · {{ detail.version }}</em><b>{{ detail.folder_name || '未归入文件夹' }}</b></p></div></div>
+          <div class="title"><span><i class="el-icon-document-checked" /></span><div><h2>{{ detail.title }}</h2><p>{{ detail.original_file_name }}<em v-if="detail.version"> · {{ detail.version }}</em><b>{{ detail.folder_name || '未归入文件夹' }}</b></p><p v-if="detail.source_tier === 'external_supplement'" class="source-status">外部补充规范 · {{ externalVerificationText(detail) }}<span v-if="detail.source_publisher"> · {{ detail.source_publisher }}</span></p></div></div>
           <div class="actions">
             <el-button icon="el-icon-download" circle title="下载原文件" @click="downloadSource" />
             <el-dropdown @command="manage">
@@ -147,6 +148,7 @@
               <el-dropdown-menu slot="dropdown">
                 <el-dropdown-item command="rename" icon="el-icon-edit">重命名</el-dropdown-item>
                 <el-dropdown-item command="move" icon="el-icon-folder-opened">移动到文件夹</el-dropdown-item>
+                <el-dropdown-item v-if="detail.source_tier === 'external_supplement' && detail.source_verification !== 'verified'" command="verify-source" icon="el-icon-circle-check">确认来源已核验</el-dropdown-item>
                 <el-dropdown-item :command="detail.active?'disable':'restore'">{{ detail.active ? '停用规程' : '恢复规程' }}</el-dropdown-item>
                 <el-dropdown-item command="delete" divided icon="el-icon-delete">彻底删除</el-dropdown-item>
               </el-dropdown-menu>
@@ -181,7 +183,7 @@ import { saveAs } from 'file-saver'
 import LibraryAssetDialog from './LibraryAssetDialog.vue'
 import {
   listRegulations, getRegulation, getRegulationContent,
-  disableRegulation, restoreRegulation, deleteRegulation, downloadRegulationFile,
+  disableRegulation, restoreRegulation, verifyRegulationSource, deleteRegulation, downloadRegulationFile,
   listRegulationFolders, createRegulationFolder, renameRegulationFolder,
   deleteRegulationFolder, moveRegulationToFolder, renameRegulation, listLibraryAssets,
   renameLibraryAsset, moveLibraryAsset, deleteLibraryAsset, downloadLibraryAsset
@@ -479,6 +481,14 @@ export default {
         this.moveOpen = true
         return
       }
+      if (command === 'verify-source') {
+        const { value } = await this.$prompt('请填写核验备注（例如核对的官网或标准信息，可留空）', '确认外部来源核验', { inputPlaceholder: '核验备注', inputValue: this.detail.source_note || '' })
+        await verifyRegulationSource(this.selectedId, { verified: true, note: value || '' })
+        this.$message.success('外部规范来源已核验；如需参与审核，请在此后恢复启用')
+        await this.reload()
+        this.detail = await getRegulation(this.selectedId)
+        return
+      }
       if (command === 'delete') {
         await this.$confirm(`将永久删除“${this.detail.title}”的原文件、规程条文和检索索引，且无法恢复。`, '确认彻底删除', { type: 'warning', confirmButtonText: '彻底删除', cancelButtonText: '取消' })
         await deleteRegulation(this.selectedId)
@@ -510,7 +520,10 @@ export default {
       if (this.previewUrl) URL.revokeObjectURL(this.previewUrl)
       this.previewUrl = ''
     },
-    async downloadSource() { saveAs(await downloadRegulationFile(this.selectedId), this.detail.original_file_name || `${this.detail.title}.pdf`) }
+    async downloadSource() { saveAs(await downloadRegulationFile(this.selectedId), this.detail.original_file_name || `${this.detail.title}.pdf`) },
+    externalVerificationText(item) {
+      return item.source_verification === 'verified' ? '来源已核验' : item.source_verification === 'rejected' ? '来源未通过核验' : '待来源核验'
+    }
   }
 }
 </script>
@@ -542,7 +555,7 @@ export default {
 .back-button { display: inline-flex; height: 30px; align-items: center; gap: 5px; border: 0; border-radius: 4px; padding: 0 8px; background: #edf4f1; color: #317764; cursor: pointer; }
 .back-button:hover { background: #dcece6; }
 .reg-list { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.reg-row { display: grid; width: 100%; min-height: 92px; grid-template-columns: 42px minmax(0,1fr) auto; gap: 10px; align-items: center; border: 0; border-bottom: 1px solid #edf0f2; padding: 13px 16px; background: #fff; text-align: left; cursor: pointer; }
+.reg-row { display: grid; width: 100%; min-height: 92px; grid-template-columns: 42px minmax(0,1fr) auto auto; gap: 10px; align-items: center; border: 0; border-bottom: 1px solid #edf0f2; padding: 13px 16px; background: #fff; text-align: left; cursor: pointer; }
 .reg-row:hover,.reg-row.selected { background: #f0f6f4; }
 .reg-row[draggable="true"] { user-select: none; }
 .reg-row[draggable="true"]:active { cursor: grabbing; }
@@ -563,6 +576,7 @@ export default {
 .title>span { display: flex; width: 52px; height: 58px; flex: none; align-items: center; justify-content: center; background: #dcefe8; color: #2f7d69; font-size: 25px; }
 .title h2 { overflow: hidden; margin: 0 0 7px; font-size: 20px; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0; }
 .title p { margin: 0; color: #858e96; }
+.title p.source-status { margin-top: 5px; color: #b26a20; font-size: 12px; }
 .title em { font-style: normal; }
 .title b { margin-left: 10px; border-radius: 3px; padding: 2px 7px; background: #edf5f2; color: #4a8173; font-size: 12px; font-weight: 400; }
 .actions { display: flex; gap: 8px; }

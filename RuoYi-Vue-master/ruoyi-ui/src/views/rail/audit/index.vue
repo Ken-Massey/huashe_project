@@ -220,7 +220,7 @@
                       </div>
                     </el-form-item>
                   </el-col>
-                  <el-col :xs="24" :md="12"><el-form-item label="收函单位"><el-input v-model.trim="form.applicant" maxlength="120" /></el-form-item></el-col>
+                  <el-col :xs="24" :md="12"><el-form-item label="收函单位"><el-input v-model.trim="form.applicant" maxlength="120" @change="normalizeApplicantField" /></el-form-item></el-col>
                   <el-col :xs="24" :md="8"><el-form-item label="项目类型"><el-select v-model="form.project_type" placeholder="识别不到请人工选择"><el-option label="基坑" value="基坑" /></el-select></el-form-item></el-col>
                   <el-col :xs="24" :md="8">
                     <el-form-item label="项目阶段" required>
@@ -278,7 +278,7 @@
                             <strong>{{ item.name }}</strong>
                             <span>{{ item.address }}</span>
                           </div>
-                          <div v-if="!locationSuggestionLoading && !locationCandidates.length" class="location-suggestion-empty">未找到匹配位置，请补充区县或道路名称</div>
+                          <div v-if="!locationSuggestionLoading && !locationCandidates.length" class="location-suggestion-empty">{{ locationSuggestionError || '未找到匹配位置，请补充区县或道路名称' }}</div>
                         </div>
                       </div>
                     </el-form-item>
@@ -327,7 +327,7 @@
               <el-form :model="form" label-width="138px" class="parameter-form">
                 <el-row :gutter="14">
                   <el-col :xs="24" :md="12"><el-form-item label="地铁线路"><el-input v-model.trim="form.metro_line_name" placeholder="例如：1号线" /></el-form-item></el-col>
-                  <el-col :xs="24" :md="12"><el-form-item label="地铁区间"><el-input v-model.trim="form.metro_section_name" /></el-form-item></el-col>
+                  <el-col :xs="24" :md="12"><el-form-item label="地铁区间"><el-input v-model.trim="form.metro_section_name" @change="normalizeMetroSectionField" /></el-form-item></el-col>
                   <el-col :xs="24" :md="8"><el-form-item label="结构形式"><el-select v-model="form.structure_method" placeholder="识别不到请人工选择"><el-option v-for="v in methods" :key="v" :label="v" :value="v" /></el-select></el-form-item></el-col>
                   <el-col :xs="24" :md="8"><el-form-item label="结构状态"><el-select v-model="form.structure_condition" placeholder="识别不到请人工选择"><el-option label="较好" value="较好" /><el-option label="较差" value="较差" /></el-select></el-form-item></el-col>
                   <el-col :xs="24" :md="8">
@@ -546,6 +546,7 @@
                     <span class="review-order">{{ item.order_no }}</span>
                     <div>
                       <h4>{{ displayReviewTitle(item) }}</h4>
+                      <el-tag v-if="reviewBasisLabel(item)" size="mini" :type="reviewBasisType(item)">{{ reviewBasisLabel(item) }}</el-tag>
                       <el-tag v-if="item.risk_level" size="mini" :type="severityType(item.risk_level)">{{ item.risk_level }}</el-tag>
                     </div>
                     <div class="review-actions">
@@ -560,12 +561,6 @@
                     <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
                     <div class="rationale-content">
                       <p v-for="entry in rationaleEntries(item)" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
-                      <div v-if="rationaleEvidence(item).length" class="rationale-evidence">
-                        <strong>引用依据</strong>
-                        <p v-for="(evidence, evidenceIndex) in rationaleEvidence(item)" :key="evidenceIndex">
-                          {{ evidenceLabel(evidence) }}<span v-if="evidence.quote">：{{ evidence.quote }}</span>
-                        </p>
-                      </div>
                     </div>
                   </details>
                 </article>
@@ -593,6 +588,7 @@
                       <span class="review-order">{{ item.order_no }}</span>
                       <div>
                         <h4>{{ displayReviewTitle(item) }}</h4>
+                        <el-tag v-if="reviewBasisLabel(item)" size="mini" :type="reviewBasisType(item)">{{ reviewBasisLabel(item) }}</el-tag>
                         <el-tag v-if="item.risk_level" size="mini" :type="severityType(item.risk_level)">{{ item.risk_level }}</el-tag>
                       </div>
                     </div>
@@ -603,12 +599,6 @@
                       <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
                       <div class="rationale-content">
                         <p v-for="entry in rationaleEntries(item)" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
-                        <div v-if="rationaleEvidence(item).length" class="rationale-evidence">
-                          <strong>引用依据</strong>
-                          <p v-for="(evidence, evidenceIndex) in rationaleEvidence(item)" :key="evidenceIndex">
-                            {{ evidenceLabel(evidence) }}<span v-if="evidence.quote">：{{ evidence.quote }}</span>
-                          </p>
-                        </div>
                       </div>
                     </details>
                   </article>
@@ -831,6 +821,28 @@ function defaultForm() {
   }
 }
 
+function normalizeApplicant(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^(?:(?:委托|收函|报审|建设|申请|业主|发函)单位|委托方|建设方)\s*[：:]\s*/u, '')
+    .trim()
+}
+
+function normalizeMetroSection(value) {
+  const text = String(value || '')
+    .trim()
+    .replace(/^(?:南京地铁|地铁|轨道交通)?\s*(?:S\d+|\d+|[一二三四五六七八九十]+)\s*号线(?:线路)?\s*/u, '')
+    .trim()
+  const match = text.match(/([\u4e00-\u9fffA-Za-z0-9]+站)\s*(?:~|～|至|-)\s*([\u4e00-\u9fffA-Za-z0-9]+站)(?:区间隧道|区间)?/u)
+  return match ? `${match[1]}～${match[2]}` : ''
+}
+
+function normalizeProjectLocation(value) {
+  const text = String(value || '').trim().split(/[。；;]/u, 1)[0].trim()
+  if (!text || /(?:东|西|南|北|左|右)侧|紧邻|相邻|邻近|毗邻|周边|范围内|沿线|之间/u.test(text)) return ''
+  return /(?:市|区|县|镇|街道|路|街|巷|大道|广场|园区|站|号|桥|河|村)/u.test(text) ? text : ''
+}
+
 const AUDIT_DRAFT_KEY = 'rail.audit.latestDraft'
 const AUDIT_DRAFT_TTL = 30 * 60 * 1000
 
@@ -881,6 +893,7 @@ export default {
       locationSelectionGuardUntil: 0,
       locationSearchSequence: 0,
       locationCandidates: [],
+      locationSuggestionError: '',
       locationSuggestionsVisible: false,
       locationSuggestionLoading: false,
       locationInputTimer: null,
@@ -1376,12 +1389,10 @@ export default {
       const query = /南京|江苏|鼓楼|玄武|秦淮|建邺|雨花台|栖霞|江宁|浦口|六合|溧水|高淳/.test(text)
         ? text
         : `南京 ${text}`
-      return searchLocalGeocoder(query, 8)
-        .then(rows => Array.isArray(rows) ? rows : [])
-        .catch(() => [])
+      return searchLocalGeocoder(query, 8).then(rows => Array.isArray(rows) ? rows : [])
     },
     queryLocationSuggestions(queryString, callback) {
-      this.searchLocationCandidates(queryString).then(rows => callback(rows))
+      this.searchLocationCandidates(queryString).then(rows => callback(rows)).catch(() => callback([]))
     },
     showLocationSuggestions() {
       const query = String(this.form.location || '').trim()
@@ -1400,18 +1411,24 @@ export default {
         this.locationCandidates = []
         this.locationSuggestionsVisible = false
         this.locationSuggestionLoading = false
+        this.locationSuggestionError = ''
         return
       }
       this.locationManuallyCleared = false
       this.locationSelecting = false
       this.locationSuggestionsVisible = true
       this.locationSuggestionLoading = true
+      this.locationSuggestionError = ''
       const searchSequence = ++this.locationSearchSequence
       this.locationInputTimer = setTimeout(() => {
         this.searchLocationCandidates(text).then(rows => {
           if (searchSequence !== this.locationSearchSequence || this.locationSelecting) return
           this.locationCandidates = rows
           this.locationSuggestionsVisible = true
+        }).catch(() => {
+          if (searchSequence !== this.locationSearchSequence || this.locationSelecting) return
+          this.locationCandidates = []
+          this.locationSuggestionError = '地址候选服务暂不可用，请稍后重试'
         }).finally(() => {
           if (searchSequence === this.locationSearchSequence) this.locationSuggestionLoading = false
         })
@@ -1464,7 +1481,7 @@ export default {
         if (!rawLocation && result.formattedAddress) this.form.location = result.formattedAddress
         this.setProjectCoordinate(result.longitude, result.latitude, true)
         return result
-      }).finally(() => {
+      }).catch(() => null).finally(() => {
         this.autoLocating = false
       })
     },
@@ -1533,6 +1550,10 @@ export default {
           return
         }
         this.autoLocateProject(true)
+      }).catch(() => {
+        if (searchSequence === this.locationSearchSequence && !this.locationSelecting) {
+          this.locationSuggestionError = '地址候选服务暂不可用，请稍后重试'
+        }
       })
       this.saveAuditDraft()
     },
@@ -1900,6 +1921,9 @@ export default {
           return
         }
         this.form = { ...defaultForm(), ...(draft.form || {}) }
+        this.form.applicant = normalizeApplicant(this.form.applicant)
+        this.form.metro_section_name = normalizeMetroSection(this.form.metro_section_name)
+        this.form.location = normalizeProjectLocation(this.form.location)
         this.sanitizeAuditOptionValues()
         this.activeTab = draft.activeTab || this.activeTab
         this.stageSelection = draft.stageSelection || ''
@@ -2207,6 +2231,9 @@ export default {
     },
     normalizedFormPayload() {
       const payload = { ...this.form }
+      payload.applicant = normalizeApplicant(payload.applicant)
+      payload.metro_section_name = normalizeMetroSection(payload.metro_section_name)
+      payload.location = normalizeProjectLocation(payload.location)
       if (payload.dewatering_method === '其他') {
         const otherValue = String(payload.dewatering_method_other || '').trim()
         payload.dewatering_method = otherValue || '其他'
@@ -2381,7 +2408,14 @@ export default {
     },
     applyRecognizedFields(fields) {
       Object.keys(fields).forEach(key => {
-        if (key !== 'project_stage' && Object.prototype.hasOwnProperty.call(this.form, key) && fields[key] !== null && fields[key] !== '') this.$set(this.form, key, fields[key])
+        if (key !== 'project_stage' && Object.prototype.hasOwnProperty.call(this.form, key) && fields[key] !== null && fields[key] !== '') {
+          const normalized = key === 'applicant'
+            ? normalizeApplicant(fields[key])
+            : (key === 'metro_section_name'
+                ? normalizeMetroSection(fields[key])
+                : (key === 'location' ? normalizeProjectLocation(fields[key]) : fields[key]))
+          this.$set(this.form, key, normalized)
+        }
       })
       if (fields.project_stage) this.applyStageValue(fields.project_stage, true)
       if (fields.land_use_type) {
@@ -2391,7 +2425,13 @@ export default {
       this.$nextTick(() => {
         if (fields.project_name || fields.project_stage) this.projectNameChanged(this.form.project_name)
         if (fields.location) this.autoLocateProject(true)
-      })
+      }).catch(() => null)
+    },
+    normalizeApplicantField(value) {
+      this.form.applicant = normalizeApplicant(value === undefined ? this.form.applicant : value)
+    },
+    normalizeMetroSectionField(value) {
+      this.form.metro_section_name = normalizeMetroSection(value === undefined ? this.form.metro_section_name : value)
     },
     sanitizeAuditOptionValues() {
       if (this.form.relative_relationship && !this.relations.includes(this.form.relative_relationship)) {
@@ -2786,6 +2826,16 @@ export default {
       const source = item.source && typeof item.source === 'object' ? item.source : {}
       const rationale = item.rationale || source.rationale
       return rationale && typeof rationale === 'object' ? rationale : null
+    },
+    reviewBasisLabel(item) {
+      const source = item && item.source && typeof item.source === 'object' ? item.source : {}
+      if (source.basis_type === 'project_file') return '项目文件依据'
+      if (source.basis_type === 'manual_review') return '待人工复核'
+      return Array.isArray(item && item.basis) && item.basis.length ? '规程依据' : ''
+    },
+    reviewBasisType(item) {
+      const source = item && item.source && typeof item.source === 'object' ? item.source : {}
+      return source.basis_type === 'project_file' ? 'warning' : source.basis_type === 'manual_review' ? 'info' : 'success'
     },
     rationaleEntries(item) {
       const rationale = this.rationaleFor(item)

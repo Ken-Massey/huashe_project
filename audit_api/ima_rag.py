@@ -6,6 +6,7 @@ import math
 import re
 import sqlite3
 import time
+from collections import Counter
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, TimeoutError as FutureTimeoutError, wait
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,22 +14,24 @@ from typing import Any, Callable
 
 from .agent import AgentService, SILICONFLOW_EMBEDDING_MODEL, SILICONFLOW_MODEL
 from .config import KNOWLEDGE_ROOT
-from .rag_audit import RISK_TOPICS, _paragraph_chunks, _risk_signal_score, _tokens, _walk_case
+from .rag_audit import DOMAIN_TERMS, RISK_TOPICS, _paragraph_chunks, _risk_signal_score, _tokens, _walk_case
 from .regulation_rules import RULE_FIELD_CATALOG, RegulationRepository
 
 
 Progress = Callable[[str], None]
 VECTOR_DB = KNOWLEDGE_ROOT / "rag_vectors.sqlite3"
 AUDIT_CACHE_ROOT = KNOWLEDGE_ROOT / "rag_audit_cache"
-AUDIT_CACHE_VERSION = "ima-rag-v7-fast-main-issues"
+AUDIT_CACHE_VERSION = "ima-rag-v10-bound-library-clause"
 AUDIT_PACKET_BATCH_SIZE = 5
 AUDIT_EVIDENCE_CHAR_LIMIT = 650
 AUDIT_BATCH_TIMEOUT_SECONDS = 75
 AUDIT_DIMENSION_TOTAL_TIMEOUT_SECONDS = 110
 AUDIT_SYNTHESIS_TIMEOUT_SECONDS = 45
-AUDIT_CORE_TOPIC_LIMIT = 4
+AUDIT_CORE_TOPIC_LIMIT = 4  # two required dimensions + four core topics = six review dimensions
 AUDIT_CASE_HIT_LIMIT = 3
 AUDIT_REGULATION_HIT_LIMIT = 2
+AUDIT_RETRIEVAL_CANDIDATE_LIMIT = 30
+AUDIT_PRIMARY_REGULATION_MIN_SCORE = 0.34
 
 USER_FIELD_LABELS = {
     **RULE_FIELD_CATALOG,
@@ -75,8 +78,12 @@ def _regulation_reference(ref: dict[str, Any]) -> str:
     section = str(ref.get("section") or "").strip()
     if section and section not in {"None", "未知", "相关内容"}:
         clause = f"第{section}条" if re.fullmatch(r"\d+(?:\.\d+)*", section) else section
-        return f"{document} {clause}"
-    return document
+        value = f"{document} {clause}"
+    else:
+        value = document
+    if ref.get("source_tier") == "external_supplement":
+        return value + "（外部补充规范，已核验）"
+    return value
 
 
 def _regulation_source_name(document: dict[str, Any]) -> str:
@@ -235,6 +242,35 @@ def _cosine(left: list[float], right: list[float]) -> float:
     return numerator / denominator if denominator else 0.0
 
 
+def _bm25_terms(text: str) -> list[str]:
+    """Tokenize Chinese/engineering text for lexical retrieval without new dependencies."""
+    normalized = re.sub(r"\s+", "", str(text or "").lower())
+    terms = re.findall(r"[a-z_][a-z0-9_]{1,}|\d+(?:\.\d+)?(?:mm|cm|km|mpa|kpa|%|m)?", normalized)
+    chinese = "".join(re.findall(r"[\u4e00-\u9fff]", normalized))
+    terms.extend(chinese[index:index + 2] for index in range(max(0, len(chinese) - 1)))
+    terms.extend(term for term in DOMAIN_TERMS if term in normalized)
+    return [term for term in terms if term]
+
+
+def _metadata_matches(metadata: dict[str, Any], filters: dict[str, Any] | None) -> bool:
+    """Apply only explicit hard filters; missing optional metadata never excludes a chunk."""
+    for key, expected in (filters or {}).items():
+        actual = metadata.get(key)
+        values = expected if isinstance(expected, (list, tuple, set)) else [expected]
+        if actual not in values:
+            return False
+    return True
+
+
+def _metadata_boost(metadata: dict[str, Any], preferences: dict[str, float] | None) -> float:
+    content_type = str(metadata.get("content_type") or "")
+    knowledge_type = str(metadata.get("knowledge_type") or "")
+    return max(
+        [0.0, *(float(weight) for key, weight in (preferences or {}).items()
+                if key in {content_type, knowledge_type})]
+    )
+
+
 class SemanticIndex:
     def __init__(self, database: Path = VECTOR_DB, agent: AgentService | None = None) -> None:
         self.database = database
@@ -251,6 +287,7 @@ class SemanticIndex:
                     source_page INTEGER,
                     section TEXT,
                     content_type TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
                     chunk_text TEXT NOT NULL,
                     content_hash TEXT NOT NULL,
                     vector_json TEXT NOT NULL,
@@ -261,6 +298,9 @@ class SemanticIndex:
                 CREATE INDEX IF NOT EXISTS idx_rag_document ON rag_chunk(document_id, active);
                 """
             )
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(rag_chunk)")}
+            if "metadata_json" not in columns:
+                connection.execute("ALTER TABLE rag_chunk ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
 
     @contextmanager
     def _connect(self):
@@ -282,6 +322,15 @@ class SemanticIndex:
                 **chunk,
                 "chunk_id": str(chunk.get("chunk_id") or f"{document_id}:{index:04d}"),
                 "text": text,
+                "metadata": {
+                    "corpus_type": corpus_type,
+                    "document_id": document_id,
+                    "document_title": title,
+                    "source_page": chunk.get("source_page"),
+                    "section": chunk.get("section"),
+                    "content_type": chunk.get("content_type") or "text",
+                    **(chunk.get("metadata") if isinstance(chunk.get("metadata"), dict) else {}),
+                },
                 "content_hash": _hash(text),
             })
         with self._connect() as connection:
@@ -307,18 +356,19 @@ class SemanticIndex:
                     """
                     INSERT INTO rag_chunk(
                         chunk_id,corpus_type,document_id,document_title,source_page,section,
-                        content_type,chunk_text,content_hash,vector_json,embedding_model,active
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,1)
+                        content_type,metadata_json,chunk_text,content_hash,vector_json,embedding_model,active
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1)
                     ON CONFLICT(chunk_id) DO UPDATE SET
                         corpus_type=excluded.corpus_type, document_id=excluded.document_id,
                         document_title=excluded.document_title, source_page=excluded.source_page,
-                        section=excluded.section, content_type=excluded.content_type,
+                        section=excluded.section, content_type=excluded.content_type, metadata_json=excluded.metadata_json,
                         chunk_text=excluded.chunk_text, content_hash=excluded.content_hash,
                         vector_json=excluded.vector_json, embedding_model=excluded.embedding_model, active=1
                     """,
                     (
                         item["chunk_id"], corpus_type, document_id, title, item.get("source_page"),
-                        item.get("section"), item.get("content_type") or "text", item["text"],
+                        item.get("section"), item.get("content_type") or "text",
+                        json.dumps(item["metadata"], ensure_ascii=False, sort_keys=True), item["text"],
                         item["content_hash"], json.dumps(vector), SILICONFLOW_EMBEDDING_MODEL,
                     ),
                 )
@@ -332,12 +382,13 @@ class SemanticIndex:
                     """
                     UPDATE rag_chunk SET
                         corpus_type=?, document_id=?, document_title=?, source_page=?,
-                        section=?, content_type=?, chunk_text=?, content_hash=?, active=1
+                        section=?, content_type=?, metadata_json=?, chunk_text=?, content_hash=?, active=1
                     WHERE chunk_id=?
                     """,
                     (
                         corpus_type, document_id, title, item.get("source_page"),
                         item.get("section"), item.get("content_type") or "text",
+                        json.dumps(item["metadata"], ensure_ascii=False, sort_keys=True),
                         item["text"], item["content_hash"], item["chunk_id"],
                     ),
                 )
@@ -349,10 +400,18 @@ class SemanticIndex:
         return cursor.rowcount
 
     def search(
-        self, query: str, corpus_type: str, limit: int = 5, document_id: str | None = None
+        self,
+        query: str,
+        corpus_type: str,
+        limit: int = 5,
+        document_id: str | None = None,
+        metadata_filters: dict[str, Any] | None = None,
+        metadata_preferences: dict[str, float] | None = None,
     ) -> list[dict[str, Any]]:
         vector = self.agent.embed([query])[0]
-        return self.search_with_vector(query, vector, corpus_type, limit, document_id)
+        return self.search_with_vector(
+            query, vector, corpus_type, limit, document_id, metadata_filters, metadata_preferences
+        )
 
     def search_with_vector(
         self,
@@ -361,8 +420,12 @@ class SemanticIndex:
         corpus_type: str,
         limit: int = 5,
         document_id: str | None = None,
+        metadata_filters: dict[str, Any] | None = None,
+        metadata_preferences: dict[str, float] | None = None,
     ) -> list[dict[str, Any]]:
-        query_tokens = _tokens(query)
+        """Hard-filter → hybrid recall → deterministic local rerank."""
+        query_terms = _bm25_terms(query)
+        query_token_set = set(query_terms)
         sql = "SELECT * FROM rag_chunk WHERE corpus_type=? AND active=1"
         params: list[Any] = [corpus_type]
         if document_id:
@@ -370,14 +433,61 @@ class SemanticIndex:
             params.append(document_id)
         with self._connect() as connection:
             rows = [dict(row) for row in connection.execute(sql, params)]
-        ranked = []
+        filtered = []
         for row in rows:
+            try:
+                metadata = json.loads(row.pop("metadata_json") or "{}")
+            except (TypeError, json.JSONDecodeError):
+                metadata = {}
+            metadata.setdefault("content_type", row.get("content_type") or "text")
+            metadata.setdefault("section", row.get("section"))
+            if _metadata_matches(metadata, metadata_filters):
+                row["metadata"] = metadata
+                filtered.append(row)
+        if not filtered:
+            return []
+
+        documents = [Counter(_bm25_terms(row["chunk_text"])) for row in filtered]
+        total_documents = len(documents)
+        average_length = sum(sum(document.values()) for document in documents) / max(1, total_documents)
+        document_frequency = Counter(
+            token for document in documents for token in document if token in query_token_set
+        )
+        lexical_max = 0.0
+        ranked = []
+        for row, document_terms in zip(filtered, documents):
             semantic = _cosine(vector, json.loads(row.pop("vector_json")))
-            overlap = len(query_tokens & _tokens(row["chunk_text"])) / max(1, len(query_tokens))
+            length = sum(document_terms.values())
+            bm25 = 0.0
+            for token in query_token_set:
+                frequency = document_terms.get(token, 0)
+                if not frequency:
+                    continue
+                idf = math.log(1 + (total_documents - document_frequency[token] + 0.5) / (document_frequency[token] + 0.5))
+                bm25 += idf * (frequency * 2.0) / (frequency + 1.2 * (1 - 0.75 + 0.75 * length / max(1.0, average_length)))
+            lexical_max = max(lexical_max, bm25)
+            normalized_text = re.sub(r"\s+", "", row["chunk_text"].lower())
+            exact = sum(1 for term in set(query_terms) if len(term) >= 3 and term in normalized_text) / max(1, len(query_token_set))
+            metadata_score = _metadata_boost(row["metadata"], metadata_preferences)
             row["semantic_score"] = round(semantic, 6)
-            row["hybrid_score"] = round(0.86 * semantic + 0.14 * overlap, 6)
+            row["bm25_score"] = bm25
+            row["exact_score"] = round(exact, 6)
+            row["metadata_score"] = round(metadata_score, 6)
             ranked.append(row)
-        return sorted(ranked, key=lambda item: item["hybrid_score"], reverse=True)[:limit]
+        for row in ranked:
+            lexical = row["bm25_score"] / lexical_max if lexical_max else 0.0
+            semantic = max(0.0, min(1.0, (row["semantic_score"] + 1.0) / 2.0))
+            row["lexical_score"] = round(lexical, 6)
+            row["hybrid_score"] = round(
+                0.55 * semantic + 0.30 * lexical + 0.10 * row["exact_score"] + 0.05 * row["metadata_score"], 6
+            )
+        candidates = sorted(ranked, key=lambda item: item["hybrid_score"], reverse=True)[:AUDIT_RETRIEVAL_CANDIDATE_LIMIT]
+        for row in candidates:
+            coverage = len(query_token_set & set(_bm25_terms(row["chunk_text"]))) / max(1, len(query_token_set))
+            row["rerank_score"] = round(
+                0.65 * row["hybrid_score"] + 0.25 * coverage + 0.10 * row["exact_score"], 6
+            )
+        return sorted(candidates, key=lambda item: item["rerank_score"], reverse=True)[:limit]
 
 
 def purge_rag_document(document_id: str) -> dict[str, int]:
@@ -404,6 +514,14 @@ def _regulation_chunks(repository: RegulationRepository) -> list[tuple[str, str,
                 "source_page": item.get("source_page"),
                 "section": item.get("clause_no"),
                 "content_type": item.get("knowledge_type") or "clause",
+                "metadata": {
+                    "source_kind": "technical_regulation",
+                    "knowledge_type": item.get("knowledge_type") or "clause",
+                    "clause_no": item.get("clause_no"),
+                    "source_tier": document.get("source_tier") or "primary",
+                    "source_verification": document.get("source_verification") or "verified",
+                    "source_publisher": document.get("source_publisher") or "",
+                },
             } for item in clauses]
         else:
             rows = json.loads(
@@ -420,6 +538,12 @@ def _regulation_chunks(repository: RegulationRepository) -> list[tuple[str, str,
                         "text": "\n".join(item["text"] for item in current),
                         "source_page": current[0].get("page"),
                         "content_type": "document_chunk",
+                        "metadata": {
+                            "source_kind": "technical_regulation", "knowledge_type": "document_chunk",
+                            "source_tier": document.get("source_tier") or "primary",
+                            "source_verification": document.get("source_verification") or "verified",
+                            "source_publisher": document.get("source_publisher") or "",
+                        },
                     })
                     current, size = current[-1:], len(current[-1]["text"])
                 current.append({"text": text, "page": row.get("page")})
@@ -430,9 +554,33 @@ def _regulation_chunks(repository: RegulationRepository) -> list[tuple[str, str,
                     "text": "\n".join(item["text"] for item in current),
                     "source_page": current[0].get("page"),
                     "content_type": "document_chunk",
+                    "metadata": {
+                        "source_kind": "technical_regulation", "knowledge_type": "document_chunk",
+                        "source_tier": document.get("source_tier") or "primary",
+                        "source_verification": document.get("source_verification") or "verified",
+                        "source_publisher": document.get("source_publisher") or "",
+                    },
                 })
         result.append((document["regulation_id"], _regulation_source_name(document), chunks))
     return result
+
+
+def _retrieval_policy(dimension: dict[str, str], corpus_type: str) -> tuple[dict[str, Any], dict[str, float]]:
+    """Use reliable provenance as a hard filter and engineering hints as soft boosts."""
+    filters = {"source_kind": "case_document" if corpus_type == "case" else "technical_regulation"}
+    preferences: dict[str, float] = {}
+    query = f"{dimension.get('title') or ''} {dimension.get('question') or ''}"
+    if corpus_type == "regulation":
+        if re.search(r"控制指标|超限|数值|限值|净距|位移|沉降|水位", query):
+            preferences.update({"quantitative": 1.0, "table": 0.8})
+        if re.search(r"监测|频率|预警", query):
+            preferences.update({"table": max(preferences.get("table", 0.0), 0.7), "qualitative": 0.35})
+    return filters, preferences
+
+
+def _has_applicable_primary_regulation(hits: list[dict[str, Any]]) -> bool:
+    """Do not consult secondary standards when the primary corpus has a real match."""
+    return any(float(item.get("rerank_score") or 0.0) >= AUDIT_PRIMARY_REGULATION_MIN_SCORE for item in hits)
 
 
 def _default_dimensions() -> list[dict[str, str]]:
@@ -514,6 +662,53 @@ def _plan_dimensions(agent: AgentService, case_scout: str) -> list[dict[str, str
     return cleaned[:12] or _default_dimensions()
 
 
+def _bind_retrieved_regulation_evidence(
+    findings: list[dict[str, Any]], packets: list[dict[str, Any]], evidence: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Bind the retrieved library clause when the model omits a valid chunk ID.
+
+    The clause is selected only from the same audit dimension's actual retrieval
+    results.  This makes the user-facing basis stable without inventing a rule.
+    """
+    packets_by_title = {
+        str((packet.get("dimension") or {}).get("title") or "").strip(): packet
+        for packet in packets
+    }
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        references = finding.get("regulation_evidence") or []
+        if any(
+            isinstance(ref, dict)
+            and evidence.get(str(ref.get("chunk_id") or ""), {}).get("corpus_type") == "regulation"
+            for ref in references
+        ):
+            continue
+        category = str(finding.get("category") or "").strip()
+        packet = packets_by_title.get(category)
+        if packet is None and category:
+            packet = next(
+                (candidate for title, candidate in packets_by_title.items() if title and (title in category or category in title)),
+                None,
+            )
+        if not packet:
+            continue
+        hit = next(
+            (item for item in packet.get("regulation_hits") or [] if item.get("chunk_id")),
+            None,
+        )
+        if not hit:
+            continue
+        finding["regulation_evidence"] = [{
+            "chunk_id": hit["chunk_id"],
+            "document_title": hit.get("document_title") or "",
+            "section": hit.get("section") or "相关内容",
+            "quote": str(hit.get("chunk_text") or "")[:AUDIT_EVIDENCE_CHAR_LIMIT],
+            "auto_bound": True,
+        }]
+    return findings
+
+
 def _validate_report(value: dict[str, Any], evidence: dict[str, dict[str, Any]]) -> dict[str, Any]:
     findings = []
     seen_titles: set[str] = set()
@@ -523,12 +718,17 @@ def _validate_report(value: dict[str, Any], evidence: dict[str, dict[str, Any]])
         title = str(item.get("title") or "").strip()
         if not title or title in seen_titles:
             continue
-        case_refs = [
-            ref for ref in item.get("case_evidence") or []
-            if isinstance(ref, dict)
-            and str(ref.get("chunk_id") or "") in evidence
-            and evidence[str(ref.get("chunk_id"))]["corpus_type"] == "case"
-        ]
+        case_refs = []
+        for ref in item.get("case_evidence") or []:
+            if not isinstance(ref, dict):
+                continue
+            source = evidence.get(str(ref.get("chunk_id") or ""))
+            if not source or source["corpus_type"] != "case":
+                continue
+            enriched = dict(ref)
+            enriched["document_title"] = source.get("document_title") or enriched.get("document_title") or "项目资料"
+            enriched["source_page"] = source.get("source_page")
+            case_refs.append(enriched)
         regulation_refs = []
         for ref in item.get("regulation_evidence") or []:
             if not isinstance(ref, dict):
@@ -545,6 +745,9 @@ def _validate_report(value: dict[str, Any], evidence: dict[str, dict[str, Any]])
                 enriched.get("section") or source.get("section") or "相关内容"
             )
             enriched["source_page"] = source.get("source_page")
+            source_metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+            enriched["source_tier"] = source_metadata.get("source_tier") or "primary"
+            enriched["source_publisher"] = source_metadata.get("source_publisher") or ""
             regulation_refs.append(enriched)
         if not case_refs:
             continue
@@ -684,7 +887,7 @@ def _audit_packet_batch(
 
 输出：
 {{"findings":[{{
-  "category":"风险类别",
+  "category":"审核维度标题（必须原样使用）",
   "title":"具体问题",
   "risk_level":"重大|高|中|低|提示",
   "judgement":"compliant|non_compliant|risk|insufficient",
@@ -696,14 +899,15 @@ def _audit_packet_batch(
 }}]}}
 
 要求：
-1. 每个审核维度只输出1项最重要结论，不重复凑数。
-2. 符合或不符合必须同时有案例和规程证据；仅有案例证据时标记risk或insufficient。
-3. 不要因缺少同名字段判资料不足，应先按全文语义判断。
-4. 表格必须按表头、行名、列名和单元格共同解释。
-5. analysis不超过220个汉字，recommendation不超过120个汉字，不输出检索过程说明。
-6. 案例参数必须写成用户能理解的中文工程术语，例如“最小水平净距为12m”，
+1. 正常审核应输出 5 至 6 项分项审核意见：每个审核维度最多1项，优先覆盖有案例事实和规程条款的维度；不得编造、拆分或用无依据内容凑数量。
+2. category 必须原样使用输入中的“审核维度”标题，便于系统绑定该维度检索到的知识库条款。
+3. 符合或不符合必须同时有案例和规程证据；仅有案例证据时标记risk或insufficient。
+4. 不要因缺少同名字段判资料不足，应先按全文语义判断。
+5. 表格必须按表头、行名、列名和单元格共同解释。
+6. analysis不超过220个汉字，recommendation不超过120个汉字，不输出检索过程说明。
+7. 案例参数必须写成用户能理解的中文工程术语，例如“最小水平净距为12m”，
 不得写“minimum_horizontal_clearance_m: 12”一类内部表示。
-7. 若有前序阶段记录，应检查历史风险、待补资料和整改要求在本次材料中是否得到响应；
+8. 若有前序阶段记录，应检查历史风险、待补资料和整改要求在本次材料中是否得到响应；
 历史结论只能作为连续性辅助信息，不能替代本次案例原文和现行规程证据。""",
         max_tokens=1500,
     )
@@ -795,7 +999,15 @@ def run_ima_rag_audit(
     session_text = _current_session_context_text(case_data)
     case_id = "CASE:" + case_content_hash[:16]
     case_chunks = [
-        {**item, "chunk_id": f"{case_id}:{item['chunk_id']}"}
+        {
+            **item,
+            "chunk_id": f"{case_id}:{item['chunk_id']}",
+            "metadata": {
+                "source_kind": "case_document",
+                "paragraph_start": item.get("paragraph_start"),
+                "paragraph_end": item.get("paragraph_end"),
+            },
+        }
         for item in case_chunks
     ]
     regulations = _regulation_chunks(repository)
@@ -860,9 +1072,11 @@ def run_ima_rag_audit(
     ]
     query_vectors = agent.embed(queries)
     for offset, dimension in enumerate(dimensions):
+        case_filters, case_preferences = _retrieval_policy(dimension, "case")
         case_hits = index.search_with_vector(
             dimension["case_query"], query_vectors[offset * 2],
             "case", limit=AUDIT_CASE_HIT_LIMIT, document_id=case_id,
+            metadata_filters=case_filters, metadata_preferences=case_preferences,
         )
         if dimension["title"] == "关键控制指标与超限值":
             candidates = [
@@ -879,10 +1093,28 @@ def run_ima_rag_audit(
             candidates.sort(key=lambda item: _risk_signal_score(item["text"]), reverse=True)
             case_hits.extend(_raw_case_hits(candidates[:3], case_id, Path(case_document).stem))
         case_hits = list({item["chunk_id"]: item for item in case_hits}.values())
+        regulation_filters, regulation_preferences = _retrieval_policy(dimension, "regulation")
+        primary_filters = {**regulation_filters, "source_tier": "primary"}
         regulation_hits = index.search_with_vector(
             dimension["regulation_query"], query_vectors[offset * 2 + 1],
             "regulation", limit=AUDIT_REGULATION_HIT_LIMIT,
+            metadata_filters=primary_filters, metadata_preferences=regulation_preferences,
         )
+        if not _has_applicable_primary_regulation(regulation_hits):
+            # External standards are a controlled fallback only. They must already
+            # be archived, manually verified and explicitly enabled in the library.
+            supplemental_hits = index.search_with_vector(
+                dimension["regulation_query"], query_vectors[offset * 2 + 1],
+                "regulation", limit=AUDIT_REGULATION_HIT_LIMIT,
+                metadata_filters={
+                    **regulation_filters,
+                    "source_tier": "external_supplement",
+                    "source_verification": "verified",
+                },
+                metadata_preferences=regulation_preferences,
+            )
+            if supplemental_hits:
+                regulation_hits = supplemental_hits
         for hit in case_hits + regulation_hits:
             evidence[hit["chunk_id"]] = hit
         packets.append({
@@ -980,7 +1212,7 @@ def run_ima_rag_audit(
             "synthesis_degraded": True,
         }
     timings["synthesis"] = round(time.perf_counter() - stage_started, 3)
-    value["findings"] = findings
+    value["findings"] = _bind_retrieved_regulation_evidence(findings, packets, evidence)
     value = _validate_report(value, evidence)
     value.update({
         "format_version": "ima_rag_audit_v1",
