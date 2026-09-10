@@ -117,7 +117,10 @@ public class PythonAuditClient
                 uri.queryParam(name, value);
             }
         });
-        return get(uri.build().encode().toUriString());
+        // RestClient encodes URI-template values itself. Encoding here first makes
+        // percent escapes encode again (for example, Chinese search text becomes
+        // "%25E5..."), which breaks the local geocoder query.
+        return get(uri.build().toUriString());
     }
 
     public Object get(String path, Map<String, ?> query, Map<String, String> headers)
@@ -134,7 +137,7 @@ public class PythonAuditClient
         }
         return json(() -> {
             org.springframework.web.client.RestClient.RequestHeadersSpec<?> request =
-                    client.get().uri(uri.build().encode().toUriString());
+                    client.get().uri(uri.build().toUriString());
             if (headers != null && !headers.isEmpty())
             {
                 request.headers(httpHeaders -> headers.forEach(httpHeaders::add));

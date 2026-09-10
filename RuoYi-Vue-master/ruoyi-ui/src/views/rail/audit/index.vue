@@ -838,9 +838,11 @@ function normalizeMetroSection(value) {
 }
 
 function normalizeProjectLocation(value) {
-  const text = String(value || '').trim().split(/[。；;]/u, 1)[0].trim()
+  const text = String(value || '').trim().split(/[。；;]/u, 1)[0]
+    .replace(/^(?:(?:本工程|本项目|工程|项目)(?:项目)?(?:地址|地点|位置)?|(?:项目|工程)?(?:地址|地点|位置))\s*(?:为|位于|在)\s*/u, '')
+    .trim()
   if (!text || /(?:东|西|南|北|左|右)侧|紧邻|相邻|邻近|毗邻|周边|范围内|沿线|之间/u.test(text)) return ''
-  return /(?:市|区|县|镇|街道|路|街|巷|大道|广场|园区|站|号|桥|河|村)/u.test(text) ? text : ''
+  return /(?:路|街|巷|大道|广场|园区|产业园|园|站|号|桥|河|村)/u.test(text) ? text : ''
 }
 
 const AUDIT_DRAFT_KEY = 'rail.audit.latestDraft'
@@ -1223,6 +1225,23 @@ export default {
     'form.structure_condition'(value) { this.syncDiseaseSeverity(value) },
     'form.dewatering_method'(value) {
       if (value !== '其他' && this.form.dewatering_method_other) this.form.dewatering_method_other = ''
+    },
+    'form.metro_section_name': {
+      immediate: true,
+      handler(value) {
+        const normalized = normalizeMetroSection(value)
+        if (value && value !== normalized && /(?:项目|隧道|地铁|出入线|东侧|西侧|南侧|北侧)/u.test(value)) {
+          this.form.metro_section_name = normalized
+        }
+      }
+    },
+    'form.location': {
+      immediate: true,
+      handler(value) {
+        if (!value || !/^(?:(?:本工程|本项目|工程|项目)(?:项目)?(?:地址|地点|位置)?|(?:项目|工程)?(?:地址|地点|位置))\s*(?:为|位于|在)\s*|(?:东|西|南|北|左|右)侧|紧邻|相邻|邻近|毗邻|周边|范围内|沿线|之间/u.test(value)) return
+        const normalized = normalizeProjectLocation(value)
+        if (value !== normalized) this.form.location = normalized
+      }
     }
   },
   created() {

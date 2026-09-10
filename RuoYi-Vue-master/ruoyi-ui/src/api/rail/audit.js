@@ -1,5 +1,4 @@
 import request from '@/utils/request'
-import axios from 'axios'
 
 const uploadConfig = { timeout: 120000, headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false } }
 
@@ -18,14 +17,10 @@ export function getTaskResult(id) { return request({ url: `/rail/tasks/${id}/res
 export function getTaskFiles(id) { return request({ url: `/rail/tasks/${id}/files`, method: 'get' }) }
 export function getLocalGeocoderStatus() { return request({ url: '/rail/local-geocoder/status', method: 'get' }) }
 export function searchLocalGeocoder(query, limit = 8) {
-  const localUrl = 'http://127.0.0.1:8001/api/v1/local-geocoder/search'
-  const searchLocalService = () => axios.get(localUrl, {
-    params: { query, limit },
-    timeout: 10000
-  }).then(response => response.data)
+  // Keep map requests inside the authenticated browser -> Java -> audit API chain.
+  // A former localhost:8001 fallback depended on a separately started process and
+  // failed after restart; it also bypassed the Java-side access-control boundary.
   return request({ url: '/rail/local-geocoder/search', method: 'get', params: { query, limit } })
-    .then(rows => Array.isArray(rows) && rows.length ? rows : searchLocalService())
-    .catch(() => searchLocalService())
 }
 export function downloadTaskFile(taskId, fileId) {
   return request({ url: `/rail/tasks/${taskId}/files/${fileId}`, method: 'get', responseType: 'blob', timeout: 120000 })

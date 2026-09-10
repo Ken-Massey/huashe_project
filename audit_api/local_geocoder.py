@@ -78,7 +78,12 @@ class LocalGeocoder:
                 "SELECT response_json FROM geocode_cache WHERE query = ?", (cache_key,)
             ).fetchone()
         if cached:
-            return json.loads(cached["response_json"])[:limit]
+            cached_rows = json.loads(cached["response_json"])
+            # An empty response may have been produced while the local Nominatim
+            # container was restarting. Do not make that transient failure a
+            # permanent "not found" result.
+            if cached_rows:
+                return cached_rows[:limit]
         if not self.endpoint:
             raise RuntimeError("本地南京地理编码服务尚未配置。")
         params = {
@@ -115,8 +120,13 @@ class LocalGeocoder:
                 "coordinate_system": "WGS84",
             })
         with self._lock, self._session() as connection:
-            connection.execute(
-                "INSERT OR REPLACE INTO geocode_cache(query, response_json, updated_at) VALUES(?, ?, ?)",
-                (cache_key, json.dumps(rows, ensure_ascii=False), _now()),
-            )
+            if rows:
+                connection.execute(
+                    "INSERT OR REPLACE INTO geocode_cache(query, response_json, updated_at) VALUES(?, ?, ?)",
+                    (cache_key, json.dumps(rows, ensure_ascii=False), _now()),
+                )
+            else:
+                # Keep the cache useful for positive results only. A later OSM
+                # data refresh may add this POI, so empty results must be retried.
+                connection.execute("DELETE FROM geocode_cache WHERE query = ?", (cache_key,))
         return rows

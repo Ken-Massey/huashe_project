@@ -241,11 +241,16 @@ def _location_from_document_lines(lines: list[str]) -> str:
         value = re.split(r"(?:建设规模|项目规模|工程规模|建设内容|用地面积|占地面积)[：:]?", match.group(1), maxsplit=1)[0]
         value = re.split(r"[。；;]", value, maxsplit=1)[0]
         value = re.sub(r"\s+", "", value).strip("，。；;、:：")
+        value = re.sub(
+            r"^(?:(?:本工程|本项目|工程|项目)(?:项目)?(?:地址|地点|位置)?|(?:项目|工程)?(?:地址|地点|位置))\s*(?:为|位于|在)\s*",
+            "",
+            value,
+        )
         # 邻接道路、方位和影响关系不能定位项目落点，不能作为项目坐标来源。
         if re.search(r"(?:东|西|南|北|左|右)侧|紧邻|相邻|邻近|毗邻|周边|范围内|沿线|之间", value):
             continue
         # 仅保留具备可地理编码特征的明确项目地点，而非说明性文字。
-        if not re.search(r"(?:市|区|县|镇|街道|路|街|巷|大道|广场|园区|站|号|桥|河|村)", value):
+        if not re.search(r"(?:路|街|巷|大道|广场|园区|产业园|园|站|号|桥|河|村)", value):
             continue
         if 3 <= len(value) <= 120:
             return value
