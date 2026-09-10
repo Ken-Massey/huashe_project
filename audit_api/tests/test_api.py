@@ -103,6 +103,14 @@ class ApiDefinitionTests(unittest.TestCase):
         self.assertEqual(fields["dewatering_method"], "管井降水")
         self.assertIn("钻孔灌注桩", fields["support_components"])
 
+    def test_recognize_letter_deduplicates_normalized_support_aliases(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "地连墙支护方案.txt"
+            source.write_text("本工程采用地下连续墙（地连墙）及锚杆支护。", encoding="utf-8")
+            fields = recognize_letter(source)["fields"]
+
+        self.assertEqual(fields["support_components"], ["地下连续墙", "锚杆"])
+
     def test_recognize_letter_prefers_explicit_project_fields(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "滨湖社区项目安全性影响预评估报告.txt"
@@ -479,6 +487,36 @@ class DynamicRegulationRuleTests(unittest.TestCase):
         self.assertEqual(RuleEngine.execute(rule, {"vertical_clearance": 6.2, "tunnel_diameter": 6.2})["status"], "matched")
         self.assertEqual(RuleEngine.execute(rule, {"vertical_clearance": 6.1, "tunnel_diameter": 6.2})["status"], "not_matched")
         self.assertEqual(RuleEngine.execute(rule, {"vertical_clearance": "6200mm", "tunnel_diameter": "6.2m"})["status"], "matched")
+
+    def test_comparison_rule_is_triggered_by_code_not_language_model(self):
+        rule = {
+            "rule_type": "comparison_rule", "name": "深基坑专项控制", "field": "pit_depth",
+            "operator": ">", "value": 15, "unit": "m",
+            "source": {"original_text": "基坑深度大于15m时应执行专项控制。", "clause": "6.2.1"},
+        }
+        execution = RuleEngine.execute(rule, {"pit_depth": 18.5})
+        self.assertEqual(execution["status"], "matched")
+        self.assertEqual(execution["calculation"], "pit_depth=18.5m > 15m")
+
+    def test_reranked_rule_scope_excludes_unretrieved_regulations(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "规程.txt"
+            source.write_text("基坑深度大于15m时应执行专项控制。", encoding="utf-8")
+            repository = RegulationRepository(root / "regulations.sqlite3", root / "files")
+            document = repository.import_document(source, "测试规程", "2026", lambda _: None)
+            item = repository.create_rule(document["regulation_id"], {
+                "rule_type": "comparison_rule", "name": "深基坑专项控制", "field": "pit_depth",
+                "operator": ">", "value": 15, "unit": "m",
+                "source": {"original_text": "基坑深度大于15m时应执行专项控制。", "clause": "6.2.1"},
+            })
+            repository.publish_rule(item["rule_id"])
+            skipped = run_dynamic_regulation_audit({"pit_depth": 18.5}, repository, allowed_regulation_ids=set())
+            self.assertEqual(skipped["published_rule_count"], 0)
+            executed = run_dynamic_regulation_audit(
+                {"pit_depth": 18.5}, repository, allowed_regulation_ids={document["regulation_id"]}
+            )
+        self.assertEqual(executed["results"][0]["audit_status"], "triggered")
 
     def test_missing_field_and_unsafe_formula(self):
         result = RuleEngine.execute(self.sample_rule(), {"vertical_clearance": 8})

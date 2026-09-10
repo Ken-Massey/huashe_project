@@ -80,6 +80,10 @@ def _scope_matches(scope: Any, facts: dict[str, Any]) -> bool:
 
 
 def _audit_status(rule: dict[str, Any], execution_status: str | None) -> str:
+    if rule.get("rule_type") == "comparison_rule":
+        return {"matched": "triggered", "not_matched": "not_triggered"}.get(
+            execution_status or "", execution_status or "error"
+        )
     action = rule.get("action") or {}
     trigger_rule = any(
         bool(value) and (str(key).endswith("_required") or str(key).startswith("require_"))
@@ -98,6 +102,8 @@ def _audit_status(rule: dict[str, Any], execution_status: str | None) -> str:
 
 def _used_fields(rule: dict[str, Any]) -> list[str]:
     rule_type = rule.get("rule_type") or "numeric_rule"
+    if rule_type == "comparison_rule":
+        return [str(rule.get("field") or "")]
     if rule_type == "conditional_rule":
         return list(dict.fromkeys(
             [item.get("field") for item in rule.get("conditions") or []] + [(rule.get("requirement") or {}).get("field")]
@@ -108,11 +114,14 @@ def _used_fields(rule: dict[str, Any]) -> list[str]:
 
 
 def run_dynamic_regulation_audit(
-    case_data: dict[str, Any], repository: RegulationRepository | None = None
+    case_data: dict[str, Any], repository: RegulationRepository | None = None,
+    *, allowed_regulation_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     repository = repository or RegulationRepository()
     facts = canonical_facts(case_data)
     rules = repository.executable_rules()
+    if allowed_regulation_ids is not None:
+        rules = [item for item in rules if item.get("regulation_id") in allowed_regulation_ids]
     ordered = sorted(rules, key=lambda item: (item["rule"].get("rule_type") != "lookup_table_rule", item["rule_id"]))
     results: list[dict[str, Any]] = []
     for item in ordered:
@@ -146,6 +155,7 @@ def run_dynamic_regulation_audit(
         "format_version": "dynamic_regulation_audit_v1",
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "published_rule_count": len(rules),
+        "execution_scope": "reranked_regulations" if allowed_regulation_ids is not None else "all_published_regulations",
         "summary": {
             "compliant": counts["compliant"],
             "non_compliant": counts["non_compliant"],

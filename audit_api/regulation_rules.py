@@ -384,6 +384,8 @@ class RuleEngine:
     @classmethod
     def validate(cls, rule: dict[str, Any]) -> dict[str, Any]:
         rule_type = rule.get("rule_type") or "numeric_rule"
+        if rule_type == "comparison_rule":
+            return cls._validate_comparison(rule)
         if rule_type == "conditional_rule":
             return cls._validate_conditional(rule)
         if rule_type == "lookup_table_rule":
@@ -391,6 +393,28 @@ class RuleEngine:
         if rule_type != "numeric_rule":
             return {"valid": False, "errors": [f"不支持的规则类型：{rule_type}"], "warnings": []}
         return cls._validate_numeric(rule)
+
+    @classmethod
+    def _validate_comparison(cls, rule: dict[str, Any]) -> dict[str, Any]:
+        """Validate an auditable one-field threshold rule.
+
+        This is intentionally simpler than ``numeric_rule``: the persisted rule
+        directly represents ``field operator value`` and is evaluated by code,
+        never inferred by an LLM.
+        """
+        errors = cls._base_errors(rule)
+        if not rule.get("field"):
+            errors.append("缺少字段：field")
+        if rule.get("operator") not in cls.OPERATORS:
+            errors.append("operator只允许<、<=、>、>=、==。")
+        if rule.get("value") in (None, ""):
+            errors.append("缺少阈值：value")
+        else:
+            try:
+                cls.measurement(rule.get("value"), str(rule.get("unit") or ""))
+            except ValueError as exc:
+                errors.append(str(exc))
+        return {"valid": not errors, "errors": errors, "warnings": []}
 
     @classmethod
     def _base_errors(cls, rule: dict[str, Any]) -> list[str]:
@@ -478,6 +502,8 @@ class RuleEngine:
     @classmethod
     def execute(cls, rule: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
         rule_type = rule.get("rule_type") or "numeric_rule"
+        if rule_type == "comparison_rule":
+            return cls._execute_comparison(rule, data)
         if rule_type == "conditional_rule":
             return cls._execute_conditional(rule, data)
         if rule_type == "lookup_table_rule":
@@ -512,6 +538,32 @@ class RuleEngine:
             "unit": unit,
             "calculation": f"{rule['actual_field']}={actual}{unit} {rule['operator']} {rule['limit_formula']}={limit}{unit}",
             "action": rule["action"] if passed else {},
+        }
+
+    @classmethod
+    def _execute_comparison(cls, rule: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+        validation = cls.validate(rule)
+        if not validation["valid"]:
+            return {"status": "invalid_rule", "validation": validation}
+        field = str(rule["field"])
+        if data.get(field) in (None, ""):
+            return {"status": "insufficient_data", "missing_fields": [field], "message": f"缺少计算所需字段：{field}"}
+        unit = str(rule.get("unit") or "")
+        try:
+            actual = cls.measurement(data[field], unit)
+            threshold = cls.measurement(rule["value"], unit)
+            triggered = cls.OPERATORS[rule["operator"]](actual, threshold)
+        except (ValueError, ArithmeticError, InvalidOperation) as exc:
+            return {"status": "calculation_error", "message": str(exc)}
+        expression = f"{field}={actual}{unit} {rule['operator']} {threshold}{unit}"
+        return {
+            "status": "matched" if triggered else "not_matched",
+            "condition_met": triggered,
+            "actual_value": str(actual),
+            "threshold_value": str(threshold),
+            "unit": unit,
+            "calculation": expression,
+            "action": rule.get("action") or {},
         }
 
     @classmethod

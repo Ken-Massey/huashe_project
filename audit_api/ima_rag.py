@@ -13,15 +13,28 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .agent import AgentService, SILICONFLOW_EMBEDDING_MODEL, SILICONFLOW_MODEL
+from .audit_knowledge_graph import build_audit_knowledge_graph, render_relationship_expansion
 from .config import KNOWLEDGE_ROOT
 from .rag_audit import DOMAIN_TERMS, RISK_TOPICS, _paragraph_chunks, _risk_signal_score, _tokens, _walk_case
 from .regulation_rules import RULE_FIELD_CATALOG, RegulationRepository
+from .dynamic_audit import run_dynamic_regulation_audit
 
 
 Progress = Callable[[str], None]
 VECTOR_DB = KNOWLEDGE_ROOT / "rag_vectors.sqlite3"
 AUDIT_CACHE_ROOT = KNOWLEDGE_ROOT / "rag_audit_cache"
-AUDIT_CACHE_VERSION = "ima-rag-v10-bound-library-clause"
+AUDIT_CACHE_VERSION = "ima-rag-v13-cag-graph-wiki-rule-engine"
+CAG_AUDIT_FRAMEWORK_VERSION = "cag-core-audit-framework-v1"
+# This is deliberately stable and contains process guardrails only.  It is not
+# a regulation excerpt and must never be presented as an audit basis.
+CAG_FIXED_AUDIT_CONTEXT = """# 固定 CAG 审核框架（非规程条文，不作为审核依据）
+1. 审核结论的事实来源只限于当前项目事实、当前项目材料和本轮 RAG 证据；不得用本框架补造事实、数值或条款。
+2. 程序已执行的规则结果属于确定性输入：不得由模型重算、弱化、推翻或改写。
+3. “符合”或“不符合”必须同时能对应项目材料与技术规程证据；证据不足时只能写工程风险、补充资料或待人工复核。
+4. 审核意见优先覆盖空间关系与净距、基坑与支护、既有结构、工程地质与水文、施工影响、监测与应急等适用维度；不适用的维度不得凑项。
+5. 每项意见必须可执行、避免重复表达；规程名称和条款号只能取自本轮 RAG 证据。
+6. 固定框架仅统一审核方法，具体技术要求以本轮检索到的技术规程为准。"""
+AUDIT_CAG_EVIDENCE_LIMIT = 5
 AUDIT_PACKET_BATCH_SIZE = 5
 AUDIT_EVIDENCE_CHAR_LIMIT = 650
 AUDIT_BATCH_TIMEOUT_SECONDS = 75
@@ -837,11 +850,14 @@ def _validate_report(value: dict[str, Any], evidence: dict[str, dict[str, Any]])
     return value
 
 
-def _packet_context(packets: list[dict[str, Any]]) -> str:
+def _packet_context(packets: list[dict[str, Any]], *, include_evidence: bool = True) -> str:
     parts = ["## 审核维度"]
     for packet in packets:
         dimension = packet["dimension"]
         parts.append(f"- {dimension['title']}：{dimension['question']}")
+
+    if not include_evidence:
+        return "\n".join(parts)
 
     unique_hits: dict[str, dict[str, Any]] = {}
     for packet in packets:
@@ -867,20 +883,117 @@ def _packet_context(packets: list[dict[str, Any]]) -> str:
     return "\n".join(parts)
 
 
+def _current_project_facts_context(case_data: dict[str, Any]) -> str:
+    """Format confirmed/current structured facts without treating them as regulations."""
+    facts, _source_evidence = _walk_case(case_data)
+    rows: list[str] = []
+    seen: set[str] = set()
+    for item in facts:
+        path, separator, raw_value = item.partition("=")
+        if not separator:
+            continue
+        field = path.rsplit(".", 1)[-1]
+        if field in {"source_file", "managed_file", "text_file", "task_id", "audit_id"}:
+            continue
+        value = _humanize_user_text(raw_value)
+        if not value:
+            continue
+        label = USER_FIELD_LABELS.get(field) or _humanize_user_text(field)
+        row = f"{label}：{value}"
+        if row in seen:
+            continue
+        seen.add(row)
+        rows.append(row)
+    if not rows:
+        return "当前未提供可用的结构化项目事实；应仅依据项目材料和 RAG 证据说明待核实事项。"
+    return "当前项目事实（来自本轮确认数据，不是规程依据）：\n" + "\n".join(
+        f"- {row}" for row in rows[-120:]
+    )
+
+
+def _top_rag_evidence_items(
+    packets: list[dict[str, Any]], limit: int = AUDIT_CAG_EVIDENCE_LIMIT
+) -> list[dict[str, Any]]:
+    """Return one deterministic global Top-N evidence set for every LLM call."""
+    unique_hits: dict[str, dict[str, Any]] = {}
+    for packet in packets:
+        for item in packet.get("case_hits", []) + packet.get("regulation_hits", []):
+            chunk_id = str(item.get("chunk_id") or "")
+            if not chunk_id:
+                continue
+            previous = unique_hits.get(chunk_id)
+            score = float(item.get("rerank_score") or item.get("hybrid_score") or 0.0)
+            if previous is None or score > float(previous.get("rerank_score") or previous.get("hybrid_score") or 0.0):
+                unique_hits[chunk_id] = item
+    return sorted(
+        unique_hits.values(),
+        key=lambda item: (-float(item.get("rerank_score") or item.get("hybrid_score") or 0.0), str(item.get("chunk_id") or "")),
+    )[:max(1, limit)]
+
+
+def _top_rag_evidence_context(
+    packets: list[dict[str, Any]], limit: int = AUDIT_CAG_EVIDENCE_LIMIT
+) -> str:
+    """Render the fixed global Top-N evidence set for model context."""
+    selected = _top_rag_evidence_items(packets, limit)
+    if not selected:
+        return "本轮未检索到可用 RAG 证据。"
+    rows = ["本轮 RAG 全局 Top 5 证据（唯一可引用的检索材料）："]
+    for index, item in enumerate(selected, start=1):
+        if item.get("corpus_type") == "regulation":
+            heading = f"[{index}|规程|{item.get('chunk_id')}|《{item.get('document_title')}》|{item.get('section') or '相关内容'}]"
+        else:
+            heading = f"[{index}|项目材料|{item.get('chunk_id')}|页{item.get('source_page') or '未知'}]"
+        rows.append(f"{heading}\n{str(item.get('chunk_text') or '')[:AUDIT_EVIDENCE_CHAR_LIMIT]}")
+    return "\n".join(rows)
+
+
+def _deterministic_rule_context(audit: dict[str, Any]) -> str:
+    """Render code-executed outcomes for LLM context without exposing rule syntax."""
+    rows = []
+    for item in audit.get("results") or []:
+        execution = item.get("execution") or {}
+        if item.get("audit_status") not in {"triggered", "non_compliant", "compliant"}:
+            continue
+        rows.append({
+            "rule_id": item.get("rule_id"),
+            "rule": item.get("rule_name"),
+            "clause": item.get("clause"),
+            "status": item.get("audit_status"),
+            "calculation": execution.get("calculation") or execution.get("message"),
+        })
+    return json.dumps(rows, ensure_ascii=False) if rows else "本轮未执行出可判定的数值/条件规则结果。"
+
+
 def _audit_packet_batch(
     agent: AgentService,
     packets: list[dict[str, Any]],
     history_text: str = "",
+    deterministic_rules: str = "",
+    cag_context: str = CAG_FIXED_AUDIT_CONTEXT,
+    project_facts: str = "",
+    top_rag_evidence: str = "",
+    relationship_context: str = "",
 ) -> list[dict[str, Any]]:
     value = agent.complete_json(
         (
-            "你是资深城市轨道交通结构安全保护评审专家。只采用LLM+RAG审核，不调用规则函数。"
-            "直接阅读案例和规程证据，完成数值比较、表格查表、多条件判断和工程风险推理。"
+            f"{cag_context}\n\n"
+            "你是资深城市轨道交通结构安全保护评审专家。数值、表格和条件规则已经由程序执行。"
+            "不得重新计算、猜测、推翻或以不同结论改写输入的确定性规则结果；只对未覆盖的规程语义和工程风险作专业分析。"
             "不得虚构事实、条款、数值或页码。所有面向用户的文字必须使用自然中文，"
             "严禁输出snake_case英文内部字段名、JSON路径、true或false。只输出紧凑合法JSON。"
         ),
-        f"""审核以下检索证据：
-{_packet_context(packets)}
+        f"""{project_facts or '当前项目事实未单独提取。'}
+
+程序确定性规则结果（不可改写）：
+{deterministic_rules or '本轮无可判定规则结果'}
+
+{top_rag_evidence or '本轮未检索到可用 RAG 证据。'}
+
+{relationship_context or '本轮未形成额外关系扩展。'}
+
+本批审核维度：
+{_packet_context(packets, include_evidence=False)}
 
 同一项目前序阶段审核记录（辅助信息，不是本次材料或规程证据）：
 {history_text or '无前序阶段审核记录'}
@@ -914,7 +1027,16 @@ def _audit_packet_batch(
     return value.get("findings", []) if isinstance(value, dict) else []
 
 
-def _synthesize_report(agent: AgentService, findings: list[dict[str, Any]], case_scout: str) -> dict[str, Any]:
+def _synthesize_report(
+    agent: AgentService,
+    findings: list[dict[str, Any]],
+    case_scout: str,
+    deterministic_rules: str = "",
+    cag_context: str = CAG_FIXED_AUDIT_CONTEXT,
+    project_facts: str = "",
+    top_rag_evidence: str = "",
+    relationship_context: str = "",
+) -> dict[str, Any]:
     compact = [{
         "title": item.get("title"),
         "risk_level": item.get("risk_level"),
@@ -924,10 +1046,21 @@ def _synthesize_report(agent: AgentService, findings: list[dict[str, Any]], case
     } for item in findings]
     value = agent.complete_json(
         (
+            f"{cag_context}\n\n"
             "你是城市轨道交通结构安全保护评审负责人。根据已经完成的分项审查，"
-            "形成专业、审慎、可执行的总体结论。不得增加分项审查中没有依据的新事实。只输出JSON。"
+            "形成专业、审慎、可执行的总体结论。不得增加分项审查中没有依据的新事实，"
+            "更不得推翻程序已经执行的确定性规则结果。只输出JSON。"
         ),
-        f"""案例概况材料：
+        f"""{project_facts or '当前项目事实未单独提取。'}
+
+程序确定性规则结果（不可改写）：
+{deterministic_rules or '本轮无可判定规则结果'}
+
+{top_rag_evidence or '本轮未检索到可用 RAG 证据。'}
+
+{relationship_context or '本轮未形成额外关系扩展。'}
+
+案例概况材料：
 {case_scout[:7000]}
 
 分项审查：
@@ -950,9 +1083,17 @@ def _synthesize_report_with_timeout(
     agent: AgentService,
     findings: list[dict[str, Any]],
     case_scout: str,
+    deterministic_rules: str = "",
+    cag_context: str = CAG_FIXED_AUDIT_CONTEXT,
+    project_facts: str = "",
+    top_rag_evidence: str = "",
+    relationship_context: str = "",
 ) -> dict[str, Any]:
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="audit-synthesis")
-    future = executor.submit(_synthesize_report, agent, findings, case_scout)
+    future = executor.submit(
+        _synthesize_report, agent, findings, case_scout, deterministic_rules,
+        cag_context, project_facts, top_rag_evidence, relationship_context,
+    )
     try:
         return future.result(timeout=AUDIT_SYNTHESIS_TIMEOUT_SECONDS)
     except FutureTimeoutError as exc:
@@ -1049,6 +1190,7 @@ def run_ima_rag_audit(
     timings["vector_index"] = round(time.perf_counter() - stage_started, 3)
 
     facts, source_evidence = _walk_case(case_data)
+    project_facts = _current_project_facts_context(case_data)
     scouts = sorted(case_chunks, key=lambda item: _risk_signal_score(item["text"]), reverse=True)[:18]
     case_scout = "\n".join(facts[-120:] + source_evidence[-30:] + [item["text"] for item in scouts])
     if history_text:
@@ -1123,6 +1265,31 @@ def run_ima_rag_audit(
             "regulation_hits": regulation_hits,
         })
     timings["retrieval"] = round(time.perf_counter() - stage_started, 3)
+    # Rules are deliberately evaluated only after hybrid recall + deterministic
+    # rerank has selected the applicable regulation documents. This keeps the
+    # engine scoped to the current audit evidence instead of blindly executing
+    # every rule stored in the knowledge base.
+    notify("正在对重排命中的规程执行确定性规则引擎")
+    stage_started = time.perf_counter()
+    reranked_regulation_ids = {
+        str(hit.get("document_id") or "")
+        for packet in packets
+        for hit in packet.get("regulation_hits") or []
+        if hit.get("document_id")
+    }
+    deterministic_audit = run_dynamic_regulation_audit(
+        case_data, repository, allowed_regulation_ids=reranked_regulation_ids
+    )
+    deterministic_rules = _deterministic_rule_context(deterministic_audit)
+    timings["rule_engine"] = round(time.perf_counter() - stage_started, 3)
+    stage_started = time.perf_counter()
+    top_rag_evidence_items = _top_rag_evidence_items(packets)
+    top_rag_evidence = _top_rag_evidence_context(packets)
+    audit_knowledge_graph = build_audit_knowledge_graph(
+        project_facts, deterministic_audit.get("results") or [], top_rag_evidence_items,
+    )
+    relationship_context = render_relationship_expansion(audit_knowledge_graph)
+    timings["knowledge_graph_expansion"] = round(time.perf_counter() - stage_started, 3)
     notify("正在由大模型分维度并行审查案例与规程证据")
     stage_started = time.perf_counter()
     batches = [
@@ -1150,7 +1317,11 @@ def run_ima_rag_audit(
     executor = ThreadPoolExecutor(max_workers=min(3, len(batches)))
     try:
         futures = {
-            executor.submit(_audit_packet_batch, agent, batch, "\n\n".join([item for item in [history_text, session_text] if item])): (batch, time.perf_counter())
+            executor.submit(
+                _audit_packet_batch, agent, batch,
+                "\n\n".join([item for item in [history_text, session_text] if item]), deterministic_rules,
+                CAG_FIXED_AUDIT_CONTEXT, project_facts, top_rag_evidence, relationship_context,
+            ): (batch, time.perf_counter())
             for batch in batches
         }
         deadline = time.perf_counter() + AUDIT_DIMENSION_TOTAL_TIMEOUT_SECONDS
@@ -1190,7 +1361,10 @@ def run_ima_rag_audit(
     notify("正在汇总总体风险等级和专业审核结论")
     stage_started = time.perf_counter()
     try:
-        value = _synthesize_report_with_timeout(agent, findings, case_scout)
+        value = _synthesize_report_with_timeout(
+            agent, findings, case_scout, deterministic_rules,
+            CAG_FIXED_AUDIT_CONTEXT, project_facts, top_rag_evidence, relationship_context,
+        )
     except (TimeoutError, OSError, RuntimeError):
         risk_order = ["重大", "高", "中", "低", "提示"]
         present = {str(item.get("risk_level") or "提示") for item in findings}
@@ -1215,9 +1389,9 @@ def run_ima_rag_audit(
     value["findings"] = _bind_retrieved_regulation_evidence(findings, packets, evidence)
     value = _validate_report(value, evidence)
     value.update({
-        "format_version": "ima_rag_audit_v1",
-        "generation_mode": "pure_llm_rag",
-        "report_method": "semantic_vector_rag+llm_reasoning",
+        "format_version": "ima_rag_audit_v2",
+        "generation_mode": "cag_rerank_rule_engine_knowledge_graph_llm_rag",
+        "report_method": "fixed_cag_context+project_facts+metadata_filter+hybrid_retrieval+deterministic_rerank+rule_engine+knowledge_graph_llm_wiki_expansion+rag_top5+llm_generation",
         "embedding_model": SILICONFLOW_EMBEDDING_MODEL,
         "audit_dimensions": dimensions,
         "retrieved_case_chunk_count": len({
@@ -1233,19 +1407,34 @@ def run_ima_rag_audit(
         "historical_stage_count": len((_history_context(case_data).get("previous_stages") or [])),
         "current_session_context_used": bool(session_text),
         "history_context_hash": history_hash,
+        "deterministic_rule_results": deterministic_audit.get("results") or [],
+        "deterministic_rule_summary": deterministic_audit.get("summary") or {},
+        "deterministic_rule_execution_scope": deterministic_audit.get("execution_scope"),
+        "cag_context": {
+            "version": CAG_AUDIT_FRAMEWORK_VERSION,
+            "content_hash": _hash(CAG_FIXED_AUDIT_CONTEXT),
+            "delivery": "stable_system_prompt_prefix",
+            "provider_kv_cache": "provider_managed_not_guaranteed",
+        },
+        "project_facts_used": bool(project_facts),
+        "rag_top_evidence_limit": AUDIT_CAG_EVIDENCE_LIMIT,
+        "rag_top_evidence_chunk_ids": [
+            str(item.get("chunk_id") or "") for item in top_rag_evidence_items
+        ],
+        "audit_knowledge_graph": audit_knowledge_graph,
     })
     timings["total"] = round(time.perf_counter() - started, 3)
     value["timings_seconds"] = timings
     result = {
-        "format_version": "pure_llm_rag_audit_v1",
-        "published_rule_count": 0,
+        "format_version": "ima_rag_rule_engine_audit_v1",
+        "published_rule_count": deterministic_audit.get("published_rule_count") or 0,
         "summary": {
             "compliant": sum(1 for item in value["findings"] if item.get("judgement") == "compliant"),
             "non_compliant": sum(1 for item in value["findings"] if item.get("judgement") == "non_compliant"),
             "risk": sum(1 for item in value["findings"] if item.get("judgement") == "risk"),
             "insufficient_data": sum(1 for item in value["findings"] if item.get("judgement") == "insufficient"),
         },
-        "results": [],
+        "results": deterministic_audit.get("results") or [],
         "risk_report": value,
     }
     AUDIT_CACHE_ROOT.mkdir(parents=True, exist_ok=True)

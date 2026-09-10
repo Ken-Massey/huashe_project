@@ -363,6 +363,14 @@ class AuditSessionApiTests(unittest.TestCase):
         self.assertIn("本次专项评估报告总体符合", text)
         self.assertNotIn("落实专项评估", text)
 
+    def test_overall_opinion_deduplicates_support_components(self):
+        text = main._engineering_overview_sentence({
+            "support_components": ["地下连续墙", "地下连续墙", "锚杆"],
+        })
+
+        self.assertIn("采用地下连续墙、锚杆支护", text)
+        self.assertNotIn("地下连续墙、地下连续墙", text)
+
     def test_chat_rewrite_keeps_document_type_style_from_session_metadata(self):
         class FakeAgent:
             def complete_json(self, system, prompt, max_tokens):

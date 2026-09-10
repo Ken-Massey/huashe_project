@@ -4,17 +4,22 @@ import unittest
 import sqlite3
 from pathlib import Path
 
+from audit_api.audit_knowledge_graph import build_audit_knowledge_graph, render_relationship_expansion
 from audit_api.ima_rag import (
+    CAG_FIXED_AUDIT_CONTEXT,
     SemanticIndex,
     _audit_context_hash,
     _audit_packet_batch,
     _bind_retrieved_regulation_evidence,
+    _current_project_facts_context,
     _fast_dimensions,
     _history_context_text,
     _has_applicable_primary_regulation,
     _packet_context,
     _regulation_reference,
     _regulation_source_name,
+    _top_rag_evidence_context,
+    _top_rag_evidence_items,
     _validate_report,
 )
 
@@ -147,6 +152,66 @@ class ImaRagTests(unittest.TestCase):
 
         self.assertEqual(context.count("同一段案例证据"), 1)
         self.assertIn("关联维度:空间关系、施工风险", context)
+
+    def test_cag_prompt_has_fixed_framework_facts_rules_and_global_top5_evidence(self):
+        class FakeAgent:
+            def complete_json(self, system, prompt, max_tokens):
+                self.system = system
+                self.prompt = prompt
+                return {"findings": []}
+
+        packets = [{
+            "dimension": {"title": "基坑支护", "question": "支护是否适用？"},
+            "case_hits": [{
+                "chunk_id": "case-1", "corpus_type": "case", "source_page": 1,
+                "chunk_text": "项目基坑深度18.5m。", "rerank_score": 0.91,
+            }],
+            "regulation_hits": [{
+                "chunk_id": "reg-1", "corpus_type": "regulation", "document_title": "测试规程",
+                "section": "6.2.1", "chunk_text": "深基坑应实施专项控制。", "rerank_score": 0.88,
+            }],
+        }]
+        agent = FakeAgent()
+        facts = _current_project_facts_context({"pit_depth_m": 18.5})
+        top5 = _top_rag_evidence_context(packets)
+        _audit_packet_batch(agent, packets, deterministic_rules='[{"rule_id":"R001"}]', project_facts=facts, top_rag_evidence=top5)
+
+        self.assertTrue(agent.system.startswith(CAG_FIXED_AUDIT_CONTEXT))
+        self.assertIn("基坑深度：18.5", agent.prompt)
+        self.assertIn('"rule_id":"R001"', agent.prompt)
+        self.assertIn("case-1", agent.prompt)
+        self.assertIn("reg-1", agent.prompt)
+
+    def test_global_top5_evidence_is_deduplicated_and_ranked(self):
+        def hit(chunk_id, score):
+            return {"chunk_id": chunk_id, "corpus_type": "case", "chunk_text": chunk_id, "rerank_score": score}
+
+        packets = [{
+            "case_hits": [hit("same", 0.2), hit("c1", 0.9), hit("c2", 0.8)],
+            "regulation_hits": [hit("same", 0.95), hit("c3", 0.7), hit("c4", 0.6), hit("c5", 0.5)],
+        }]
+        selected = _top_rag_evidence_items(packets)
+
+        self.assertEqual([item["chunk_id"] for item in selected], ["same", "c1", "c2", "c3", "c4"])
+
+    def test_knowledge_graph_expands_only_from_current_audit_inputs(self):
+        graph = build_audit_knowledge_graph(
+            "当前项目事实：\n- 基坑深度：18.5\n- 降水方式：管井降水",
+            [{
+                "rule_id": "R001", "audit_status": "triggered",
+                "input_values": {"pit_depth": 18.5},
+            }],
+            [{
+                "chunk_id": "case-1", "corpus_type": "case",
+                "chunk_text": "本项目采用地下连续墙并进行基坑开挖。",
+            }],
+        )
+        expansion = render_relationship_expansion(graph)
+
+        self.assertIn("基坑与支护", graph["activated_topics"])
+        self.assertTrue(any(item["target"] == "地层变形与沉降" for item in graph["relationship_expansion"]))
+        self.assertIn("仅辅助分析，不是项目事实或规程依据", expansion)
+        self.assertIn("基坑与支护", expansion)
 
     def test_semantic_index_filters_current_case_and_corpus(self):
         with tempfile.TemporaryDirectory() as directory:

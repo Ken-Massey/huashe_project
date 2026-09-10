@@ -2066,10 +2066,25 @@ def _format_overall_meter(value: Any) -> str:
 
 
 def _support_form_text(value: Any) -> str:
-    text = _usable_overall_value(value)
-    if not text:
+    if isinstance(value, (list, tuple, set)):
+        values = value
+    else:
+        text = _usable_overall_value(value)
+        values = re.split(r"[、,，;；]", text) if text else []
+    components: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        component = _usable_overall_value(item)
+        if not component:
+            continue
+        component = component.strip("，,、；; ")
+        if not component or component in seen:
+            continue
+        seen.add(component)
+        components.append(component)
+    if not components:
         return ""
-    text = text.replace(",", "、")
+    text = "、".join(components)
     return text if re.search(r"(支护|围护|支撑体系|支护体系|支护结构)", text) else f"{text}支护"
 
 

@@ -384,7 +384,10 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
     elif "保护区外" in compact:
         protection_zone_location = "保护区外"
 
-    support_components = [
+    # "地下连续墙" and "地连墙" (and similar aliases added later) may both
+    # appear in one document.  Preserve the first recognized term, but never
+    # expose the normalized value twice to the confirmation form or review.
+    support_components = list(dict.fromkeys([
         value for keyword, value in (
             ("钻孔灌注桩", "钻孔灌注桩"),
             ("围护桩", "围护桩"),
@@ -404,7 +407,7 @@ def recognize_letter(source_file: Path) -> dict[str, Any]:
             ("土钉", "土钉"),
         )
         if keyword in compact
-    ]
+    ]))
 
     other_involvements = [
         value for value in ("红线", "接口", "临时结构", "协议") if value in compact
