@@ -84,6 +84,7 @@ export function deleteAgentSession(id) { return request({ url: `/rail/agent/sess
 
 export function createAuditSession(data) { return request({ url: '/rail/audit-sessions', method: 'post', data }) }
 export function getAuditSession(id) { return request({ url: `/rail/audit-sessions/${id}`, method: 'get' }) }
+export function refreshAuditSessionOverall(id) { return request({ url: `/rail/audit-sessions/${id}/refresh-overall`, method: 'post' }) }
 export function createAuditSessionItem(sessionId, data) { return request({ url: `/rail/audit-sessions/${sessionId}/items`, method: 'post', data }) }
 export function updateAuditSessionItem(sessionId, itemId, data) { return request({ url: `/rail/audit-sessions/${sessionId}/items/${itemId}`, method: 'post', data }) }
 export function deleteAuditSessionItem(sessionId, itemId) { return request({ url: `/rail/audit-sessions/${sessionId}/items/${itemId}`, method: 'delete' }) }

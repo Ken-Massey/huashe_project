@@ -64,6 +64,43 @@ class AuditSessionRepositoryTests(unittest.TestCase):
         self.assertEqual(message["version_no"], current["current_version"])
         self.assertEqual(len(self.repository.list_messages(session["session_id"])), 2)
 
+    def test_update_overall_opinion_creates_new_session_snapshot(self):
+        session = self.repository.create_session({
+            "metadata": {"overall_opinion": {"title": "综合评价", "conclusion": "旧文案"}},
+            "items": [{"title": "审核事项", "conclusion": "核实相关资料。"}],
+        })
+
+        updated = self.repository.update_overall_opinion(session["session_id"], {
+            "title": "综合评价",
+            "conclusion": "新版文案",
+            "risk_level": "中",
+            "basis": [],
+            "recommendation": "",
+            "source": {"kind": "overall_summary"},
+        })
+
+        self.assertEqual(updated["current_version"], 2)
+        self.assertEqual(updated["metadata"]["overall_opinion"]["conclusion"], "新版文案")
+        self.assertEqual(updated["latest_result"]["overall_opinion"]["conclusion"], "新版文案")
+
+    def test_overall_update_records_template_metadata_without_changing_items(self):
+        session = self.repository.create_session({
+            "metadata": {"overall_opinion": {"title": "综合评价", "conclusion": "旧文案"}},
+            "items": [{"title": "人工编辑意见", "conclusion": "保留该意见。", "manual_modified": True}],
+        })
+        item_id = session["items"][0]["item_id"]
+
+        updated = self.repository.update_overall_opinion(
+            session["session_id"],
+            {"title": "综合评价", "conclusion": "新版文案"},
+            metadata_updates={"overall_opinion_template_version": "formal-reply-overview-v3"},
+        )
+
+        self.assertEqual(updated["metadata"]["overall_opinion_template_version"], "formal-reply-overview-v3")
+        self.assertEqual(updated["items"][0]["item_id"], item_id)
+        self.assertTrue(updated["items"][0]["manual_modified"])
+        self.assertIn(session["session_id"], self.repository.list_session_ids())
+
 
 class AuditSessionApiTests(unittest.TestCase):
     def setUp(self):
@@ -85,6 +122,7 @@ class AuditSessionApiTests(unittest.TestCase):
         expected = {
             "/api/v1/audit-sessions",
             "/api/v1/audit-sessions/{session_id}",
+            "/api/v1/audit-sessions/{session_id}/refresh-overall",
             "/api/v1/audit-sessions/{session_id}/items",
             "/api/v1/audit-sessions/{session_id}/items/{item_id}",
             "/api/v1/audit-sessions/{session_id}/messages",
@@ -93,6 +131,30 @@ class AuditSessionApiTests(unittest.TestCase):
             "/api/v1/audit-sessions/{session_id}/reply",
         }
         self.assertTrue(expected.issubset(paths))
+
+    def test_refresh_overall_upgrades_legacy_session_but_preserves_items(self):
+        session = self.repository.create_session({
+            "metadata": {
+                "review_profile": "safety_assessment_report",
+                "form_data": {
+                    "project_name": "测试地块",
+                    "metro_line_name": "1号线",
+                    "metro_section_name": "甲站~乙站区间隧道",
+                    "relative_relationship": "双侧",
+                    "pit_depth_m": 8,
+                },
+                "overall_opinion": {"title": "综合评价", "conclusion": "本项目与1号线呈双侧关系。"},
+            },
+            "items": [{"title": "人工审核意见", "conclusion": "保留人工审核意见。", "manual_modified": True}],
+        })
+        item_id = session["items"][0]["item_id"]
+
+        refreshed = main.refresh_audit_session_overall_opinion(session["session_id"])
+
+        self.assertGreater(refreshed["current_version"], session["current_version"])
+        self.assertEqual(refreshed["items"][0]["item_id"], item_id)
+        self.assertIn("测试地块项目基坑位于已建地铁1号线甲站～乙站区间隧道的两侧", refreshed["metadata"]["overall_opinion"]["conclusion"])
+        self.assertEqual(refreshed["metadata"]["overall_opinion_template_version"], main.OVERALL_OPINION_TEMPLATE_VERSION)
 
     def test_api_functions_manage_items(self):
         session = main.create_audit_session(main.AuditSessionCreatePayload(
@@ -354,11 +416,11 @@ class AuditSessionApiTests(unittest.TestCase):
         )
 
         text = overall["conclusion"]
-        self.assertIn("本项目与地铁2号线云锦路站~莫愁湖站区间隧道呈北侧关系", text)
+        self.assertIn("本项目基坑位于已建地铁2号线云锦路站～莫愁湖站区间隧道的北侧，基坑开挖深度约为6.7米", text)
         self.assertIn("基坑开挖深度约为6.7米", text)
-        self.assertIn("采用钻孔灌注桩、三轴搅拌桩止水帷幕", text)
-        self.assertIn("支护结构与地铁结构边线最小水平距离约为20.1米", text)
-        self.assertIn("降水方式为管井降水", text)
+        self.assertIn("基坑支护采用钻孔灌注桩、三轴搅拌桩止水帷幕", text)
+        self.assertIn("项目基坑与地铁结构边线的最小水平距离约为20.1米", text)
+        self.assertIn("降水采用管井降水", text)
         self.assertIn("对应地铁结构埋深约为14.5~16.5米", text)
         self.assertIn("本次专项评估报告总体符合", text)
         self.assertNotIn("落实专项评估", text)
@@ -370,6 +432,26 @@ class AuditSessionApiTests(unittest.TestCase):
 
         self.assertIn("采用地下连续墙、锚杆支护", text)
         self.assertNotIn("地下连续墙、地下连续墙", text)
+
+    def test_engineering_overview_uses_formal_reply_location_order(self):
+        text = main._engineering_overview_sentence({
+            "project_name": "某项目基坑工程",
+            "metro_line_name": "十号线号线",
+            # A legacy free-text value may contain a direction before the
+            # station pair.  It must not be rendered as part of the section.
+            "metro_section_name": "十号线号线基坑南侧及东南侧距离江心洲站~绿博园站",
+            "relative_relationship": "双侧",
+            "pit_depth_m": 19.6,
+            "support_components": ["围护桩", "地下连续墙", "锚杆"],
+            "minimum_horizontal_clearance_m": 17,
+            "dewatering_method": "止水帷幕",
+        })
+
+        self.assertIn("某项目基坑工程位于已建地铁十号线江心洲站～绿博园站区间的南侧及东南侧，基坑开挖深度约为19.6米", text)
+        self.assertNotIn("呈双侧关系", text)
+        self.assertIn("基坑支护采用围护桩、地下连续墙、锚杆。", text)
+        self.assertIn("项目基坑与地铁结构边线的最小水平距离约为17米。", text)
+        self.assertNotIn("十号线基坑南侧及东南侧距离", text)
 
     def test_chat_rewrite_keeps_document_type_style_from_session_metadata(self):
         class FakeAgent:

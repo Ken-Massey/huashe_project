@@ -477,6 +477,7 @@
                     <strong>这是当前最新版审核结果</strong>
                     <small>可直接编辑单条结果，也可以在下方输入修改意见让我调整。</small>
                   </div>
+                  <el-button size="mini" plain icon="el-icon-refresh" :loading="auditSessionRefreshing" @click="refreshAuthoritativeAuditSession(true)">刷新审核结果</el-button>
                   <el-button size="mini" type="primary" plain icon="el-icon-plus" @click="openReviewItemDialog()">新增条目</el-button>
                 </div>
                 <div v-if="auditSession" v-hasPermi="['rail:audit:workflow:list']" class="workflow-panel">
@@ -535,7 +536,7 @@
                   <h4>综合评价</h4>
                   <p>{{ displayOverallOpinion(messageOverallOpinion(message)) }}</p>
                   <details v-if="rationaleFor(messageOverallOpinion(message))" class="review-rationale">
-                    <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
+                    <summary><i class="el-icon-notebook-2" /> 审核推理过程</summary>
                     <div class="rationale-content">
                       <p v-for="entry in rationaleEntries(messageOverallOpinion(message))" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
                     </div>
@@ -558,7 +559,7 @@
                     <span>意见</span>{{ displayReviewOpinion(item) }}
                   </div>
                   <details v-if="rationaleFor(item)" class="review-rationale">
-                    <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
+                    <summary><i class="el-icon-notebook-2" /> 审核推理过程</summary>
                     <div class="rationale-content">
                       <p v-for="entry in rationaleEntries(item)" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
                     </div>
@@ -577,7 +578,7 @@
                     <h4>综合评价</h4>
                     <p>{{ displayOverallOpinion(messageOverallOpinion(message)) }}</p>
                     <details v-if="rationaleFor(messageOverallOpinion(message))" class="review-rationale">
-                      <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
+                    <summary><i class="el-icon-notebook-2" /> 审核推理过程</summary>
                       <div class="rationale-content">
                         <p v-for="entry in rationaleEntries(messageOverallOpinion(message))" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
                       </div>
@@ -596,7 +597,7 @@
                       <span>意见</span>{{ displayReviewOpinion(item) }}
                     </div>
                     <details v-if="rationaleFor(item)" class="review-rationale">
-                      <summary><i class="el-icon-notebook-2" /> 审核依据与形成说明</summary>
+                    <summary><i class="el-icon-notebook-2" /> 审核推理过程</summary>
                       <div class="rationale-content">
                         <p v-for="entry in rationaleEntries(item)" :key="entry.label"><strong>{{ entry.label }}</strong>{{ entry.value }}</p>
                       </div>
@@ -788,7 +789,7 @@ import { saveAs } from 'file-saver'
 import FileDropZone from '../components/FileDropZone.vue'
 import {
   createFullTask, createReplyTask, recognizeReplyLetter,
-  getTask, getTaskResult, getAuditSession,
+  getTask, getTaskResult, getAuditSession, refreshAuditSessionOverall,
   createAuditSessionItem, updateAuditSessionItem, deleteAuditSessionItem,
   reviseAuditSession, writeAuditSessionToArchive, rerunArchivedAudit, generateAuditSessionReply,
   listKnowledge, listLibraryAssets, downloadKnowledgeFile, downloadLibraryAsset,
@@ -855,7 +856,7 @@ export default {
     return {
       activeTab: 'project', documents: [], recognizing: false, documentSequence: 0, mainCaseDocumentId: '',
       auditTaskId: '', auditResult: null, replyResult: null, auditSubmitting: false, replySubmitting: false,
-      auditSession: null, reviewItems: [], chatMessages: [], chatInstruction: '', chatSubmitting: false,
+      auditSession: null, reviewItems: [], chatMessages: [], chatInstruction: '', chatSubmitting: false, auditSessionRefreshing: false,
       expandedSnapshotIds: {},
       workflowInfo: null, workflowTasks: [], workflowLogs: [], workflowSnapshots: [],
       workflowLoading: false, workflowSubmitting: false, workflowHistoryDialogVisible: false,
@@ -1982,9 +1983,53 @@ export default {
         if (restoredMainCase) this.mainCaseDocumentId = restoredMainCase.id
         this.ensureMainCaseSelection()
         this.documentSequence = this.documents.length
-        if (this.auditSession) this.$nextTick(() => this.refreshWorkflowInfo())
+        if (this.auditSession) {
+          // The browser draft is only a recovery cache.  The editable audit
+          // session on the server is authoritative, especially after the
+          // review-generation template has been updated while a page is open.
+          this.$nextTick(() => {
+            this.refreshWorkflowInfo()
+            this.refreshRestoredAuditSession()
+          })
+        }
       } catch (error) {
         sessionStorage.removeItem(AUDIT_DRAFT_KEY)
+      }
+    },
+    async refreshRestoredAuditSession() {
+      return this.refreshAuthoritativeAuditSession(false)
+    },
+    async refreshAuthoritativeAuditSession(showSuccess = false) {
+      const sessionId = String(this.auditSession && this.auditSession.session_id || '')
+      if (!sessionId) return
+      this.auditSessionRefreshing = true
+      try {
+        // The server session is the single source of truth for the current
+        // result.  Chat snapshots are retained only as historical records.
+        let session
+        try {
+          session = await refreshAuditSessionOverall(sessionId)
+        } catch (refreshError) {
+          // Existing Java instances may not yet expose the dedicated refresh
+          // proxy during a rolling update.  GET has the same server-side
+          // deterministic upgrade gate and keeps currently deployed systems
+          // usable until that proxy is restarted.
+          const status = refreshError && refreshError.response && refreshError.response.status
+          if (status !== 404 && status !== 405) throw refreshError
+          session = await getAuditSession(sessionId)
+        }
+        // Do not overwrite a new audit started while the background refresh
+        // was waiting for the server response.
+        if (String(this.auditSession && this.auditSession.session_id || '') !== sessionId) return
+        this.applySessionResponse(session)
+        if (showSuccess) this.$message.success('已同步服务端当前审核结果')
+      } catch (error) {
+        // Keep the recovery cache visible when the service is temporarily
+        // unavailable; the next page load will try to synchronize again.
+        console.warn('审核会话同步失败，暂时显示本地恢复版本', error)
+        if (showSuccess) this.$message.error('审核结果同步失败，请检查服务状态')
+      } finally {
+        this.auditSessionRefreshing = false
       }
     },
     async loadArchiveSelection() {
@@ -2859,12 +2904,43 @@ export default {
     rationaleEntries(item) {
       const rationale = this.rationaleFor(item)
       if (!rationale) return []
+      const source = item && item.source && typeof item.source === 'object' ? item.source : {}
+      const evidence = this.rationaleEvidence(item)
+      const comparison = this.cleanRationaleValue(source.comparison)
+      const sourceResult = this.cleanRationaleValue(source.source_result || source.result)
+      const fact = comparison
+        ? `本次资料中可量化识别到：${comparison}。`
+        : sourceResult
+          ? `本次资料识别结果：${sourceResult}。`
+          : '本条未保留可定位的项目资料摘录；需结合补充后的原文、计算书或调查记录复核。'
+      const rule = evidence.map(entry => {
+        if (entry && typeof entry === 'object') {
+          const reference = [entry.document, entry.clause ? `第${entry.clause}条` : ''].filter(Boolean).join(' ')
+          return `${reference}${entry.quote ? `：${entry.quote}` : ''}`
+        }
+        return String(entry || '')
+      }).filter(Boolean).join('；') || this.cleanRationaleValue(rationale.rule)
+      const judgement = this.rationaleJudgement(source, Boolean(comparison), Boolean(evidence.length), rationale)
       return [
-        { label: '资料事实：', value: this.cleanRationaleValue(rationale.facts) },
-        { label: '审核依据：', value: this.cleanRationaleValue(rationale.rule) },
-        { label: '规则判断：', value: this.cleanRationaleValue(rationale.rule_judgement) },
-        { label: '意见形成：', value: this.cleanRationaleValue(rationale.conclusion_reason) }
+        { label: '已识别事实：', value: fact },
+        { label: '适用条款：', value: rule },
+        { label: '对照判断：', value: judgement }
       ].filter(entry => entry.value)
+    },
+    rationaleJudgement(source, hasComparison, hasEvidence, rationale) {
+      const basisType = String(source && source.basis_type || 'regulation')
+      const judgement = String(source && (source.judgement || source.review_status) || '')
+      if (basisType === 'project_file') return '该项仅依据项目资料提出补充或核验要求，不能替代规程符合性结论。'
+      if (basisType === 'manual_review') return '缺少可追溯条文或资料原文，不能自动判断符合性，须由专业人员补充核验。'
+      if (judgement === 'non_compliant') return '已识别资料与条款要求存在不一致或缺项，故形成补充、修改或控制要求。'
+      if (judgement === 'missing') return '缺少完成条文对照所需的关键资料，当前不能判断符合性，故要求补充后复核。'
+      if (['warning', 'risk', 'needs_review'].includes(judgement)) {
+        return hasComparison
+          ? '已识别到需对照的工程数据，但当前资料未给出完整的量化验算或控制值对照结论；不能直接判定符合，故列为需核实和补充的审核事项。'
+          : '已命中相关风险或控制条款，但未保留可供自动对照的项目事实或量化验算结论；不能直接判定符合，故列为需核实和补充的审核事项。'
+      }
+      if (hasEvidence) return '已关联适用条款，但尚需以可定位的项目事实完成逐项对照后，才能形成符合性判断。'
+      return this.cleanRationaleValue(rationale && rationale.rule_judgement) || '缺少可核验依据，暂不能形成自动符合性判断。'
     },
     cleanRationaleValue(value) {
       return String(value || '').replace(/^(资料事实|审核依据|引用依据|规则判断|意见形成|形成原因)\s*[:：]\s*/, '').trim()
@@ -2964,6 +3040,10 @@ export default {
     },
     messageReviewItems(message) {
       if (!message || message.role !== 'assistant') return []
+      // The visible “latest” card must never be driven by a persisted or
+      // browser-cached chat snapshot.  It always renders the authoritative
+      // server session.  Older cards remain immutable history.
+      if (this.isLatestSnapshot(message)) return this.auditReviewItems
       const snapshot = this.messageSnapshot(message)
       const items = snapshot && (snapshot.items || snapshot.review_items)
       return Array.isArray(items)
@@ -2972,6 +3052,7 @@ export default {
     },
     messageOverallOpinion(message) {
       if (!message || message.role !== 'assistant') return null
+      if (this.isLatestSnapshot(message)) return this.currentOverallOpinion
       const snapshot = this.messageSnapshot(message)
       const items = snapshot && (snapshot.items || snapshot.review_items)
       return this.extractOverallOpinion(snapshot, Array.isArray(items) ? items : [])
@@ -3031,9 +3112,11 @@ export default {
     },
     displayOverallOpinion(item) {
       const text = this.cleanChatMessageContent(item && (item.conclusion || item.recommendation) || '')
-      if (!text) return ''
-      if (!this.overallOpinionNeedsPositiveTone(text) && !this.overallOpinionNeedsStandardTone(text)) return text
-      return this.positiveOverallOpinionText()
+      // The active audit-session card is populated by the server's
+      // deterministic template.  Do not substitute the old browser-side
+      // fallback here: its legacy location wording can overwrite a correctly
+      // refreshed formal-reply overview while still reporting success.
+      return text
     },
     overallOpinionNeedsPositiveTone(value) {
       return /(不予通过|不同意|不可实施|不得进入|不得实施|多项高风险|高风险及不合规|总体结论为|缺乏|不足|超限|缺陷|缺失|不满足|不符合|严禁|必须严格)/.test(String(value || ''))
@@ -3264,7 +3347,16 @@ export default {
     applySessionResponse(session) {
       this.auditSession = session
       this.reviewItems = session.items || []
-      this.chatMessages = this.ensureSnapshotMessages(session, { review_items: this.reviewItems }, this.chatMessages)
+      const metadata = session.metadata || {}
+      this.auditResult = {
+        ...(this.auditResult || {}),
+        audit_session_id: session.session_id,
+        audit_session: session,
+        review_items: this.reviewItems,
+        overall_opinion: metadata.overall_opinion || {},
+        latest_result: session.latest_result || {}
+      }
+      this.chatMessages = this.ensureSnapshotMessages(session, this.auditResult, this.chatMessages)
       this.saveAuditDraft()
       this.$nextTick(() => this.refreshWorkflowInfo())
     },

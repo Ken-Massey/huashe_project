@@ -44,6 +44,11 @@ from stage1_reply_system.review_generation import render_reply_draft_docx
 
 LOGGER = logging.getLogger(__name__)
 
+# The overall opinion is generated deterministically from confirmed form data.
+# Persisting this revision lets old sessions be upgraded without rewriting their
+# editable review items or historical conversation snapshots.
+OVERALL_OPINION_TEMPLATE_VERSION = "formal-reply-overview-v4"
+
 app = FastAPI(
     title="杞ㄩ亾浜ら€氫繚鎶ゅ尯鏅鸿兘瀹℃牳Python鏈嶅姟",
     version="1.0.0",
@@ -1020,6 +1025,43 @@ def _session_overall_context(session: dict[str, Any]) -> dict[str, Any]:
     return context
 
 
+def _refresh_session_overall_opinion(session: dict[str, Any]) -> dict[str, Any]:
+    """Apply the current deterministic overall-opinion template to old sessions.
+
+    Editable audit sessions outlive template releases.  Refresh only the
+    system-generated overall text when it differs, while retaining every
+    review item and its user edits.
+    """
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    current = metadata.get("overall_opinion") if isinstance(metadata.get("overall_opinion"), dict) else {}
+    refreshed = _sanitize_overall_opinion(
+        {},
+        current,
+        [item for item in (session.get("items") or []) if not _is_overall_review_item(item)],
+        _session_overall_context(session),
+        force_formal=True,
+    )
+    if _session_review_profile(session) == "safety_assessment_report":
+        refreshed["conclusion"] = _normalize_safety_assessment_wording_text(
+            refreshed.get("conclusion") or ""
+        )
+    if current.get("rationale"):
+        refreshed["rationale"] = current["rationale"]
+    template_is_current = metadata.get("overall_opinion_template_version") == OVERALL_OPINION_TEMPLATE_VERSION
+    if (
+        current.get("title") == refreshed.get("title")
+        and current.get("conclusion") == refreshed.get("conclusion")
+        and current.get("risk_level") == refreshed.get("risk_level")
+        and template_is_current
+    ):
+        return session
+    return audit_sessions.update_overall_opinion(
+        session["session_id"],
+        refreshed,
+        metadata_updates={"overall_opinion_template_version": OVERALL_OPINION_TEMPLATE_VERSION},
+    )
+
+
 def _normalize_safety_assessment_wording_text(text: Any) -> str:
     value = str(text or "")
     replacements = (
@@ -1223,7 +1265,7 @@ def _rationale_evidence(basis: Any) -> list[dict[str, str]]:
 
 
 def _build_review_item_rationale(item: dict[str, Any]) -> dict[str, Any]:
-    """Build an auditable explanation, rather than exposing model reasoning."""
+    """Build a traceable fact-to-rule judgement, without exposing model reasoning."""
     source = item.get("source") if isinstance(item.get("source"), dict) else {}
     evidence = _rationale_evidence(item.get("basis") or [])
     kind = str(source.get("kind") or "")
@@ -1231,21 +1273,21 @@ def _build_review_item_rationale(item: dict[str, Any]) -> dict[str, Any]:
     source_result = _rationale_text(source.get("source_result") or source.get("result"), 360)
 
     if comparison:
-        facts = f"资料与技术要求比对结果为：{comparison}"
+        facts = f"本次资料中可量化识别到：{comparison}。"
     elif source_result:
-        facts = f"本次资料识别结果为：{source_result}"
+        facts = f"本次资料识别结果：{source_result}。"
     elif kind == "previous_stage_delta":
         facts = "本阶段资料与已归档上一阶段资料比对后，发现需要继续复核或说明的关键变化。"
     elif kind == "same_upload_data_consistency":
         facts = "同批上传资料交叉核对后，发现需要统一或进一步核验的关键数据。"
     elif evidence:
-        facts = "根据已关联的资料摘录和技术规程条款形成审核事项。"
+        facts = "本条未保留可定位的项目资料摘录，需结合补充后的原文、计算书或调查记录复核。"
     else:
         facts = "该条意见尚未关联到可定位的资料事实或技术规程条款。"
 
     evidence_summary = "；".join(
-        " ".join(part for part in (entry.get("document"), entry.get("clause")) if part)
-        or entry.get("quote", "")
+        " ".join(part for part in (entry.get("document"), f"第{entry.get('clause')}条" if entry.get("clause") else "") if part)
+        + (f"：{entry.get('quote')}" if entry.get("quote") else "")
         for entry in evidence
     )
     basis_type = str(source.get("basis_type") or "regulation")
@@ -1256,24 +1298,29 @@ def _build_review_item_rationale(item: dict[str, Any]) -> dict[str, Any]:
     else:
         rule = _short_text(evidence_summary, 520) if evidence_summary else "未找到可引用的规程条款或资料定位，需补充审核依据。"
     judgement = str(source.get("judgement") or source.get("review_status") or "")
-    judgement_map = {
-        "non_compliant": "识别结果提示相关资料或控制要求尚需补充、复核或落实。",
-        "missing": "关键资料未完整提供，暂不具备充分核验条件。",
-        "warning": "存在需要重点关注并落实控制措施的风险提示。",
-        "needs_review": "现有资料需要由专业人员进一步复核确认。",
-    }
-    rule_judgement = ("该项依据项目已提交资料形成补充、核验或落实要求，不作为规程符合性结论。"
-        if basis_type == "project_file" else judgement_map.get(judgement) or (
-        "结合资料事实与引用依据，形成需处理的审核事项。"
-        if evidence
-        else "本条尚缺少可核验依据，仅可作为待补充、待复核事项，不能直接作为正式审核结论。"
-    ))
+    if basis_type == "project_file":
+        rule_judgement = "该项仅能依据项目资料提出补充或核验要求，不能替代规程符合性结论。"
+    elif basis_type == "manual_review":
+        rule_judgement = "缺少可追溯条文或资料原文，不能自动判断符合性，须由专业人员补充核验。"
+    elif judgement == "non_compliant":
+        rule_judgement = "已识别资料与条款要求存在不一致或缺项，故形成补充、修改或控制要求。"
+    elif judgement == "missing":
+        rule_judgement = "缺少完成条文对照所需的关键资料，当前不能判断符合性，故要求补充后复核。"
+    elif judgement in {"warning", "risk", "needs_review"}:
+        rule_judgement = (
+            "已命中相关风险或控制条款，但当前结构化资料未提供完整的量化验算/对照结论；"
+            "不能据此直接判定符合，故列为需核实和补充的审核事项。"
+        )
+    elif evidence:
+        rule_judgement = "已关联适用条款，但尚需以可定位的项目事实完成逐项对照后，才能形成符合性判断。"
+    else:
+        rule_judgement = "本条尚缺少可核验依据，仅可作为待补充、待复核事项，不能直接作为正式审核结论。"
     title = _short_text(item.get("title") or "该审核事项", 100)
     return {
         "facts": facts,
         "rule": rule,
         "rule_judgement": rule_judgement,
-        "conclusion_reason": f"上述资料事实和规则判断共同指向“{title}”，具体处理要求见该条审核意见。",
+        "conclusion_reason": f"对照判断指向“{title}”，具体处理要求见该条审核意见。",
         "evidence": evidence,
     }
 
@@ -1755,6 +1802,7 @@ def _attach_audit_session(
             "stage_name": stage.get("stage_name") or "",
             "archive_binding": result.get("archive_binding") or {},
             "overall_opinion": overall_opinion,
+            "overall_opinion_template_version": OVERALL_OPINION_TEMPLATE_VERSION,
             "review_profile": review_profile,
             "form_data": manual_context if isinstance(manual_context, dict) else {},
             "uploaded_documents": uploaded_documents,
@@ -2094,7 +2142,118 @@ def _clean_metro_target(value: Any) -> str:
         return ""
     text = re.sub(r"^(?:本)?项目(?:位于|处于|邻近|临近|紧邻|靠近|涉及)?", "", text)
     text = re.sub(r"^(?:地铁)?线路(?:名称)?[：:]?", "", text)
+    # Some older recognition records contain a duplicated line suffix such as
+    # “1号线号线”.  Keep a single canonical suffix before rendering it.
+    text = re.sub(
+        r"((?:S\d+|\d+|[一二三四五六七八九十]+)号线)(?:号线|线路)+",
+        r"\1",
+        text,
+    )
     return text.strip("，,、：:；;。 ")
+
+
+def _overview_project_subject(value: Any) -> str:
+    """Return a safe subject for the formal engineering-overview opening."""
+    text = _usable_overall_value(value)
+    if not text:
+        return "本项目"
+    text = re.sub(r"^(?:项目名称|工程名称|建设项目名称)\s*[：:]?\s*", "", text)
+    text = text.strip("，,、：:；;。 ")
+    return text[:120] or "本项目"
+
+
+def _overview_metro_section(value: Any) -> tuple[str, str]:
+    """Extract only an explicit station-to-station metro section and its direction.
+
+    The confirmation form can contain a legacy free-text value.  It must not be
+    concatenated into the formal overview, because phrases such as “基坑南侧…
+    距离” otherwise become an ungrammatical pseudo-section.  A section is used
+    only when both station names are explicit.
+    """
+    raw = _clean_metro_target(value)
+    if not raw:
+        return "", ""
+    # Line and section are stored separately.  Older records may still carry
+    # a repeated line prefix in the section field (for example “1号线号线…”).
+    raw = re.sub(
+        r"^(?:(?:南京地铁|地铁|轨道交通)?\s*(?:S\d+|\d+|[一二三四五六七八九十]+)号线(?:号线|线路)?|号线)+",
+        "",
+        raw,
+    ).strip()
+
+    direction_match = re.search(
+        r"((?:东南|东北|西南|西北|东|南|西|北)侧(?:及(?:东南|东北|西南|西北|东|南|西|北)侧)?)",
+        raw,
+    )
+    direction = direction_match.group(1) if direction_match else ""
+    section_match = re.search(
+        r"([\u4e00-\u9fffA-Za-z0-9]+站)\s*(?:~|～|至|—|-)\s*([\u4e00-\u9fffA-Za-z0-9]+站)",
+        raw,
+    )
+    if not section_match:
+        return "", direction
+
+    def _station_name(candidate: str) -> str:
+        # When a legacy free-text value puts a location phrase immediately
+        # before the first station, keep only the actual station name.
+        for marker in ("距离", "邻近", "临近", "靠近", "位于", "项目", "基坑", "隧道"):
+            if marker in candidate:
+                candidate = candidate.rsplit(marker, 1)[-1]
+        return candidate.strip()
+
+    suffix_text = raw[section_match.end():]
+    if re.search(r"区间明挖隧道|明挖区间隧道", suffix_text):
+        suffix = "区间明挖隧道"
+    elif "区间隧道" in suffix_text:
+        suffix = "区间隧道"
+    elif "隧道" in suffix_text:
+        suffix = "区间隧道"
+    else:
+        suffix = "区间"
+    return f"{_station_name(section_match.group(1))}～{_station_name(section_match.group(2))}{suffix}", direction
+
+
+def _overview_relation_parts(value: Any) -> tuple[str, str]:
+    """Split a relation into a positional direction and a residual relationship."""
+    relation = _usable_overall_value(value).strip("，,、：:；;。 ")
+    if not relation:
+        return "", ""
+    direction_match = re.search(
+        r"((?:东南|东北|西南|西北|东|南|西|北)侧(?:及(?:东南|东北|西南|西北|东|南|西|北)侧)?)",
+        relation,
+    )
+    direction = direction_match.group(1) if direction_match else ""
+    if direction:
+        relation = relation.replace(direction, "")
+    relation = re.sub(r"^(?:本)?项目(?:与|相对)?", "", relation)
+    relation = re.sub(r"(?:关系|项目)$", "", relation).strip("，,、：:；;。 ")
+    return direction, relation
+
+
+def _formal_location_side(direction: str, relation: str) -> str:
+    """Return the locative side wording used by formal reply letters.
+
+    Recognition stores values such as ``双侧`` as a relationship.  That is a
+    data label, not prose suitable for the opening of a reply.  The formal
+    wording is instead “位于……区间隧道的两侧”.
+    """
+    if direction:
+        return direction
+    normalized = _usable_overall_value(relation).strip("，,、：:；;。 ")
+    if normalized in {"双侧", "两侧"}:
+        return "两侧"
+    if normalized in {"单侧", "一侧"}:
+        return "一侧"
+    return ""
+
+
+def _formal_location_subject(project_subject: str) -> str:
+    """Use a natural project/works subject before the formal location clause."""
+    if re.search(r"(?:项目)?基坑(?:工程)?$", project_subject):
+        return project_subject
+    if project_subject == "本项目":
+        return "本项目基坑"
+    return f"{project_subject}项目基坑"
 
 
 def _relation_and_target(relation_value: Any, metro_target: str) -> tuple[str, str]:
@@ -2127,34 +2286,68 @@ def _review_profile_label(profile: str) -> str:
 def _engineering_overview_sentence(result: dict[str, Any]) -> str:
     form = _overall_form_context(result)
     line = _clean_metro_target(form.get("metro_line_name") or form.get("line_name"))
-    section = _clean_metro_target(form.get("metro_section_name") or form.get("section_name"))
+    section, section_direction = _overview_metro_section(
+        form.get("metro_section_name") or form.get("section_name")
+    )
+    project_subject = _overview_project_subject(form.get("project_name") or form.get("name"))
     pit_depth = _format_overall_meter(form.get("pit_depth_m"))
     support = _support_form_text(form.get("support_components") or form.get("support_form") or form.get("support_type"))
     horizontal = _format_overall_meter(form.get("minimum_horizontal_clearance_m"))
     dewatering = _usable_overall_value(form.get("dewatering_method"))
     buried = _format_overall_meter(form.get("buried_depth_m"))
 
-    clauses: list[str] = []
+    sentences: list[str] = []
     metro_target = section if section and (not line or line in section) else "".join(part for part in (line, section) if part)
-    relation, metro_target = _relation_and_target(form.get("relative_relationship"), metro_target)
-    if relation:
-        if metro_target:
-            clauses.append(f"本项目与{metro_target}呈{relation}关系")
-        else:
-            clauses.append(f"本项目与地铁结构呈{relation}关系")
-    elif metro_target:
-        clauses.append(f"本项目邻近{metro_target}")
+    relation_direction, relation = _overview_relation_parts(form.get("relative_relationship"))
+    direction = _formal_location_side(section_direction or relation_direction, relation)
+    has_formal_location = bool(section and direction)
+
+    # Mirror the opening sentence of the formal reply letters:
+    # “XX项目基坑位于已建地铁X号线A站（含）～B站区间隧道的东侧，基坑开挖……”。
+    # A relationship label such as “双侧” must be rendered as “两侧”, rather
+    # than being copied into the prose as “呈双侧关系”.
+    engineering_clauses: list[str] = []
     if pit_depth:
-        clauses.append(f"基坑开挖深度约为{pit_depth}")
+        engineering_clauses.append(f"基坑开挖深度约为{pit_depth}")
     if support:
-        clauses.append(f"采用{support}")
+        engineering_clauses.append(f"基坑支护采用{support}")
+    if metro_target and has_formal_location:
+        metro_prefix = "" if metro_target.startswith("地铁") else "地铁"
+        location = f"{_formal_location_subject(project_subject)}位于已建{metro_prefix}{metro_target}的{direction}"
+        if engineering_clauses:
+            sentences.append(location + "，" + "，".join(engineering_clauses) + "。")
+        else:
+            sentences.append(location + "。")
+        engineering_clauses = []
+    elif direction:
+        sentences.append(f"{_formal_location_subject(project_subject)}位于地铁结构{direction}。")
+
+    if relation and not (has_formal_location and relation in {"双侧", "两侧", "单侧", "一侧"}):
+        if relation in {"邻近", "临近", "紧邻", "靠近"} and metro_target:
+            target = "上述地铁结构" if has_formal_location else metro_target
+            sentences.append(f"{project_subject}邻近{target}。")
+        elif relation in {"交叉", "上跨", "下穿", "侧穿", "跨越"}:
+            sentences.append(f"{project_subject}与地铁结构{relation}。")
+        else:
+            sentences.append(f"{project_subject}与地铁结构呈{relation}关系。")
+    elif metro_target and not has_formal_location:
+        sentences.append(f"{project_subject}邻近{metro_target}。")
+    elif not metro_target and not direction:
+        relation, metro_target = _relation_and_target(form.get("relative_relationship"), metro_target)
+        if relation:
+            sentences.append(f"{project_subject}与地铁结构呈{relation}关系。")
+        elif metro_target:
+            sentences.append(f"{project_subject}邻近{metro_target}。")
+
+    if engineering_clauses:
+        sentences.append("，".join(engineering_clauses) + "。")
     if horizontal:
-        clauses.append(f"支护结构与地铁结构边线最小水平距离约为{horizontal}")
+        sentences.append(f"项目基坑与地铁结构边线的最小水平距离约为{horizontal}。")
     if dewatering:
-        clauses.append(f"降水方式为{dewatering}")
+        sentences.append(f"降水采用{dewatering}。")
     if buried:
-        clauses.append(f"地铁结构埋深约为{buried}")
-    return "，".join(clauses) + "。" if clauses else ""
+        sentences.append(f"对应地铁结构埋深约为{buried}。")
+    return "".join(sentences)
 
 
 def _formal_overall_review_text(
@@ -3367,9 +3560,22 @@ def create_audit_session(payload: AuditSessionCreatePayload) -> dict[str, Any]:
 )
 def get_audit_session(session_id: str) -> dict[str, Any]:
     try:
-        return audit_sessions.get_session(session_id)
+        return _refresh_session_overall_opinion(audit_sessions.get_session(session_id))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="???????") from exc
+
+
+@app.post(
+    "/api/v1/audit-sessions/{session_id}/refresh-overall",
+    dependencies=[Depends(verify_service_token)],
+    tags=["audit-sessions"],
+)
+def refresh_audit_session_overall_opinion(session_id: str) -> dict[str, Any]:
+    """Refresh only the deterministic overall opinion for the active session."""
+    try:
+        return _refresh_session_overall_opinion(audit_sessions.get_session(session_id))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="审核会话不存在。") from exc
 
 
 @app.get(

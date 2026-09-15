@@ -449,6 +449,48 @@ class AuditSessionRepository:
             self._renumber_items(connection, session_id)
             return self._touch_session(connection, session_id)
 
+    def update_overall_opinion(
+        self,
+        session_id: str,
+        overall_opinion: dict[str, Any],
+        *,
+        metadata_updates: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Persist a regenerated overall opinion without rewriting review items.
+
+        ``metadata_updates`` records deterministic rendering-template metadata
+        alongside the result.  It deliberately does not touch review items or
+        historical chat snapshots.
+        """
+        with self._lock, self._connect() as connection:
+            session = self._session(self._require_session(connection, session_id))
+            metadata = dict(session.get("metadata") or {})
+            metadata["overall_opinion"] = overall_opinion
+            if metadata_updates:
+                metadata.update(metadata_updates)
+            connection.execute(
+                """
+                UPDATE audit_sessions
+                SET metadata_json = ?, updated_at = ?
+                WHERE session_id = ?
+                """,
+                (_json_dump(metadata, {}), _now(), session_id),
+            )
+            return self._touch_session(connection, session_id)
+
+    def list_session_ids(self, *, limit: int = 10000) -> list[str]:
+        """Return session identifiers for controlled maintenance migrations."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT session_id FROM audit_sessions
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (max(1, min(int(limit), 100000)),),
+            ).fetchall()
+            return [str(row["session_id"]) for row in rows]
+
     def _insert_message(
         self,
         connection: sqlite3.Connection,

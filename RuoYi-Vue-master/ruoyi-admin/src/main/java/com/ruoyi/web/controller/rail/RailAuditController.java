@@ -2,6 +2,7 @@ package com.ruoyi.web.controller.rail;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import jakarta.servlet.http.HttpServletResponse;
@@ -153,6 +154,13 @@ public class RailAuditController
     public Object auditSession(@PathVariable("sessionId") String sessionId)
     {
         return python.get("/api/v1/audit-sessions/" + sessionId);
+    }
+
+    @PreAuthorize("@ss.hasPermi('rail:audit:run')")
+    @PostMapping("/audit-sessions/{sessionId}/refresh-overall")
+    public Object refreshAuditSessionOverall(@PathVariable("sessionId") String sessionId)
+    {
+        return python.post("/api/v1/audit-sessions/" + sessionId + "/refresh-overall", Collections.emptyMap());
     }
 
     @PreAuthorize("@ss.hasPermi('rail:audit:run')")

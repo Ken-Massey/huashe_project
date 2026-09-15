@@ -1,6 +1,6 @@
 # 项目上下文（跨 Codex 对话）
 
-> 最后核对：2026-09-10。每次新开 Codex 对话先阅读本文件，再执行 `git status --short`、`git diff` 并检查最近提交；本文件只记录可由代码、Git 和项目文档证实的当前状态。
+> 最后核对：2026-09-15。每次新开 Codex 对话先阅读本文件，再执行 `git status --short`、`git diff` 并检查最近提交；本文件只记录可由代码、Git 和项目文档证实的当前状态。
 
 ## 项目简介
 
@@ -14,8 +14,8 @@
 ## 当前 Git 状态
 
 - 分支：`main`，跟踪 `origin/main`。
-- 当前未提交改动：`PROJECT_CONTEXT.md`，以及 `audit_api/ima_rag.py`、`audit_knowledge_graph.py`、`dynamic_audit.py`、`regulation_rules.py`、`main.py`、`services.py` 与相应测试；未暂存。包括 RAG v13 的程序规则引擎、CAG/知识图谱关系扩展和支护构件去重修复，不得回滚。
-- 最近提交：`789d6cb`（2026-09-08，完善本地地图定位与地址候选）。其改动包括审核页地址候选/定位、文档信息抽取补项目地点、Python 本地地理编码 CORS 和本地地图 Compose 配置。
+- 当前未提交改动：`audit_api/main.py`、`audit_api/audit_session.py`、`audit_api/migrate_overall_opinions.py`、`audit_api/tests/test_audit_session.py`、`RuoYi-Vue-master/ruoyi-admin/src/main/java/com/ruoyi/web/controller/rail/RailAuditController.java`、`RuoYi-Vue-master/ruoyi-ui/src/api/rail/audit.js`、`RuoYi-Vue-master/ruoyi-ui/src/views/rail/audit/index.vue`；未暂存。内容为综合评价中项目位置句式的正式复函化、模板版本控制、服务端权威会话刷新、旧会话迁移、Java 代理和前端展示修复及回归测试，不得被覆盖或回滚。
+- 最近提交：`aa306aa`（RAG 流程增加 CAG、Knowledge Graph、LLM Wiki）；此前 `884db08` 修复地图问题，`6d7fad6` 增加 Metadata 过滤和 Rerank。提交日期与远端同步状态：**待确认**。
 - 紧邻的巡查提交（2026-09-07）实现了项目—巡查一对一、按项目汇总审核意见、多线路/多巡查员、意见现场核查及 Word 导出。
 
 ## 技术栈
@@ -59,6 +59,12 @@
 - 地铁区间规范化：地铁线路与区间分列保存；仅当资料中出现明确的“起始站～终止站”站名对时才填写区间字段，去除重复的“X 号线”和“区间”字样；其他含“隧道/区间”的泛文本必须留空。
 - 项目位置与邻近审核：`location` 只保存可地理编码的具体项目落点并据此保存坐标；识别顺序为项目名称 → 原始文件名 → 正文地点字段。正文仅接受道路、园区、站点、门牌等具体落点；“本工程地址位于某区”（无更细地点）及“西侧紧邻某路”等方位/周边关系均不得写入。表单监听会清除这些旧识别值。后续仅以坐标计算 50 米邻近项目，并将邻近项目作为综合审核的上下文。
 - 审核综合评价支护构件去重：文档抽取将“地下连续墙”和“地连墙”等别称标准化后保序去重；综合评价渲染也再次去重。因此“地下连续墙、地下连续墙、锚杆支护”不是 LLM 复读，而是旧识别列表的别称重复，现已在抽取和展示两层修复。
+- 审核综合评价的项目位置表述：已参照 `复函/` 中正式复函第一条，严格按“项目名称项目基坑位于已建地铁 X 号线 A 站（含）～B 站区间（隧道）的某侧，基坑开挖深度……，基坑支护采用……”形成首句；仅在识别到明确站名对和方位/两侧关系时生成该句。识别字段“`双侧`”转换为“`区间（隧道）的两侧`”，不得输出“呈双侧关系”；历史自由文本中夹带的方位或“距离”等描述不会再被拼进区间名称，也不得出现“地铁地铁”“号线号线”。
+- 审核页面会话同步：`sessionStorage` 仅作为断页恢复缓存，服务端 `audit_session` 才是权威版本。恢复草稿后必须主动读取服务端会话并覆盖本地快照；服务端读取旧会话时会仅按当前确定性模板升级“综合评价”并生成新版快照，不改动用户已编辑的分条审核意见，避免模板更新后仍显示旧审核结果。
+- 综合评价唯一真相来源：页面标记为“当前最新版”的卡片直接读取服务端会话的 `metadata.overall_opinion` 和当前 `items`；聊天 `result_snapshot` 只作为历史版本，不能覆盖当前结果。综合评价模板版本为 `formal-reply-overview-v4`；页面打开和点击“刷新审核结果”都会请求服务端确定性刷新。Java 尚未滚动更新时，前端会降级使用原有 `GET /rail/audit-sessions/{id}`，该接口同样执行刷新。
+- 综合评价前端展示边界：`displayOverallOpinion` 只负责清理并显示服务端文本，不得再依据浏览器本地表单重新拼接“兜底综合评价”；此前该兜底会在接口已返回 v4 后以旧的“本项目与……呈双侧关系”覆盖页面内容，并产生“已同步服务端”的误导提示。2026-09-15 已修复并在当前审核页面验证新版首句可见。
+- 审核推理过程：分项意见下的折叠区统一展示“已识别事实 → 适用条款（含摘录）→ 对照判断”，不再展示“资料事实/规则判断/意见形成”等泛化套话。判断只能基于已保存的项目数据、条款摘录和规则状态；缺少项目原文或量化验算时必须明确无法自动判定并要求补充/人工复核，不得伪造推理过程。
+- 历史会话综合评价迁移：`audit_api/migrate_overall_opinions.py` 仅升级 `metadata.overall_opinion`、模板版本和派生 `latest_result`，绝不改写审核意见项或历史聊天快照。2026-09-15 已完成 v4 迁移和服务重启；最近一次检查 89 条会话、补充更新 2 条，全部会话均已按 v4 写入。截图对应的旧会话已从第 1 版升级到第 2 版。
 
 ## 当前正在做的功能
 
@@ -88,6 +94,8 @@
 - 知识库案例只有 `ready` 状态才参与匹配；停用保留数据/原件但退出检索，恢复后重新参与。
 - 项目档案阶段审核记录一阶段一条（`audit_records.stage_id` 唯一）；审核来源文件采用内容哈希归档。
 - 审核对话：用户指令、附件追加和每一版 AI 审核结果均应按时间顺序保留，不得由新版结果覆盖历史；中途新增附件应追加到当前会话，后续重审使用全部现有资料。审核结果展示为“综合评价 + 5–6 条正式审核意见”；分条仅写可执行意见，评价性判断放在综合评价。历史任务已按此方向开发，当前完整性仍须以端到端实测为准。
+- 综合评价位置句式：必须复用复函首条的完整句法：“项目名称项目基坑位于地铁线路 + 明确站间区间（隧道）的方位/两侧，基坑开挖深度……，基坑支护采用……”。不得使用“本项目与线路/区间呈某侧/双侧关系”这类拼接句；“双侧”必须写成“两侧”。未识别明确站名对或位置关系时不得虚构区间、方位或两侧。
+- 综合评价版本/刷新边界：确定性综合评价模板发生变化时必须提升 `OVERALL_OPINION_TEMPLATE_VERSION`，并运行 `python -m audit_api.migrate_overall_opinions` 升级已有会话。不能依赖 `sessionStorage` 或历史聊天快照显示当前审核结果；最新卡片必须以服务端会话的元数据和当前意见项为准。
 - 巡查权限分工：平台端负责任务、字典和审核；小程序巡查员只执行任务。小程序不做字典管理、不允许改任务、不做持续轨迹或现场点位打卡；上传时记录单点 GPS。
 - 巡查任务按项目唯一：终审通过后首次建任务；同项目后续阶段只追加意见。意见从项目档案 `audit_records` 的审核意见汇总。
 - 意见项状态机：`pending_photo` → `photo_taken` → 平台通过 `done`；退回为 `returned` 并可重传。每意见最多 9 张照片。
@@ -114,6 +122,7 @@
 
 - Python 健康检查：`GET /health`。
 - Python 智能任务：`POST /api/v1/stage1/tasks`、`/api/v1/stage2/audit/tasks`、`/advice/tasks`、`/full/tasks`；查询 `GET /api/v1/tasks/{task_id}` 及结果/文件子路由。
+- Python 审核会话刷新：`GET /api/v1/audit-sessions/{session_id}` 与 `POST /api/v1/audit-sessions/{session_id}/refresh-overall` 均会返回并在需要时持久化当前模板的综合评价；后者用于页面显式刷新，均经 Java `/rail/audit-sessions/...` 代理。
 - Python 项目档案：`/api/v1/project-archives/projects`、`/projects/nearby`、`/resolve`、阶段和审核记录子路由。
 - Python 知识库：`/api/v1/knowledge/cases`、`/regulations`、`/assets`、`/rules`、`/stats`；外部规范来源核验为 `POST /api/v1/knowledge/regulations/{id}/source-verification`；均应由 Java 代理并携带服务令牌。
 - Python 本地地图：`GET /api/v1/local-geocoder/status`、`/search`。
@@ -129,7 +138,7 @@
 - **已确认审核可解释性缺陷：** IMA-RAG 在仅有案例原文、没有 `regulation_evidence` 时会把“符合/不符合”降级为工程风险判断，但仍保留该条并可被 AI 润色为普通审核意见；页面未将“无规程依据的待复核项”与“有双侧证据的正式审核结论”强区分。截图中“未找到可引用的规程条款或资料定位”即为该路径，应优先修复展示和发布门禁。
 - **已确认待调优：**主规程是否“无适用依据”当前由本地重排分数阈值 `0.34` 判定，尚未用真实规程/案例评测集标定；阈值、外部规范适用范围和人工核验职责应在上线前确认。
 - **已修复、待端到端复验：**地址候选曾因 Vue 根据环境变量直连 `127.0.0.1:8000`，且 Python CORS 正则转义错误而静默返回空数组；现已修正 CORS，代理查询权限也从单一 `rail:audit:run` 放宽为审核相关任一既有权限。运行中 Java 代理仍对已验证的“河海大学”回传空数组，因此 Vue 现采用“Java 代理优先；空结果或失败时本机 Python 回退”，前端请求失败时明确显示服务不可用。已在 `8001` 启动加载新 CORS 的临时本机地理编码服务：`Origin http://127.0.0.1:80` 对“南京 河海大学”返回 2 条候选。后续应查明 Java 运行时代理空数组的根因，并在服务重启后收敛为单一 `8000` 服务。
-- **测试环境已知问题：**支护构件去重的两项定向测试及规程条文门禁、IMA-RAG/规程库回归均通过。执行 `ApiDefinitionTests` 与 `AuditSessionApiTests` 时另有 3 项既有失败：`test_legacy_stage1_task_also_only_exposes_two_public_files`（Windows 下乱码文件名 fixture 未匹配）、`test_recognize_letter_extracts_engineering_fields_from_plain_text`（区间中文断言/识别结果不符）、`test_overall_opinion_uses_engineering_overview_and_document_profile`（既有“对应地铁结构埋深”文案断言与当前输出不符）；均不由本次去重逻辑引起，待单独修复。
+- **测试环境已知问题：**支护构件去重、规程条文门禁、IMA-RAG/规程库回归均通过；审核会话单元测试 21 项于 2026-09-15 通过，覆盖位置句式、模板版本和旧会话升级。Vue `build:prod` 与 RuoYi Admin Maven 编译均于同日通过。`test_legacy_stage1_task_also_only_exposes_two_public_files`（Windows 下乱码文件名 fixture 未匹配）和 `test_recognize_letter_extracts_engineering_fields_from_plain_text`（区间中文断言/识别结果不符）尚未在本轮复验。
 - **待确认：**未执行完整测试、Java/Maven 构建、Vue 构建、Docker 地图启动或真实端到端验收；不要将“代码存在”视为“已部署可用”。
 
 ## 不能随意修改或回滚的内容
@@ -142,9 +151,9 @@
 
 ## 下一步建议
 
-1. 先修复并验证 `audit_api/requirements.txt` 的冲突标记，再运行与改动模块相关的 Python 测试。
-2. 在真实“主规程命中/主规程缺失”的样本上校准 RAG 回退阈值；上传一份受控外部规范，依次验证待核验→核验→启用→可引用的完整流程。
-3. 修复审核页面和发布门禁：没有规程条款的工程风险提示不得作为正式合规/不合规结论展示或入档。
+1. 以实际案例打开已迁移旧会话和新建会话，分别核对“当前最新版”都直接显示服务端 `formal-reply-overview-v4` 综合评价，且展开历史聊天快照仍可查看旧版本。
+2. 修复并验证 `audit_api/requirements.txt` 的冲突标记，再运行与改动模块相关的 Python 测试。
+3. 在真实“主规程命中/主规程缺失”的样本上校准 RAG 回退阈值；上传一份受控外部规范，依次验证待核验→核验→启用→可引用的完整流程。
 4. 完成巡查 P1 #7，并补充平台/巡查员权限与状态回归测试；随后同步巡查问题清单的已完成状态。
 
 ## 维护规则
