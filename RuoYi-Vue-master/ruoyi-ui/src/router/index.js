@@ -47,6 +47,12 @@ export const constantRoutes = [
     hidden: true
   },
   {
+    path: '/rail/patrol-mobile',
+    component: () => import('@/views/rail/patrol-mobile/index'),
+    hidden: true,
+    meta: { title: '现场巡查手机端', noCache: true }
+  },
+  {
     path: '/404',
     component: () => import('@/views/error/404'),
     hidden: true
