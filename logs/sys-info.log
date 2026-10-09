@@ -1,17 +1,14 @@
-18:41:06.603 [background-preinit] INFO  o.h.v.i.util.Version - [<clinit>,18] - HV000001: Hibernate Validator 9.0.1.Final
-18:41:06.657 [restartedMain] INFO  c.r.RuoYiApplication - [logStarting,54] - Starting RuoYiApplication using Java 25.0.3 with PID 41308 (D:\develop\huashe\huashe_project\RuoYi-Vue-master\ruoyi-admin\target\classes started by zjd in D:\develop\huashe\huashe_project)
-18:41:06.659 [restartedMain] INFO  c.r.RuoYiApplication - [logStartupProfileInfo,658] - The following 1 profile is active: "druid"
-18:47:51.590 [background-preinit] INFO  o.h.v.i.util.Version - [<clinit>,18] - HV000001: Hibernate Validator 9.0.1.Final
-18:47:51.630 [restartedMain] INFO  c.r.RuoYiApplication - [logStarting,54] - Starting RuoYiApplication using Java 25.0.3 with PID 45708 (D:\develop\huashe\huashe_project\RuoYi-Vue-master\ruoyi-admin\target\classes started by zjd in D:\develop\huashe\huashe_project)
-18:47:51.633 [restartedMain] INFO  c.r.RuoYiApplication - [logStartupProfileInfo,658] - The following 1 profile is active: "druid"
-18:47:54.935 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Initializing ProtocolHandler ["http-nio-8080"]
-18:47:54.937 [restartedMain] INFO  o.a.c.c.StandardService - [log,168] - Starting service [Tomcat]
-18:47:54.937 [restartedMain] INFO  o.a.c.c.StandardEngine - [log,168] - Starting Servlet engine: [Apache Tomcat/11.0.21]
-18:47:56.127 [restartedMain] INFO  c.a.d.p.DruidDataSource - [init,865] - {dataSource-1} inited
-18:47:58.907 [restartedMain] INFO  o.q.c.SchedulerSignalerImpl - [<init>,62] - Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
-18:47:58.909 [restartedMain] INFO  o.q.c.QuartzScheduler - [<init>,224] - Quartz Scheduler v2.5.2 created.
-18:47:58.910 [restartedMain] INFO  o.q.s.RAMJobStore - [initialize,152] - RAMJobStore initialized.
-18:47:58.910 [restartedMain] INFO  o.q.c.QuartzScheduler - [initialize,289] - Scheduler meta-data: Quartz Scheduler (v2.5.2) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
+10:43:34.377 [background-preinit] INFO  o.h.v.i.util.Version - [<clinit>,18] - HV000001: Hibernate Validator 9.0.1.Final
+10:43:34.433 [restartedMain] INFO  c.r.RuoYiApplication - [logStarting,54] - Starting RuoYiApplication using Java 25.0.3 with PID 17264 (D:\develop\huashe\huashe_project\RuoYi-Vue-master\ruoyi-admin\target\classes started by zjd in D:\develop\huashe\huashe_project)
+10:43:34.435 [restartedMain] INFO  c.r.RuoYiApplication - [logStartupProfileInfo,658] - The following 1 profile is active: "druid"
+10:43:40.946 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Initializing ProtocolHandler ["http-nio-8080"]
+10:43:40.951 [restartedMain] INFO  o.a.c.c.StandardService - [log,168] - Starting service [Tomcat]
+10:43:40.953 [restartedMain] INFO  o.a.c.c.StandardEngine - [log,168] - Starting Servlet engine: [Apache Tomcat/11.0.21]
+10:43:42.840 [restartedMain] INFO  c.a.d.p.DruidDataSource - [init,865] - {dataSource-1} inited
+10:43:46.660 [restartedMain] INFO  o.q.c.SchedulerSignalerImpl - [<init>,62] - Initialized Scheduler Signaller of type: class org.quartz.core.SchedulerSignalerImpl
+10:43:46.661 [restartedMain] INFO  o.q.c.QuartzScheduler - [<init>,224] - Quartz Scheduler v2.5.2 created.
+10:43:46.662 [restartedMain] INFO  o.q.s.RAMJobStore - [initialize,152] - RAMJobStore initialized.
+10:43:46.663 [restartedMain] INFO  o.q.c.QuartzScheduler - [initialize,289] - Scheduler meta-data: Quartz Scheduler (v2.5.2) 'quartzScheduler' with instanceId 'NON_CLUSTERED'
   Scheduler class: 'org.quartz.core.QuartzScheduler' - running locally.
   NOT STARTED.
   Currently in standby mode.
@@ -19,14 +16,24 @@
   Using thread pool 'org.quartz.simpl.SimpleThreadPool' - with 10 threads.
   Using job-store 'org.quartz.simpl.RAMJobStore' - which does not support persistence. and is not clustered.
 
-18:47:58.911 [restartedMain] INFO  o.q.c.QuartzScheduler - [setJobFactory,2250] - JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@2a72abb5
-18:48:00.042 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Starting ProtocolHandler ["http-nio-8080"]
-18:48:00.056 [restartedMain] INFO  o.q.c.QuartzScheduler - [start,541] - Scheduler quartzScheduler_$_NON_CLUSTERED started.
-18:48:00.062 [restartedMain] INFO  c.r.RuoYiApplication - [logStarted,60] - Started RuoYiApplication in 8.83 seconds (process running for 9.596)
-18:49:32.115 [http-nio-8080-exec-6] INFO  o.a.c.c.C.[.[.[/] - [log,168] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-18:49:45.504 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
-18:49:45.591 [schedule-pool-1] INFO  n.b.p.u.u.YauaaVersion - [logVersion,104] - Yauaa 8.1.1 (v8.1.1 @ 2026-03-20T07:34:20Z)
-18:49:45.709 [schedule-pool-1] INFO  n.b.p.u.c.ConfigLoader - [loadResources,309] - - Loaded 122 files in  109 ms using expression: classpath*:UserAgents/**/*.yaml
-18:49:46.387 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [finalizeLoadingRules,282] - Building all needed matchers for the requested 11 fields.
-18:49:46.433 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,336] - Initializing Analyzer data structures
-18:49:47.040 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,347] - Built in 607 msec : Hashmap 199731, Ranges map:3004
+10:43:46.663 [restartedMain] INFO  o.q.c.QuartzScheduler - [setJobFactory,2250] - JobFactory set to: org.springframework.scheduling.quartz.SpringBeanJobFactory@6ee47b8
+10:43:48.168 [restartedMain] INFO  o.a.c.h.Http11NioProtocol - [log,168] - Starting ProtocolHandler ["http-nio-8080"]
+10:43:48.192 [restartedMain] INFO  o.q.c.QuartzScheduler - [start,541] - Scheduler quartzScheduler_$_NON_CLUSTERED started.
+10:43:48.199 [restartedMain] INFO  c.r.RuoYiApplication - [logStarted,60] - Started RuoYiApplication in 14.296 seconds (process running for 15.546)
+10:47:53.545 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[.[.[/] - [log,168] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+10:47:53.999 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+10:47:54.084 [schedule-pool-1] INFO  n.b.p.u.u.YauaaVersion - [logVersion,104] - Yauaa 8.1.1 (v8.1.1 @ 2026-03-20T07:34:20Z)
+10:47:54.220 [schedule-pool-1] INFO  n.b.p.u.c.ConfigLoader - [loadResources,309] - - Loaded 122 files in  129 ms using expression: classpath*:UserAgents/**/*.yaml
+10:47:55.034 [schedule-pool-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [finalizeLoadingRules,282] - Building all needed matchers for the requested 11 fields.
+10:47:55.091 [http-nio-8080-exec-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,336] - Initializing Analyzer data structures
+10:47:55.680 [http-nio-8080-exec-1] INFO  n.b.p.u.a.UserAgentStringMatchMaker - [initializeMatchers,347] - Built in 588 msec : Hashmap 199731, Ranges map:3004
+10:47:57.721 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Success][登录成功]
+10:48:23.941 [schedule-pool-2] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[xcy][Success][登录成功]
+11:14:28.022 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[admin][Logout][退出成功]
+11:14:56.610 [schedule-pool-3] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[xcy][Success][登录成功]
+11:15:13.350 [schedule-pool-2] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[xcy][Success][登录成功]
+11:18:46.858 [schedule-pool-4] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[xcy][Success][登录成功]
+11:20:19.736 [schedule-pool-1] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[xcy][Success][登录成功]
+11:22:56.656 [schedule-pool-5] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[xcy][Success][登录成功]
+11:23:39.446 [schedule-pool-3] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[xcy][Success][登录成功]
+11:25:41.935 [schedule-pool-6] INFO  sys-user - [run,55] - [127.0.0.1]内网IP[xcy][Success][登录成功]

@@ -74,6 +74,14 @@
           </el-button>
         </el-form-item>
       </el-form>
+      <div class="patrol-entry">
+        <span class="entry-divider">现场工作人员</span>
+        <router-link :to="{ path: '/rail/patrol-mobile', query: { view: 'login' } }" class="patrol-entry-button">
+          <svg-icon icon-class="documentation" aria-hidden="true" />
+          <span><strong>巡查端</strong><small>查看任务 · 现场上报 · 隐患整改</small></span>
+          <span class="entry-arrow" aria-hidden="true">›</span>
+        </router-link>
+      </div>
     </div>
 
     <!-- 底部版权 -->
@@ -174,9 +182,11 @@ $border-color: #dcdfe6;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  min-height: 100vh;
+  height: auto;
   width: 100vw;
-  overflow: hidden;
+  overflow-x: hidden;
+  padding: 32px 0 64px;
   // 藏蓝 → 浅天蓝 自上而下线性渐变
   background: linear-gradient(180deg, #13294b 0%, #1b3a67 32%, #2d5d95 58%, #6f9fc9 82%, #c3ddf2 100%);
 }
@@ -374,6 +384,37 @@ $border-color: #dcdfe6;
   letter-spacing: 1px;
   color: rgba(35, 67, 105, 0.65);
   z-index: 2;
+}
+
+.patrol-entry {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #edf0f5;
+}
+
+.entry-divider {
+  display: block;
+  margin-bottom: 10px;
+  color: #7a899a;
+  font-size: 12px;
+}
+
+.patrol-entry-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 66px;
+  padding: 12px 16px;
+  border: 1px solid #d6e5f7;
+  border-radius: 8px;
+  background: #f5f9ff;
+  color: #24578f;
+  transition: background-color .2s, border-color .2s;
+  &:hover, &:focus-visible { background: #eaf3ff; border-color: #409eff; }
+  strong, small { display: block; }
+  strong { font-size: 16px; font-weight: 600; }
+  small { margin-top: 4px; color: #71849a; font-size: 12px; }
+  .entry-arrow { margin-left: auto; font-size: 26px; }
 }
 
 /* ---------- 小屏适配 ---------- */

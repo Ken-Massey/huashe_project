@@ -65,6 +65,8 @@ export function mobileUpload(path, file, fields = {}, onProgress) {
     if (fields[key] !== null && fields[key] !== undefined) form.append(key, fields[key])
   })
   return api.post(path, form, {
+    // 覆盖管理端的全局 JSON 请求头，保留 FormData；浏览器会补上 multipart boundary。
+    headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000,
     onUploadProgress: event => {
       if (onProgress && event.total) onProgress(Math.round(event.loaded / event.total * 100))
